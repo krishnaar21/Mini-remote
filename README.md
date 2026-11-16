@@ -2,7 +2,7 @@
 
 Universal TV remote with a soft-touch charcoal design. Kotlin + Jetpack Compose.
 
-- Control over local Wi-Fi: **Roku** (ECP), **Samsung** Tizen, **LG** webOS. Android / Fire TV pairing is a stub.
+- Control over local Wi-Fi: **Roku** (ECP), **Samsung** Tizen, **LG** webOS, **Android TV / Google TV** (remote protocol v2, pair with the code on screen). Fire TV runs Fire OS and doesn't support this protocol.
 - Round clickpad: tap, hold to repeat, drag to scrub (landing zone picks the axis), hold OK for voice.
 - Haptics, synthesized click sounds, accent colours, retro fader, keyboard sheet.
 - Local-network only: private IPv4 addresses are enforced in code.

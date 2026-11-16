@@ -9,6 +9,8 @@ import androidx.lifecycle.viewModelScope
 import com.krishna.miniremote.net.HostValidator
 import com.krishna.miniremote.net.RemoteAdapter
 import com.krishna.miniremote.net.Unsupported
+import com.krishna.miniremote.net.UserFacing
+import kotlinx.coroutines.CompletableDeferred
 import com.krishna.miniremote.net.adapterFor
 import com.krishna.miniremote.net.isCertChanged
 import com.krishna.miniremote.net.Discovery
@@ -31,6 +33,9 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     var scanning by mutableStateOf(false); private set
     var scanNote by mutableStateOf<String?>(null); private set
     var mutedHint by mutableStateOf(false); private set
+    /** Non-null while an Android / Google TV is showing a pairing code and we're waiting for it. */
+    var pairPrompt by mutableStateOf<PairPrompt?>(null); private set
+    private var codeAnswer: CompletableDeferred<String?>? = null
 
     val active: Device? get() = devices.firstOrNull { it.id == activeId }
 
@@ -68,7 +73,8 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     fun say(t: String) {
         toast = t
         toastJob?.cancel()
-        toastJob = viewModelScope.launch { delay(1100); toast = null }
+        // Longer messages stay up longer so they can be read.
+        toastJob = viewModelScope.launch { delay(1100L + 45L * t.length.coerceAtMost(80)); toast = null }
     }
 
     fun connect(d: Device) {
@@ -80,6 +86,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 val a = adapterFor(d,
                     onToken = { tok -> updateDevice(d.id) { it.copy(token = tok) } },
                     onPin = { pin -> updateDevice(d.id) { it.copy(pin = pin) } },
+                    askCode = { err -> askCode(d.name, err) },
                 )
                 a.connect()
                 adapter = a
@@ -88,7 +95,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 link = Link.ERROR
                 say(when {
-                    e is Unsupported -> e.message ?: "Not supported"
+                    e is UserFacing -> e.message ?: "Not supported"
                     e.isCertChanged() -> "${d.name}'s certificate changed. Remove and add it again if you reset it."
                     else -> "Couldn't reach ${d.name}"
                 })
@@ -96,6 +103,17 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
+    /** Shows the pairing dialog and suspends until the user enters a code (or cancels: null). */
+    private suspend fun askCode(tvName: String, error: String?): String? {
+        val d = CompletableDeferred<String?>()
+        codeAnswer?.complete(null)
+        codeAnswer = d
+        pairPrompt = PairPrompt(tvName, error)
+        return try { d.await() } finally { if (codeAnswer === d) { codeAnswer = null; pairPrompt = null } }
+    }
+
+    fun answerCode(code: String?) { codeAnswer?.complete(code) }
 
     fun select(d: Device) {
         activeId = d.id; store.saveActive(d.id); connect(d)

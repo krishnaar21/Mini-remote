@@ -18,7 +18,10 @@ import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
-class Unsupported(msg: String) : Exception(msg)
+/** An error whose message is written for the user and can be shown as is. */
+open class UserFacing(msg: String) : Exception(msg)
+
+class Unsupported(msg: String) : UserFacing(msg)
 
 interface RemoteAdapter {
     suspend fun connect()
@@ -30,19 +33,20 @@ interface RemoteAdapter {
 
 /**
  * [onToken] saves a pairing token; [onPin] saves the TV's certificate fingerprint the first
- * time a secure connection succeeds (see [TlsPin]).
+ * time a secure connection succeeds (see [TlsPin]); [askCode] asks the user for a pairing code.
  */
-fun adapterFor(d: Device, onToken: (String) -> Unit, onPin: (String) -> Unit): RemoteAdapter {
+fun adapterFor(
+    d: Device,
+    onToken: (String) -> Unit,
+    onPin: (String) -> Unit,
+    askCode: suspend (error: String?) -> String?,
+): RemoteAdapter {
     require(HostValidator.isPrivateIPv4(d.host)) { "Only local network addresses are allowed" }
     return when (d.brand) {
         Brand.ROKU -> RokuAdapter(d.host)
         Brand.SAMSUNG -> SamsungAdapter(d.host, d.token, d.pin, onToken, onPin)
         Brand.LG -> LgAdapter(d.host, d.token, d.pin, onToken, onPin)
-        Brand.ANDROID_TV -> object : RemoteAdapter {
-            override suspend fun connect() { throw Unsupported("Android / Fire TV pairing isn't built yet") }
-            override suspend fun send(key: RemoteKey) { throw Unsupported("Android / Fire TV pairing isn't built yet") }
-            override fun close() {}
-        }
+        Brand.ANDROID_TV -> AndroidTvAdapter(d.host, d.pin, onPin, askCode)
     }
 }
 

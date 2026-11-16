@@ -113,4 +113,5 @@ fun RemoteScreen(vm: RemoteVM) {
 
     if (showDevices) DevicesSheet(vm, accent) { showDevices = false }
     if (showKeys) KeyboardSheet(vm, accent) { showKeys = false }
+    vm.pairPrompt?.let { PairCodeDialog(vm, it, accent) }
 }

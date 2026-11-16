@@ -38,6 +38,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import com.krishna.miniremote.PairPrompt
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -192,7 +197,7 @@ private fun AddManual(vm: RemoteVM, accent: Color) {
         err?.let { Text(it, color = T.Danger, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
         OutlinedTextField(name, { name = it }, label = { Text("Name (optional)") }, singleLine = true, colors = colors, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
         Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(Brand.ROKU, Brand.SAMSUNG, Brand.LG).forEach { b ->
+            listOf(Brand.ROKU, Brand.SAMSUNG, Brand.LG, Brand.ANDROID_TV).forEach { b ->
                 FilterChip(selected = brand == b, onClick = { brand = b }, label = { Text(b.label.substringBefore(' ')) },
                     colors = FilterChipDefaults.filterChipColors(selectedContainerColor = accent.copy(0.25f), selectedLabelColor = T.Ink, labelColor = T.Dim))
             }
@@ -226,4 +231,45 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
             }
         }
     }
+}
+
+/** Asks for the 6-character code an Android / Google TV shows while pairing. */
+@Composable
+fun PairCodeDialog(vm: RemoteVM, prompt: PairPrompt, accent: Color) {
+    var code by remember(prompt) { mutableStateOf("") }
+    val ok = code.length == 6
+    AlertDialog(
+        onDismissRequest = { vm.answerCode(null) },
+        containerColor = Sheet,
+        title = { Text("Pair with ${prompt.tvName}", color = T.Ink, modifier = Modifier.semantics { heading() }) },
+        text = {
+            Column {
+                Text("Enter the code shown on your TV.", color = T.Dim, fontSize = 14.sp)
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    code,
+                    // Codes are hex: keep 0-9 and A-F only, uppercase, max 6.
+                    { v -> code = v.uppercase().filter { it in '0'..'9' || it in 'A'..'F' }.take(6) },
+                    label = { Text("Pairing code") },
+                    singleLine = true,
+                    isError = prompt.error != null,
+                    supportingText = prompt.error?.let { e -> { Text(e, color = T.Danger) } },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters,
+                        keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { if (ok) vm.answerCode(code) }),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 22.sp, letterSpacing = 4.sp, color = T.Ink),
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = T.Ink, unfocusedTextColor = T.Ink,
+                        focusedBorderColor = accent, unfocusedBorderColor = Color(0xFF3A3A3D), cursorColor = accent,
+                        focusedLabelColor = accent, unfocusedLabelColor = T.Dim),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { vm.answerCode(code) }, enabled = ok, shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color.Black),
+                modifier = Modifier.height(48.dp)) { Text("Pair", fontWeight = FontWeight.SemiBold) }
+        },
+        dismissButton = { TextButton(onClick = { vm.answerCode(null) }) { Text("Cancel", color = T.Dim) } },
+    )
 }

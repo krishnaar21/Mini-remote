@@ -5,6 +5,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -164,12 +165,13 @@ fun Clickpad(
         Text(
             toast ?: "OK",
             // Announce toasts ("Lost connection", "Choose a TV first") without making "OK" a stop.
-            modifier = Modifier.clearAndSetSemantics {
+            modifier = Modifier.widthIn(max = size * 0.62f).clearAndSetSemantics {
                 if (toast != null) { contentDescription = toast; liveRegion = LiveRegionMode.Polite }
             },
             color = if (toast != null) T.Ink else Color(0xFF55555B),
             fontSize = if (toast != null) 15.sp else 17.sp,
             fontWeight = FontWeight.SemiBold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
 
         val zone = size * 0.28f

@@ -7,7 +7,8 @@ enum class Brand(val label: String) {
     ROKU("Roku"),
     SAMSUNG("Samsung"),
     LG("LG webOS"),
-    ANDROID_TV("Android / Fire / Google TV (soon)")
+    // Enum name kept for saved devices. Fire TV (Fire OS) doesn't speak this protocol.
+    ANDROID_TV("Android / Google TV")
 }
 
 enum class RemoteKey(val word: String) {
@@ -68,3 +69,6 @@ val ACCENTS = listOf(
 )
 
 enum class Link { IDLE, CONNECTING, READY, ERROR }
+
+/** Shown while pairing an Android / Google TV. [error] is from the previous attempt. */
+data class PairPrompt(val tvName: String, val error: String?)
