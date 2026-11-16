@@ -4,6 +4,12 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// CI passes a stable keystore (from GitHub secrets) so every APK has the same signature and
+// installs over the previous one. Without it, Gradle's per-machine debug key is used.
+val signingKeystore: String? = System.getenv("SIGNING_KEYSTORE_PATH")?.takeIf { it.isNotBlank() && file(it).exists() }
+// Each CI run gets a higher versionCode, so Android accepts it as an update.
+val ciRun: Int = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+
 android {
     namespace = "com.krishna.miniremote"
     compileSdk = 35
@@ -12,11 +18,23 @@ android {
         applicationId = "com.krishna.miniremote"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = ciRun
+        versionName = "0.2.$ciRun"
+    }
+
+    signingConfigs {
+        if (signingKeystore != null) create("stable") {
+            storeFile = file(signingKeystore)
+            storePassword = System.getenv("SIGNING_PASSWORD")
+            keyAlias = "miniremote"
+            keyPassword = System.getenv("SIGNING_PASSWORD")
+        }
     }
 
     buildTypes {
+        debug {
+            if (signingKeystore != null) signingConfig = signingConfigs.getByName("stable")
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

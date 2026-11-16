@@ -20,7 +20,20 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.10.2
+      - name: Set up the stable signing key
+        # Same key every build, so a new APK installs over the old one without uninstalling.
+        env:
+          KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/mini-remote.jks"
+            echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/mini-remote.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::SIGNING_KEYSTORE_BASE64 secret is missing, so this APK uses a throwaway key and won't install over earlier builds."
+          fi
       - name: Build debug APK
+        env:
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
         run: gradle :app:assembleDebug --no-daemon --stacktrace
       - name: Name the APK
         run: cp app/build/outputs/apk/debug/app-debug.apk MiniRemote.apk
