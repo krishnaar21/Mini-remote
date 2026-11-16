@@ -28,12 +28,16 @@ interface RemoteAdapter {
     fun close()
 }
 
-fun adapterFor(d: Device, onToken: (String) -> Unit): RemoteAdapter {
+/**
+ * [onToken] saves a pairing token; [onPin] saves the TV's certificate fingerprint the first
+ * time a secure connection succeeds (see [TlsPin]).
+ */
+fun adapterFor(d: Device, onToken: (String) -> Unit, onPin: (String) -> Unit): RemoteAdapter {
     require(HostValidator.isPrivateIPv4(d.host)) { "Only local network addresses are allowed" }
     return when (d.brand) {
         Brand.ROKU -> RokuAdapter(d.host)
-        Brand.SAMSUNG -> SamsungAdapter(d.host, d.token, onToken)
-        Brand.LG -> LgAdapter(d.host, d.token, onToken)
+        Brand.SAMSUNG -> SamsungAdapter(d.host, d.token, d.pin, onToken, onPin)
+        Brand.LG -> LgAdapter(d.host, d.token, d.pin, onToken, onPin)
         Brand.ANDROID_TV -> object : RemoteAdapter {
             override suspend fun connect() { throw Unsupported("Android / Fire TV pairing isn't built yet") }
             override suspend fun send(key: RemoteKey) { throw Unsupported("Android / Fire TV pairing isn't built yet") }
@@ -80,9 +84,13 @@ class RokuAdapter(private val host: String) : RemoteAdapter {
 class SamsungAdapter(
     private val host: String,
     private var token: String?,
+    private val pin: String?,
     private val onToken: (String) -> Unit,
+    private val onPin: (String) -> Unit,
 ) : RemoteAdapter {
     private var ws: WebSocket? = null
+    private val tls = TlsPin(pin)
+    private val client = Net.pinnedTls(tls)
     private val keys = mapOf(
         RemoteKey.UP to "KEY_UP", RemoteKey.DOWN to "KEY_DOWN", RemoteKey.LEFT to "KEY_LEFT", RemoteKey.RIGHT to "KEY_RIGHT",
         RemoteKey.OK to "KEY_ENTER", RemoteKey.BACK to "KEY_RETURN", RemoteKey.HOME to "KEY_HOME",
@@ -97,7 +105,7 @@ class SamsungAdapter(
         val url = "wss://$host:8002/api/v2/channels/samsung.remote.control?name=$name" +
             (token?.let { "&token=" + URLEncoder.encode(it, "UTF-8") } ?: "")
         val ready = CompletableDeferred<Unit>()
-        ws = Net.lanTls.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
+        ws = client.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 val j = runCatching { JSONObject(text) }.getOrNull() ?: return
                 if (j.optString("event") == "ms.channel.connect") {
@@ -113,6 +121,7 @@ class SamsungAdapter(
         })
         // The TV may show an "Allow" prompt the first time, so wait longer.
         try { withTimeout(25_000) { ready.await() } } catch (e: Exception) { close(); throw e }
+        if (pin == null) tls.seen?.let(onPin)
     }
 
     override suspend fun send(key: RemoteKey) {
@@ -132,8 +141,12 @@ class SamsungAdapter(
 class LgAdapter(
     private val host: String,
     private var token: String?,
+    private val pin: String?,
     private val onToken: (String) -> Unit,
+    private val onPin: (String) -> Unit,
 ) : RemoteAdapter {
+    private val tls = TlsPin(pin)
+    private val secure = Net.pinnedTls(tls)
     private var ws: WebSocket? = null
     private var pointer: WebSocket? = null
     private val ids = AtomicInteger(1)
@@ -180,11 +193,18 @@ class LgAdapter(
 
     override suspend fun connect() {
         close()
+        if (pin != null) {
+            // Paired over TLS before: never drop back to the unencrypted port.
+            tryConnect("wss://$host:3001", secure)
+            return
+        }
         try {
             tryConnect("ws://$host:3000", Net.plain)
         } catch (e: Exception) {
+            if (e.isCertChanged()) throw e
             // Newer webOS versions only accept the secure port.
-            tryConnect("wss://$host:3001", Net.lanTls)
+            tryConnect("wss://$host:3001", secure)
+            tls.seen?.let(onPin)
         }
     }
 
@@ -203,7 +223,7 @@ class LgAdapter(
             .optJSONObject("payload")?.optString("socketPath").orEmpty()
         if (path.isEmpty()) error("TV refused the input channel")
         val up = CompletableDeferred<Unit>()
-        val client = if (path.startsWith("wss")) Net.lanTls else Net.plain
+        val client = if (path.startsWith("wss")) secure else Net.plain
         val s = client.newWebSocket(Request.Builder().url(path).build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) { up.complete(Unit) }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {

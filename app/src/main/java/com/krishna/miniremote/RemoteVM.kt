@@ -10,6 +10,7 @@ import com.krishna.miniremote.net.HostValidator
 import com.krishna.miniremote.net.RemoteAdapter
 import com.krishna.miniremote.net.Unsupported
 import com.krishna.miniremote.net.adapterFor
+import com.krishna.miniremote.net.isCertChanged
 import com.krishna.miniremote.net.Discovery
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -76,14 +77,21 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         link = Link.CONNECTING
         connectJob = viewModelScope.launch {
             try {
-                val a = adapterFor(d) { tok -> updateDevice(d.copy(token = tok)) }
+                val a = adapterFor(d,
+                    onToken = { tok -> updateDevice(d.id) { it.copy(token = tok) } },
+                    onPin = { pin -> updateDevice(d.id) { it.copy(pin = pin) } },
+                )
                 a.connect()
                 adapter = a
                 link = Link.READY
                 feel.fire(Feel.SUCCESS)
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 link = Link.ERROR
-                say(if (e is Unsupported) e.message ?: "Not supported" else "Couldn't reach ${d.name}")
+                say(when {
+                    e is Unsupported -> e.message ?: "Not supported"
+                    e.isCertChanged() -> "${d.name}'s certificate changed. Remove and add it again if you reset it."
+                    else -> "Couldn't reach ${d.name}"
+                })
                 feel.fire(Feel.ERROR)
             }
         }
@@ -93,8 +101,9 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         activeId = d.id; store.saveActive(d.id); connect(d)
     }
 
-    private fun updateDevice(d: Device) {
-        devices = devices.map { if (it.id == d.id) d else it }
+    /** Update the stored copy by id, so a token and a pin saved in one connect don't overwrite each other. */
+    private fun updateDevice(id: String, change: (Device) -> Device) {
+        devices = devices.map { if (it.id == id) change(it) else it }
         store.saveDevices(devices)
     }
 

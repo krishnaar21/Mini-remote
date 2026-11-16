@@ -22,10 +22,13 @@ data class Device(
     val host: String,
     val brand: Brand,
     val token: String? = null,
+    /** SHA-256 of the TV's TLS certificate, recorded on first pairing (Samsung / LG wss). */
+    val pin: String? = null,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("name", name).put("host", host).put("brand", brand.name)
         .put("token", token ?: JSONObject.NULL)
+        .put("pin", pin ?: JSONObject.NULL)
 
     companion object {
         fun fromJson(o: JSONObject): Device? = runCatching {
@@ -35,6 +38,7 @@ data class Device(
                 host = o.getString("host"),
                 brand = Brand.valueOf(o.getString("brand")),
                 token = if (o.isNull("token")) null else o.getString("token"),
+                pin = if (!o.has("pin") || o.isNull("pin")) null else o.getString("pin"),
             )
         }.getOrNull()
 
