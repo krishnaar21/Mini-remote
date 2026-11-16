@@ -25,6 +25,7 @@ class Store(ctx: Context) {
             scrubStepDp = p.getFloat("step", d.scrubStepDp).coerceIn(24f, 60f),
             gyro = p.getBoolean("gyro", d.gyro),
             keepAwake = p.getBoolean("awake", d.keepAwake),
+            autoUpdate = p.getBoolean("autoupdate", d.autoUpdate),
         )
     }
 
@@ -32,7 +33,8 @@ class Store(ctx: Context) {
         .putBoolean("haptics", s.haptics).putFloat("strength", s.hapticStrength)
         .putBoolean("sound", s.sound).putFloat("soundLevel", s.soundLevel)
         .putString("accent", s.accentHex).putFloat("step", s.scrubStepDp)
-        .putBoolean("gyro", s.gyro).putBoolean("awake", s.keepAwake).apply()
+        .putBoolean("gyro", s.gyro).putBoolean("awake", s.keepAwake)
+        .putBoolean("autoupdate", s.autoUpdate).apply()
 
     /** Whether the one-time local network explainer has been shown. */
     fun localSeen(): Boolean = p.getBoolean("localSeen", false)

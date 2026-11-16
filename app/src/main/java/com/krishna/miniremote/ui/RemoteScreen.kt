@@ -5,6 +5,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
@@ -163,6 +171,14 @@ fun RemoteScreen(vm: RemoteVM) {
                     Text("Type", color = T.Ink, fontSize = bsp(38f), fontWeight = FontWeight.SemiBold)
                 }
             }
+            // Update notice: a small pill above the top row, only when a newer build is downloading or ready.
+            when (val u = vm.update) {
+                is RemoteVM.Update.Downloading, is RemoteVM.Update.Ready -> Box(at(460f, 40f, 640f, 76f), contentAlignment = Alignment.Center) {
+                    UpdatePill(u, accent, onInstall = { vm.installUpdate() }, onDismiss = { vm.dismissUpdate() })
+                }
+                else -> {}
+            }
+
             VolumePill(
                 accent, vm.muted, at(655f, 1700f, 390f, 130f),
                 onDown = { vm.press(RemoteKey.VOL_DOWN, quiet = true) },
@@ -176,5 +192,32 @@ fun RemoteScreen(vm: RemoteVM) {
     if (showKeys) KeyboardSheet(vm, accent) { showKeys = false }
     // Pairing normally happens inside the sheet; this covers a pairing that starts with it closed.
     if (sheet == null) vm.pairPrompt?.let { PairCodeDialog(vm, it, accent) }
+    }
+}
+
+/** "Update 0.2.N ready · Install" (or download progress), with a close button. */
+@Composable
+private fun UpdatePill(u: RemoteVM.Update, accent: Color, onInstall: () -> Unit, onDismiss: () -> Unit) {
+    val ready = u as? RemoteVM.Update.Ready
+    val text = when (u) {
+        is RemoteVM.Update.Ready -> "Update ${u.info.name} ready \u00b7 Install"
+        is RemoteVM.Update.Downloading -> "Downloading update ${(u.progress * 100).toInt()}%"
+        else -> ""
+    }
+    Row(
+        Modifier.fillMaxHeight().clip(androidx.compose.foundation.shape.CircleShape).background(Color(0xFF2A2A2B))
+            .then(if (ready != null) Modifier.clickable(onClickLabel = "install update", onClick = onInstall) else Modifier)
+            .padding(start = 14.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(Modifier.size(7.dp).background(accent, androidx.compose.foundation.shape.CircleShape))
+        Text(text, color = T.Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        if (ready != null) Box(
+            Modifier.size(28.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                .clickable(onClickLabel = "dismiss", onClick = onDismiss).semantics { contentDescription = "Dismiss update" },
+            contentAlignment = Alignment.Center,
+        ) { LineIcon(Ico.CLOSE, T.Dim, 14.dp) } else Box(Modifier.size(10.dp))
     }
 }

@@ -36,11 +36,18 @@ jobs:
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
         run: gradle :app:assembleDebug --no-daemon --stacktrace
       - name: Name the APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk MiniRemote.apk
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk MiniRemote.apk
+          # The in-app updater reads this to find newer builds and verify the download.
+          printf '{"versionCode":%s,"versionName":"0.2.%s","sha256":"%s"}\n' \
+            "$GITHUB_RUN_NUMBER" "$GITHUB_RUN_NUMBER" "$(sha256sum MiniRemote.apk | cut -d' ' -f1)" > version.json
+          cat version.json
       - uses: actions/upload-artifact@v4
         with:
           name: MiniRemote-apk
-          path: MiniRemote.apk
+          path: |
+            MiniRemote.apk
+            version.json
       - name: Publish as the latest release (stable download link)
         # Only builds of main replace the public download; PR builds stay as run artifacts.
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -48,6 +55,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete latest-build --cleanup-tag --yes || true
-          gh release create latest-build MiniRemote.apk \
+          gh release create latest-build MiniRemote.apk version.json \
             --title "Latest build" \
             --notes "Debug APK built from commit ${GITHUB_SHA::7}. Install on Android (allow unknown apps)."

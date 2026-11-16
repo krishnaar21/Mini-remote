@@ -132,7 +132,6 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onClose, sheetState = state, containerColor = SheetBg, contentColor = T.Ink,
         shape = SheetShape, scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
-        modifier = Modifier.border(1.dp, Line, SheetShape),
     ) {
         BackHandler(enabled = stack.size > 1) { back() }
         val canBack = stack.size > 1 || page !is Page.Devices
@@ -605,6 +604,36 @@ private fun SettingsPage(vm: RemoteVM, accent: Color, manage: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text("Manage TVs", color = T.Ink, fontSize = 15.sp)
             Text("${vm.devices.size} saved", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
+        }
+        Chevron()
+    }
+    Divider()
+    SectionTitle("Updates")
+    ToggleRow("Automatic updates", "Download new builds in the background, then ask to install", s.autoUpdate) {
+        vm.update(s.copy(autoUpdate = it)); if (it) vm.checkForUpdate()
+    }
+    val u = vm.update
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 68.dp)
+            .clickable(role = Role.Button, enabled = u !is RemoteVM.Update.Checking && u !is RemoteVM.Update.Downloading) {
+                if (u is RemoteVM.Update.Ready) vm.installUpdate() else vm.checkForUpdate(manual = true)
+            }
+            .padding(vertical = 16.dp, horizontal = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
+            Text(if (u is RemoteVM.Update.Ready) "Install update" else "Check for updates", color = T.Ink, fontSize = 15.sp)
+            Text(
+                when (u) {
+                    RemoteVM.Update.Idle -> "Looks at the latest build on GitHub"
+                    RemoteVM.Update.Checking -> "Checking…"
+                    RemoteVM.Update.UpToDate -> "You're on the latest build"
+                    is RemoteVM.Update.Downloading -> "Downloading ${u.info.name}… ${(u.progress * 100).toInt()}%"
+                    is RemoteVM.Update.Ready -> "Version ${u.info.name} is downloaded"
+                    is RemoteVM.Update.Failed -> u.message
+                },
+                color = if (u is RemoteVM.Update.Failed) DangerInk else Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp),
+            )
         }
         Chevron()
     }
