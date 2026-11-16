@@ -176,8 +176,8 @@ fun Clickpad(
             insideStadium {
                 touch?.let { t ->
                     if (!wellDown) drawCircle(Brush.radialGradient(
-                        0f to Color.White.copy(0.10f), 0.7f to Color.Transparent, center = t, radius = size.width * 260f / 780f),
-                        size.width * 260f / 780f, t)
+                        0f to Color.White.copy(0.10f), 0.7f to Color.Transparent, center = t, radius = this.size.width * 260f / 780f),
+                        this.size.width * 260f / 780f, t)
                 }
                 val v = rip.value
                 if (v < 1f) {
