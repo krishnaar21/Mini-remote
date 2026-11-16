@@ -31,6 +31,8 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     var activeId by mutableStateOf(store.activeId()); private set
     var link by mutableStateOf(Link.IDLE); private set
     var toast by mutableStateOf<String?>(null); private set
+    /** The key behind the current toast, so the well can show its icon above the name. */
+    var toastKey by mutableStateOf<RemoteKey?>(null); private set
     var scanning by mutableStateOf(false); private set
     /** TVs found by the last scan that aren't saved yet. */
     var found by mutableStateOf<List<Device>>(emptyList()); private set
@@ -74,17 +76,18 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         feel.fire(if (key == RemoteKey.POWER) Feel.HEAVY else Feel.PRESS)
         if (key == RemoteKey.MUTE) muted = !muted
         if (key == RemoteKey.VOL_UP) muted = false
-        if (!quiet) say(key.word)
+        if (!quiet) say(key.word, key)
         queue.trySend(key)
     }
 
     fun scrubTick(key: RemoteKey) { feel.fire(Feel.TICK); queue.trySend(key) }
 
-    fun say(t: String) {
+    fun say(t: String, key: RemoteKey? = null) {
         toast = t
+        toastKey = key
         toastJob?.cancel()
         // Longer messages stay up longer so they can be read.
-        toastJob = viewModelScope.launch { delay(1100L + 45L * t.length.coerceAtMost(80)); toast = null }
+        toastJob = viewModelScope.launch { delay(1100L + 45L * t.length.coerceAtMost(80)); toast = null; toastKey = null }
     }
 
     fun connect(d: Device) {

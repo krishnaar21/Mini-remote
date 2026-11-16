@@ -4,16 +4,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.animation.core.RepeatMode
@@ -37,7 +37,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.krishna.miniremote.Link
 import com.krishna.miniremote.RemoteKey
 import com.krishna.miniremote.RemoteVM
@@ -53,6 +52,15 @@ private fun grain(): ImageBitmap {
     }
     val bmp = android.graphics.Bitmap.createBitmap(px, n, n, android.graphics.Bitmap.Config.ARGB_8888)
     return bmp.asImageBitmap()
+}
+
+/** The icon the well shows above a key's name, as in the design's toast. */
+private fun keyIcon(k: RemoteKey, muted: Boolean): Ico? = when (k) {
+    RemoteKey.UP -> Ico.UP; RemoteKey.DOWN -> Ico.DOWN; RemoteKey.LEFT -> Ico.LEFT; RemoteKey.RIGHT -> Ico.RIGHT
+    RemoteKey.BACK -> Ico.BACK; RemoteKey.HOME -> Ico.HOME; RemoteKey.PLAY_PAUSE -> Ico.PLAY; RemoteKey.POWER -> Ico.POWER
+    RemoteKey.VOL_UP -> Ico.PLUS; RemoteKey.VOL_DOWN -> Ico.MINUS; RemoteKey.VOICE -> Ico.MIC
+    RemoteKey.MUTE -> if (muted) Ico.SPEAKER_MUTED else Ico.SPEAKER
+    RemoteKey.OK -> null
 }
 
 @Composable
@@ -74,69 +82,93 @@ fun RemoteScreen(vm: RemoteVM) {
         0.2f, 1f, infiniteRepeatable(androidx.compose.animation.core.tween(500), RepeatMode.Reverse), label = "blink")
 
     CompositionLocalProvider(LocalTilt provides tilt) {
-    BoxWithConstraints(Modifier.fillMaxSize().background(T.Bg).drawBehind { drawRect(grainBrush) }.systemBarsPadding()) {
-        val padSize = (maxWidth - 64.dp).coerceIn(220.dp, 340.dp)
-        Column(
-            Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            // Top row: mic | TV pill | power
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                RoundKey(56.dp, accent, "Voice search", onPress = { vm.press(RemoteKey.VOICE) }) { LineIcon(Ico.MIC, it) }
-                KeyButton(
-                    RoundedCornerShape(50), accent,
-                    label = vm.active?.let { "TV: ${it.name}" } ?: "Choose a TV",
-                    modifier = Modifier.weight(1f).height(56.dp),
-                    state = if (vm.active != null) linkWord(vm.link) else null,
-                    actionLabel = "open TVs and settings",
-                    onPress = { sheet = Page.Devices },
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        val dotAlpha = when {
-                            vm.active == null || vm.link == Link.ERROR -> 0.4f
-                            vm.link == Link.CONNECTING -> blink.value
-                            else -> 0.16f + 0.84f * lit.value
-                        }
-                        val dotColor = if (vm.active == null || vm.link == Link.ERROR) Color(0xFF666666) else accent
-                        Box(Modifier.size(10.dp)
-                            .drawBehind { if (lit.value > 0f) drawCircle(accent.copy(0.6f * lit.value), size.minDimension * 1.6f) }
-                            .background(dotColor.copy(alpha = dotAlpha), CircleShape))
-                        Text(vm.active?.name ?: "Choose a TV", color = T.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                        LineIcon(Ico.CHEVRON_R, T.Dim, 16.dp)
-                    }
-                }
-                RoundKey(56.dp, accent, "Power", onPress = { vm.press(RemoteKey.POWER) }) { LineIcon(Ico.POWER, if (it == accent) accent else T.Danger) }
+    BoxWithConstraints(Modifier.fillMaxSize().background(T.Bg).drawBehind { drawRect(grainBrush, alpha = 0.30f) }.systemBarsPadding()) {
+        // The design's board: 920 x 2000, as wide as the phone minus a 16dp gutter each side
+        // (at most 420dp), shrunk further if the screen is short, centred and nudged down 70.
+        val bw = (maxWidth.value - 32f).coerceAtMost(420f)
+        val k = minOf(bw / 920f, maxHeight.value / 2000f)
+        val ox = (maxWidth.value - 920f * k) / 2f
+        val oy = ((maxHeight.value - 2000f * k) / 2f + 70f * k).coerceAtLeast(0f)
+        /** Places a w x h element centred on board point (cx, cy). */
+        fun at(cx: Float, cy: Float, w: Float, h: Float) =
+            Modifier.offset((ox + (cx - w / 2f) * k).dp, (oy + (cy - h / 2f) * k).dp).size((w * k).dp, (h * k).dp)
+
+        CompositionLocalProvider(LocalK provides k) {
+            // Voice (.ib2.mic): pressed it glows with the accent and a pulsing inner ring.
+            val micDown = flat(mix(accent, 0.26f, Color(0xFF2A2A2D)), KEY_DOWN.shadows)
+            KeyButton(accent, "Voice search", at(102f, 190f, 124f, 124f), downFace = micDown, onPress = { vm.press(RemoteKey.VOICE) }) { c, down ->
+                if (down) Box(Modifier.size((124f * k).dp).drawBehind {
+                    drawCircle(accent.copy(0.7f * blink.value), size.minDimension / 2f - 1.5f * k * density, style = androidx.compose.ui.graphics.drawscope.Stroke(3f * k * density))
+                })
+                LineIcon(Ico.MIC, c, bdp(50f))
             }
 
-            Clickpad(
-                size = padSize, accent = accent, stepDp = vm.settings.scrubStepDp, toast = vm.toast,
-                onKey = { vm.press(it, quiet = it == RemoteKey.OK) },
-                onTick = { vm.scrubTick(it) },
-                onVoice = { vm.feel.fire(com.krishna.miniremote.Feel.HEAVY); vm.press(RemoteKey.VOICE) },
-                offline = offline,
-                onOffline = { vm.feel.fire(com.krishna.miniremote.Feel.PRESS); sheet = Page.Devices },
-            )
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                RoundKey(76.dp, accent, "Back", onPress = { vm.press(RemoteKey.BACK) }) { LineIcon(Ico.BACK, it, 28.dp) }
-                RoundKey(76.dp, accent, "Play or pause", onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { LineIcon(Ico.PLAY, it, 28.dp) }
-                RoundKey(76.dp, accent, "Home", onPress = { vm.press(RemoteKey.HOME) }) { LineIcon(Ico.HOME, it, 28.dp) }
+            // TV pill (.devpill): status light, name, chevron. Opens TVs & settings.
+            KeyButton(
+                accent, label = vm.active?.let { "TV: ${it.name}" } ?: "Choose a TV",
+                modifier = at(460f, 190f, 508f, 124f),
+                state = if (vm.active != null) linkWord(vm.link) else null,
+                actionLabel = "open TVs and settings", pressedScale = 0.98f,
+                onPress = { sheet = Page.Devices },
+            ) { c, down ->
+                Row(Modifier.padding(horizontal = bdp(32f)), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(bdp(22f))) {
+                    val off = vm.active == null || vm.link == Link.ERROR
+                    val dotAlpha = when {
+                        off -> 0.4f
+                        vm.link == Link.CONNECTING -> blink.value
+                        else -> 0.16f + 0.84f * lit.value
+                    }
+                    Box(Modifier.size(bdp(22f))
+                        .drawBehind {
+                            if (!off && lit.value > 0f) drawCircle(Brush.radialGradient(
+                                listOf(accent.copy(0.6f * lit.value), Color.Transparent), center, size.minDimension / 2f + 29f * k * density),
+                                size.minDimension / 2f + 29f * k * density)
+                            if (off) drawCircle(Color(0xFF666666).copy(alpha = dotAlpha))
+                            else drawCircle(Brush.radialGradient(
+                                0f to mix(accent, 0.55f, Color.White), 0.5f to accent, 1f to mix(accent, 0.45f, Color.Black),
+                                center = Offset(size.width * 0.4f, size.height * 0.35f), radius = size.minDimension * 0.75f), alpha = dotAlpha)
+                        })
+                    Text(vm.active?.name ?: "Choose a TV", Modifier.widthIn(max = bdp(300f)), color = T.Ink, fontSize = bsp(40f),
+                        fontWeight = FontWeight.SemiBold, letterSpacing = bsp(-0.4f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    LineIcon(Ico.CHEVRON_R, if (down) accent else Color(0xFF9A9AA0), bdp(40f), stroke = 2.2f)
+                }
             }
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                KeyButton(RoundedCornerShape(50), accent, "Type on TV", Modifier.weight(1f).height(56.dp), actionLabel = "open keyboard", onPress = { showKeys = true }) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        LineIcon(Ico.KEYBOARD, it); Text("Type", color = it, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-                VolumePill(
-                    accent, vm.muted, Modifier.weight(1.08f).height(56.dp),
-                    onDown = { vm.press(RemoteKey.VOL_DOWN, quiet = true) },
-                    onMute = { vm.press(RemoteKey.MUTE) },
-                    onUp = { vm.press(RemoteKey.VOL_UP, quiet = true) },
+            // Power: its icon is always in the accent colour.
+            KeyButton(accent, "Power", at(818f, 190f, 124f, 124f), restColor = accent, onPress = { vm.press(RemoteKey.POWER) }) { c, _ ->
+                LineIcon(Ico.POWER, c, bdp(50f))
+            }
+
+            Box(at(460f, 770f, 780f, 780f), contentAlignment = Alignment.Center) {
+                Clickpad(
+                    size = (780f * k).dp, accent = accent, stepDp = vm.settings.scrubStepDp, toast = vm.toast,
+                    toastIcon = vm.toastKey?.let { keyIcon(it, vm.muted) },
+                    onKey = { vm.press(it, quiet = it == RemoteKey.OK) },
+                    onTick = { vm.scrubTick(it) },
+                    onVoice = { vm.feel.fire(com.krishna.miniremote.Feel.HEAVY); vm.press(RemoteKey.VOICE) },
+                    offline = offline,
+                    onOffline = { vm.feel.fire(com.krishna.miniremote.Feel.PRESS); sheet = Page.Devices },
                 )
             }
+
+            // Big keys (.ib2.lg): 196 across, 70px icons at stroke 2.
+            KeyButton(accent, "Back", at(190f, 1370f, 196f, 196f), onPress = { vm.press(RemoteKey.BACK) }) { c, _ -> LineIcon(Ico.BACK, c, bdp(70f), stroke = 2f) }
+            KeyButton(accent, "Play or pause", at(460f, 1370f, 196f, 196f), onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { c, _ -> LineIcon(Ico.PLAY, c, bdp(70f), stroke = 2f) }
+            KeyButton(accent, "Home", at(730f, 1370f, 196f, 196f), onPress = { vm.press(RemoteKey.HOME) }) { c, _ -> LineIcon(Ico.HOME, c, bdp(70f), stroke = 2f) }
+
+            // Type (.ipill) and the volume rocker (.ivol).
+            KeyButton(accent, "Type on TV", at(250f, 1700f, 360f, 130f), actionLabel = "open keyboard", pressedScale = 0.97f, onPress = { showKeys = true }) { c, _ ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(bdp(20f))) {
+                    LineIcon(Ico.KEYBOARD, c, bdp(48f))
+                    Text("Type", color = T.Ink, fontSize = bsp(38f), fontWeight = FontWeight.SemiBold)
+                }
+            }
+            VolumePill(
+                accent, vm.muted, at(655f, 1700f, 390f, 130f),
+                onDown = { vm.press(RemoteKey.VOL_DOWN, quiet = true) },
+                onMute = { vm.press(RemoteKey.MUTE) },
+                onUp = { vm.press(RemoteKey.VOL_UP, quiet = true) },
+            )
         }
     }
 

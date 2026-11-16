@@ -5,103 +5,58 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-enum class Ico { UP, DOWN, LEFT, RIGHT, MIC, POWER, BACK, PLAY, HOME, KEYBOARD, MINUS, PLUS, SPEAKER, SPEAKER_MUTED, CHEVRON_R, CHEVRON_L, GEAR, CLOSE, SLIDERS, WIFI, CHECK, ALERT, TV }
+/**
+ * Line icons, using the exact 24x24 SVG paths from the design preview (Lucide style).
+ * Numbers are written with explicit separators so the parser never has to guess.
+ */
+enum class Ico(val d: String) {
+    UP("M6 15L12 9L18 15"),
+    DOWN("M6 9L12 15L18 9"),
+    LEFT("M15 6L9 12L15 18"),
+    RIGHT("M9 6L15 12L9 18"),
+    CHEVRON_R("M9 6L15 12L9 18"),
+    CHEVRON_L("M15 18L9 12L15 6"),
+    MIC("M12 2a3 3 0 0 0 -3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0 -3 -3Z M19 10v2a7 7 0 0 1 -14 0v-2 M12 19v3"),
+    POWER("M12 2v10 M18.4 6.6a9 9 0 1 1 -12.77 0.04"),
+    BACK("M9 14L4 9L9 4 M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1 -5.5 5.5H11"),
+    PLAY("M4 5L13 12L4 19Z M17 5v14 M21 5v14"),
+    HOME("M15 21v-8a1 1 0 0 0 -1 -1h-4a1 1 0 0 0 -1 1v8 M3 10a2 2 0 0 1 0.709 -1.528l7 -5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1 -2 2H5a2 2 0 0 1 -2 -2Z"),
+    KEYBOARD("M10 8h0.01 M12 12h0.01 M14 8h0.01 M16 12h0.01 M18 8h0.01 M6 8h0.01 M8 12h0.01 M7 16h10 M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2H4a2 2 0 0 1 -2 -2V6a2 2 0 0 1 2 -2Z"),
+    MINUS("M5 12h14"),
+    PLUS("M5 12h14 M12 5v14"),
+    SPEAKER("M3 9.5h3.5L12 5v14l-5.5 -4.5H3Z M16 9a5 5 0 0 1 0 6"),
+    SPEAKER_MUTED("M3 9.5h3.5L12 5v14l-5.5 -4.5H3Z M16 9a5 5 0 0 1 0 6 M4 4l16 16"),
+    GEAR("M12.22 2h-0.44a2 2 0 0 0 -2 2v0.18a2 2 0 0 1 -1 1.73l-0.43 0.25a2 2 0 0 1 -2 0l-0.15 -0.08a2 2 0 0 0 -2.73 0.73l-0.22 0.38a2 2 0 0 0 0.73 2.73l0.15 0.1a2 2 0 0 1 1 1.72v0.51a2 2 0 0 1 -1 1.74l-0.15 0.09a2 2 0 0 0 -0.73 2.73l0.22 0.38a2 2 0 0 0 2.73 0.73l0.15 -0.08a2 2 0 0 1 2 0l0.43 0.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h0.44a2 2 0 0 0 2 -2v-0.18a2 2 0 0 1 1 -1.73l0.43 -0.25a2 2 0 0 1 2 0l0.15 0.08a2 2 0 0 0 2.73 -0.73l0.22 -0.39a2 2 0 0 0 -0.73 -2.73l-0.15 -0.08a2 2 0 0 1 -1 -1.74v-0.5a2 2 0 0 1 1 -1.74l0.15 -0.09a2 2 0 0 0 0.73 -2.73l-0.22 -0.38a2 2 0 0 0 -2.73 -0.73l-0.15 0.08a2 2 0 0 1 -2 0l-0.43 -0.25a2 2 0 0 1 -1 -1.73V4a2 2 0 0 0 -2 -2Z M15 12a3 3 0 1 1 -6 0a3 3 0 0 1 6 0Z"),
+    CLOSE("M18 6L6 18 M6 6l12 12"),
+    SLIDERS("M21 4h-7 M10 4H3 M21 12h-9 M8 12H3 M21 20h-5 M12 20H3 M14 2v4 M8 10v4 M16 18v4"),
+    WIFI("M12 20h0.01 M2 8.82a15 15 0 0 1 20 0 M5 12.86a10 10 0 0 1 14 0 M8.5 16.43a5 5 0 0 1 7 0"),
+    CHECK("M20 6L9 17l-5 -5"),
+    ALERT("M12 7v6 M12 17h0.01"),
+    TV("M4 3h16a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2H4a2 2 0 0 1 -2 -2V5a2 2 0 0 1 2 -2Z M8 21h8 M12 17v4");
 
-/** Light line icons drawn on a 24x24 grid so they match the soft-touch look without extra libraries. */
+    internal val path: Path by lazy { PathParser().parsePathString(d).toPath() }
+}
+
+/**
+ * Draws [ico] at [size]. [stroke] is in the icon's own 24-unit grid, like SVG stroke-width
+ * (the design uses 1.8 on round keys, 1.9 on volume, 2.0 on the big keys, 2.3 on pad arrows).
+ */
 @Composable
-fun LineIcon(ico: Ico, color: Color, size: Dp = 24.dp, modifier: Modifier = Modifier) {
+fun LineIcon(ico: Ico, color: Color, size: Dp = 24.dp, modifier: Modifier = Modifier, stroke: Float = 1.8f) {
     Canvas(modifier.size(size)) {
         val k = this.size.minDimension / 24f
-        val st = Stroke(width = 2.1f * k, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        fun o(x: Float, y: Float) = Offset(x * k, y * k)
-        fun DrawScope.line(x1: Float, y1: Float, x2: Float, y2: Float) =
-            drawLine(color, o(x1, y1), o(x2, y2), st.width, StrokeCap.Round)
-        fun DrawScope.poly(close: Boolean, vararg p: Pair<Float, Float>) {
-            val path = Path()
-            p.forEachIndexed { i, (x, y) -> if (i == 0) path.moveTo(x * k, y * k) else path.lineTo(x * k, y * k) }
-            if (close) path.close()
-            drawPath(path, color, style = st)
-        }
-        when (ico) {
-            Ico.UP -> poly(false, 6f to 15f, 12f to 9f, 18f to 15f)
-            Ico.DOWN -> poly(false, 6f to 9f, 12f to 15f, 18f to 9f)
-            Ico.LEFT -> poly(false, 15f to 6f, 9f to 12f, 15f to 18f)
-            Ico.RIGHT, Ico.CHEVRON_R -> poly(false, 9f to 6f, 15f to 12f, 9f to 18f)
-            Ico.PLUS -> { line(5f, 12f, 19f, 12f); line(12f, 5f, 12f, 19f) }
-            Ico.MINUS -> line(5f, 12f, 19f, 12f)
-            Ico.CLOSE -> { line(6f, 6f, 18f, 18f); line(18f, 6f, 6f, 18f) }
-            Ico.CHEVRON_L -> poly(false, 15f to 6f, 9f to 12f, 15f to 18f)
-            Ico.SPEAKER_MUTED -> {
-                poly(true, 4f to 10f, 8f to 10f, 12.5f to 6f, 12.5f to 18f, 8f to 14f, 4f to 14f)
-                line(4f, 4f, 20f, 20f)
-            }
-            Ico.SLIDERS -> {
-                line(21f, 4f, 14f, 4f); line(10f, 4f, 3f, 4f); line(21f, 12f, 12f, 12f); line(8f, 12f, 3f, 12f)
-                line(21f, 20f, 16f, 20f); line(12f, 20f, 3f, 20f); line(14f, 2f, 14f, 6f); line(8f, 10f, 8f, 14f); line(16f, 18f, 16f, 22f)
-            }
-            Ico.WIFI -> {
-                drawArc(color, 225f, 90f, false, o(2f, 6f), Size(20f * k, 20f * k), style = st)
-                drawArc(color, 225f, 90f, false, o(5f, 9f), Size(14f * k, 14f * k), style = st)
-                drawArc(color, 225f, 90f, false, o(8.5f, 12.5f), Size(7f * k, 7f * k), style = st)
-                drawCircle(color, 1.2f * k, o(12f, 19.5f))
-            }
-            Ico.CHECK -> poly(false, 20f to 6f, 9f to 17f, 4f to 12f)
-            Ico.ALERT -> { line(12f, 7f, 12f, 13f); drawCircle(color, 1.2f * k, o(12f, 17f)) }
-            Ico.TV -> {
-                drawRoundRect(color, o(2f, 7f), Size(20f * k, 15f * k), CornerRadius(2f * k), style = st)
-                poly(false, 17f to 2f, 12f to 7f, 7f to 2f)
-            }
-            Ico.POWER -> {
-                drawArc(color, -50f, 280f, false, o(5f, 6f), Size(14f * k, 14f * k), style = st)
-                line(12f, 3.5f, 12f, 12f)
-            }
-            Ico.MIC -> {
-                drawRoundRect(color, o(9f, 3f), Size(6f * k, 11f * k), CornerRadius(3f * k), style = st)
-                drawArc(color, 0f, 180f, false, o(5.5f, 7f), Size(13f * k, 11f * k), style = st)
-                line(12f, 18f, 12f, 21f)
-            }
-            Ico.BACK -> {
-                poly(false, 9f to 5f, 4f to 10f, 9f to 15f)
-                val p = Path().apply {
-                    moveTo(4f * k, 10f * k); lineTo(14f * k, 10f * k)
-                    cubicTo(21f * k, 10f * k, 21f * k, 19f * k, 14f * k, 19f * k)
-                    lineTo(9f * k, 19f * k)
-                }
-                drawPath(p, color, style = st)
-            }
-            Ico.PLAY -> {
-                poly(true, 4f to 5f, 4f to 19f, 13f to 12f)
-                line(17f, 5f, 17f, 19f); line(20.5f, 5f, 20.5f, 19f)
-            }
-            Ico.HOME -> {
-                poly(false, 3.5f to 11f, 12f to 3.5f, 20.5f to 11f)
-                poly(false, 6f to 9.5f, 6f to 20f, 18f to 20f, 18f to 9.5f)
-                poly(false, 10f to 20f, 10f to 14f, 14f to 14f, 14f to 20f)
-            }
-            Ico.KEYBOARD -> {
-                drawRoundRect(color, o(2.5f, 6f), Size(19f * k, 12f * k), CornerRadius(2.5f * k), style = st)
-                listOf(6.5f, 10f, 13.5f, 17f).forEach { line(it, 10f, it + 0.01f, 10f) }
-                line(8f, 14.5f, 16f, 14.5f)
-            }
-            Ico.SPEAKER -> {
-                poly(true, 4f to 10f, 8f to 10f, 12.5f to 6f, 12.5f to 18f, 8f to 14f, 4f to 14f)
-                drawArc(color, -50f, 100f, false, o(11f, 8f), Size(10f * k, 8f * k), style = st)
-            }
-            Ico.GEAR -> {
-                drawCircle(color, 3f * k, o(12f, 12f), style = st)
-                drawCircle(color, 7.5f * k, o(12f, 12f), style = Stroke(2.1f * k, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(3.2f * k, 2.2f * k))))
-            }
+        scale(k, k, pivot = Offset.Zero) {
+            drawPath(ico.path, color, style = Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
     }
 }

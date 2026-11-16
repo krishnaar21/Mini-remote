@@ -6,7 +6,6 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -19,6 +18,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +61,8 @@ fun Clickpad(
     accent: Color,
     stepDp: Float,
     toast: String?,
+    /** Icon shown above [toast] in the well (the key that was pressed), if any. */
+    toastIcon: Ico? = null,
     onKey: (RemoteKey) -> Unit,
     onTick: (RemoteKey) -> Unit,
     onVoice: () -> Unit,
@@ -63,13 +71,21 @@ fun Clickpad(
     onOffline: () -> Unit = {},
 ) {
     val isOffline = androidx.compose.runtime.rememberUpdatedState(offline)
-    val tilt = LocalTilt.current
     val density = LocalDensity.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val stepPx = with(density) { stepDp.dp.toPx() }
     val deadPx = with(density) { 8.dp.toPx() }
     var litDir by remember { mutableStateOf<RemoteKey?>(null) }
     var wellDown by remember { mutableStateOf(false) }
+    var listening by remember { mutableStateOf(false) }
+    // Where the finger is (for the soft glow) and the ripple, both in pad pixels.
+    var touch by remember { mutableStateOf<Offset?>(null) }
+    var ripAt by remember { mutableStateOf(Offset.Zero) }
+    var ripD by remember { mutableStateOf(0f) }
+    val rip = remember { androidx.compose.animation.core.Animatable(1f) }
+    val wellScale by androidx.compose.animation.core.animateFloatAsState(
+        if (wellDown) 0.97f else 1f,
+        if (wellDown) androidx.compose.animation.core.tween(80) else androidx.compose.animation.core.spring(0.42f, 700f), label = "well")
 
     Box(
         Modifier
@@ -83,7 +99,7 @@ fun Clickpad(
                         return@awaitEachGesture
                     }
                     val c = Offset(this.size.width / 2f, this.size.height / 2f)
-                    val wellR = this.size.width * 0.26f
+                    val wellR = this.size.width * WELL_FRAC / 2f
                     val rel = down.position - c
                     val inWell = rel.getDistance() < wellR
                     val edgeHorizontal = abs(rel.x) > abs(rel.y)
@@ -95,12 +111,22 @@ fun Clickpad(
                     var moved = false
                     var holdFired = false
                     if (inWell) wellDown = true else litDir = zoneKey
+                    touch = down.position
+                    // Ripple: on the well for OK, on the arrow for an edge, like the design.
+                    val w = this.size.width.toFloat()
+                    val inset = w * (52f + 38f) / 780f
+                    ripAt = if (inWell) c else when (zoneKey) {
+                        RemoteKey.UP -> Offset(c.x, inset); RemoteKey.DOWN -> Offset(c.x, w - inset)
+                        RemoteKey.LEFT -> Offset(inset, c.y); else -> Offset(w - inset, c.y)
+                    }
+                    ripD = w * (if (inWell) 0.5f else 0.42f)
+                    scope.launch { rip.snapTo(0f); rip.animateTo(1f, androidx.compose.animation.core.tween(700, easing = androidx.compose.animation.core.CubicBezierEasing(.2f, .7f, .3f, 1f))) }
 
                     val hold: Job = scope.launch {
                         delay(350)
                         if (moved) return@launch
                         holdFired = true
-                        if (inWell) onVoice() else {
+                        if (inWell) { listening = true; onVoice() } else {
                             var d = 150L
                             while (true) { onTick(zoneKey); delay(d); d = maxOf(70L, d - 10) }
                         }
@@ -113,6 +139,7 @@ fun Clickpad(
                         if (!ch.pressed) { ch.consume(); break }
                         val delta = ch.position - last
                         last = ch.position
+                        touch = ch.position
                         acc += delta
                         if (horizontal == null && acc.getDistance() > deadPx) {
                             horizontal = abs(acc.x) > abs(acc.y)
@@ -137,46 +164,48 @@ fun Clickpad(
                     }
                     hold.cancel()
                     if (!moved && !holdFired) onKey(if (inWell) RemoteKey.OK else zoneKey)
-                    litDir = null; wellDown = false
+                    litDir = null; wellDown = false; listening = false; touch = null
                 }
             },
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(size)) {
-            val r = this.size.width / 2f
-            val c = center
-            // raised ring
-            drawCircle(Color.Black.copy(0.55f), r + 2f, c.copy(y = c.y + 10f))
-            drawCircle(Brush.linearGradient(listOf(Color(0xFF3D3D40), Color(0xFF2A2A2D), Color(0xFF202023)),
-                Offset(0f, 0f), Offset(this.size.width, this.size.height)), r, c)
-            drawCircle(Color.White.copy(0.10f), r - 1f, c, style = Stroke(2f))
-            drawCircle(Color.Black.copy(0.6f), r, c, style = Stroke(2f))
-            // gyro sheen on the raised ring
-            val t = tilt.value
-            val hc = Offset(this.size.width * (0.5f + t.x * 0.34f), this.size.height * (0.08f + t.y * 0.12f))
-            drawCircle(Brush.radialGradient(listOf(Color.White.copy(0.10f), Color.Transparent), hc, this.size.width * 0.55f), r, c)
-            if (offline) return@Canvas
-            // concave well
-            val wr = this.size.width * 0.26f
-            drawCircle(Brush.verticalGradient(
-                listOf(if (wellDown) Color(0xFF0A0A0B) else T.Well, Color(0xFF262629)), c.y - wr, c.y + wr), wr, c)
-            drawCircle(Color.Black.copy(0.8f), wr, c, style = Stroke(3f))
-            if (wellDown) drawCircle(accent.copy(0.16f), wr, c)
-            // arrows
-            val off = r * 0.72f
-            val len = r * 0.07f
-            fun chev(dir: RemoteKey, p: Offset, a: Offset, b: Offset) {
-                val col = if (litDir == dir) accent else Color(0xFF86868C)
-                val st = Stroke(width = 6f, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round)
-                val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(p.x + a.x, p.y + a.y); lineTo(p.x, p.y); lineTo(p.x + b.x, p.y + b.y)
+        // Raised ring (its face and shadows), the finger glow and the ripple.
+        Box(Modifier.size(size).softFace(PAD).drawWithContent {
+            drawContent()
+            if (offline) return@drawWithContent
+            insideStadium {
+                touch?.let { t ->
+                    if (!wellDown) drawCircle(Brush.radialGradient(
+                        0f to Color.White.copy(0.10f), 0.7f to Color.Transparent, center = t, radius = size.width * 260f / 780f),
+                        size.width * 260f / 780f, t)
                 }
-                drawPath(path, col, style = st)
+                val v = rip.value
+                if (v < 1f) {
+                    val r = ripD / 2f * (0.1f + 0.9f * v)
+                    drawCircle(Brush.radialGradient(
+                        0f to Color.White.copy(0.20f * (1f - v)), 0.55f to Color.White.copy(0.07f * (1f - v)), 0.7f to Color.Transparent,
+                        center = ripAt, radius = r), r, ripAt)
+                }
             }
-            chev(RemoteKey.UP, Offset(c.x, c.y - off), Offset(-len * 1.6f, len), Offset(len * 1.6f, len))
-            chev(RemoteKey.DOWN, Offset(c.x, c.y + off), Offset(-len * 1.6f, -len), Offset(len * 1.6f, -len))
-            chev(RemoteKey.LEFT, Offset(c.x - off, c.y), Offset(len, -len * 1.6f), Offset(len, len * 1.6f))
-            chev(RemoteKey.RIGHT, Offset(c.x + off, c.y), Offset(-len, -len * 1.6f), Offset(-len, len * 1.6f))
+        })
+        if (!offline) Canvas(Modifier.size(size)) {
+            // .pchev: 76px chevrons, 52px in from the edge, stroke 2.3, lit in the accent colour.
+            val u = this.size.width / 780f
+            val cs = 76f * u
+            val e = 52f * u
+            fun chev(dir: RemoteKey, ico: Ico, x: Float, y: Float) {
+                val col = if (litDir == dir) accent else T.Dim
+                translate(x, y) {
+                    scale(cs / 24f, cs / 24f, pivot = Offset.Zero) {
+                        drawPath(ico.path, col, style = Stroke(2.3f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                    }
+                }
+            }
+            val mid = (this.size.width - cs) / 2f
+            chev(RemoteKey.UP, Ico.UP, mid, e)
+            chev(RemoteKey.DOWN, Ico.DOWN, mid, this.size.height - e - cs)
+            chev(RemoteKey.LEFT, Ico.LEFT, e, mid)
+            chev(RemoteKey.RIGHT, Ico.RIGHT, this.size.width - e - cs, mid)
         }
         if (offline) {
             Column(
@@ -186,36 +215,57 @@ fun Clickpad(
                     onClick(label = "choose a TV") { onOffline(); true }
                 },
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(bdp(22f)),
             ) {
-                LineIcon(Ico.TV, Color(0xFF6F6F75), 40.dp)
-                Text("No TV connected", color = Color(0xFF6F6F75), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Text("Tap to choose a TV", color = Color(0xFF55555B), fontSize = 13.sp)
+                LineIcon(Ico.TV, Color(0xFF6F6F75), bdp(110f), stroke = 1.5f)
+                Text("No TV connected", color = Color(0xFF6F6F75), fontSize = bsp(36f), fontWeight = FontWeight.SemiBold)
+                Text("Tap to choose a TV", color = Color(0xFF55555B), fontSize = bsp(30f))
             }
             return@Box
         }
-        Text(
-            toast ?: "OK",
-            // Announce toasts ("Lost connection", "Choose a TV first") without making "OK" a stop.
-            modifier = Modifier.widthIn(max = size * 0.62f).clearAndSetSemantics {
-                if (toast != null) { contentDescription = toast; liveRegion = LiveRegionMode.Polite }
-            },
-            color = if (toast != null) T.Ink else Color(0xFF55555B),
-            fontSize = if (toast != null) 15.sp else 17.sp,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-        )
+        // .well: dished centre, 300 of the pad's 780. Sinks (scale .97) and darkens while pressed;
+        // tinted with the accent while holding for voice.
+        val wellFace = when {
+            listening -> flat(mix(accent, 0.22f, Color(0xFF1A1A1C)), WELL.shadows)
+            wellDown -> WELL_DOWN
+            else -> WELL
+        }
+        Box(
+            Modifier.size(size * WELL_FRAC).graphicsLayer { scaleX = wellScale; scaleY = wellScale }.softFace(wellFace, sheen = false),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (toast == null) {
+                Text("OK", Modifier.clearAndSetSemantics {}, color = if (wellDown) accent else Color(0xFF55555B),
+                    fontSize = bsp(40f), fontWeight = FontWeight.SemiBold, letterSpacing = bsp(40f * 0.06f))
+            } else {
+                // .toast: accent icon (84px) over the key name, 500 28px #d4d4d9; longer messages wrap.
+                Column(
+                    Modifier.padding(horizontal = bdp(26f)).clearAndSetSemantics {
+                        contentDescription = toast; liveRegion = LiveRegionMode.Polite
+                    },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(bdp(8f)),
+                ) {
+                    if (toastIcon != null) LineIcon(toastIcon, accent, bdp(84f), stroke = 1.8f)
+                    Text(toast, color = Color(0xFFD4D4D9), fontSize = bsp(28f), fontWeight = FontWeight.Medium,
+                        lineHeight = bsp(34f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                }
+            }
+        }
 
         val zone = size * 0.28f
         PadZone("Up", Modifier.align(Alignment.TopCenter).size(zone)) { onKey(RemoteKey.UP) }
         PadZone("Left", Modifier.align(Alignment.CenterStart).size(zone)) { onKey(RemoteKey.LEFT) }
-        PadZone("OK", Modifier.align(Alignment.Center).size(size * 0.52f), longLabel = "voice search", onLong = onVoice) {
+        PadZone("OK", Modifier.align(Alignment.Center).size(size * WELL_FRAC), longLabel = "voice search", onLong = onVoice) {
             onKey(RemoteKey.OK)
         }
         PadZone("Right", Modifier.align(Alignment.CenterEnd).size(zone)) { onKey(RemoteKey.RIGHT) }
         PadZone("Down", Modifier.align(Alignment.BottomCenter).size(zone)) { onKey(RemoteKey.DOWN) }
     }
 }
+
+/** Well diameter as a share of the pad (design: 300 of 780). */
+private const val WELL_FRAC = 300f / 780f
 
 /** Accessibility-only button over a clickpad zone. Draws nothing and takes no touches. */
 @Composable

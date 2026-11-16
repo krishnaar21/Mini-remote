@@ -1,19 +1,15 @@
 package com.krishna.miniremote.ui
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,12 +19,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -37,37 +31,73 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+/** The design's ripple: white .16 from the centre, 1.6x the key, .55s, fading as it grows. */
+private val RipEase = CubicBezierEasing(.2f, .7f, .3f, 1f)
+
+private fun CoroutineScope.ripple(a: Animatable<Float, *>) = launch { a.snapTo(0f); a.animateTo(1f, tween(550, easing = RipEase)) }
+
+private fun Modifier.rippleLayer(p: () -> Float) = drawWithContent {
+    drawContent()
+    val v = p()
+    if (v < 1f) insideStadium {
+        val r = size.maxDimension * 1.6f / 2f * (0.1f + 0.9f * v)
+        drawCircle(Color.White.copy(alpha = 0.16f * (1f - v)), r, center)
+    }
+}
+
+/** Press handling shared by every key: fires on touch-down, optional auto-repeat while held. */
+private fun Modifier.pressInput(repeat: Boolean, scope: CoroutineScope, onDown: (Boolean) -> Unit, onPress: () -> Unit) =
+    pointerInput(repeat) {
+        detectTapGestures(onPress = {
+            onDown(true)
+            onPress()
+            val rep = if (repeat) scope.launch {
+                delay(380)
+                var d = 160L
+                while (true) { onPress(); delay(d); d = maxOf(70L, d - 12) }
+            } else null
+            tryAwaitRelease()
+            rep?.cancel()
+            onDown(false)
+        })
+    }
+
+/** Scale that dips fast on press and springs back with a little overshoot, like the design's bezier(.3,1.7,.5,1). */
+@Composable
+private fun pressScale(down: Boolean, to: Float) = animateFloatAsState(
+    if (down) to else 1f,
+    if (down) tween(80) else spring(dampingRatio = 0.42f, stiffness = 700f), label = "press",
+)
+
 /**
- * Raised soft-touch button. Pressed = inverted gradient, accent icon and a ripple that
- * starts where the finger landed. Content gets the current icon colour.
+ * Raised soft-touch key (circle or pill). Pressed = flipped gradient with an inner shadow,
+ * scale [pressedScale], accent icon and a centre ripple. Content gets the current icon colour.
  *
  * [label] is what TalkBack reads; [state] is read after it (e.g. "Connected").
  * [actionLabel] replaces TalkBack's "double-tap to activate" hint when the action isn't obvious.
  */
 @Composable
 fun KeyButton(
-    shape: Shape,
     accent: Color,
     label: String,
     modifier: Modifier = Modifier,
     state: String? = null,
     actionLabel: String? = null,
     repeat: Boolean = false,
+    pressedScale: Float = 0.95f,
+    downFace: Face = KEY_DOWN,
+    restColor: Color = T.Ink,
     onPress: () -> Unit,
-    content: @Composable (Color) -> Unit,
+    content: @Composable (color: Color, down: Boolean) -> Unit,
 ) {
     var down by remember { mutableStateOf(false) }
-    var origin by remember { mutableStateOf(Offset.Zero) }
-    val prog = remember { Animatable(1f) }
+    val rip = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()
-    val top = if (down) T.FaceBot else T.FaceTop
-    val bot = if (down) T.FaceTop else T.FaceBot
-    val tilt = LocalTilt.current
+    val scale by pressScale(down, pressedScale)
 
     Box(
         modifier
@@ -78,47 +108,19 @@ fun KeyButton(
                 // TalkBack double-tap: one press (no repeat), same feedback path as a finger tap.
                 onClick(label = actionLabel) { onPress(); true }
             }
-            .shadow(if (down) 2.dp else 10.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
-            .clip(shape)
-            .background(Brush.verticalGradient(listOf(top, bot)))
-            .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(0.14f), Color.Transparent)), shape)
-            .drawWithContent {
-                if (!down) sheen(tilt.value)
-                drawContent()
-                val p = prog.value
-                if (p < 1f) {
-                    val r = size.maxDimension * 0.9f * p
-                    drawCircle(accent.copy(alpha = 0.28f * (1f - p)), r, origin)
-                }
-            }
-            .pointerInput(repeat) {
-                detectTapGestures(onPress = { pos ->
-                    origin = pos; down = true
-                    scope.launch { prog.snapTo(0f); prog.animateTo(1f, tween(520)) }
-                    onPress()
-                    val rep = if (repeat) scope.launch {
-                        delay(380)
-                        var d = 160L
-                        while (true) { onPress(); delay(d); d = maxOf(70L, d - 12) }
-                    } else null
-                    tryAwaitRelease()
-                    rep?.cancel()
-                    down = false
-                })
-            },
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .softFace(if (down) downFace else KEY_UP, sheen = !down)
+            .rippleLayer { rip.value }
+            .pressInput(repeat, scope, { down = it; if (it) scope.ripple(rip) }, onPress),
         contentAlignment = Alignment.Center,
     ) {
         // Hide icons/text from TalkBack; the button's own label speaks for them.
-        Box(Modifier.clearAndSetSemantics {}, contentAlignment = Alignment.Center) { content(if (down) accent else T.Ink) }
+        Box(Modifier.clearAndSetSemantics {}, contentAlignment = Alignment.Center) { content(if (down) accent else restColor, down) }
     }
 }
 
-@Composable
-fun RoundKey(size: Dp, accent: Color, label: String, onPress: () -> Unit, content: @Composable (Color) -> Unit) =
-    KeyButton(CircleShape, accent, label, Modifier.size(size), onPress = onPress, content = content)
-
 /**
- * Volume rocker: one soft-touch pill split into − | mute | +. Each segment is its own button for
+ * .ivol: one soft-touch pill split into − | mute | +. Each segment is its own button for
  * TalkBack; − and + repeat while held. Mute turns the accent colour while muted.
  */
 @Composable
@@ -130,38 +132,31 @@ fun VolumePill(
     onMute: () -> Unit,
     onUp: () -> Unit,
 ) {
-    val shape = CircleShape
-    val tilt = LocalTilt.current
-    Row(
-        modifier
-            .shadow(10.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
-            .clip(shape)
-            .background(Brush.verticalGradient(listOf(T.FaceTop, T.FaceBot)))
-            .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(0.14f), Color.Transparent)), shape)
-            .drawBehind { sheen(tilt.value) },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        PillSegment("Volume down", accent, repeat = true, onPress = onDown) { LineIcon(Ico.MINUS, it) }
-        Box(Modifier.width(1.5.dp).height(28.dp).background(Color.Black.copy(0.35f)))
+    Row(modifier.softFace(ROCKER).clip(androidx.compose.foundation.shape.CircleShape), verticalAlignment = Alignment.CenterVertically) {
+        PillSegment("Volume down", accent, first = true, repeat = true, onPress = onDown) { LineIcon(Ico.MINUS, it, bdp(48f), stroke = 1.9f) }
         PillSegment("Mute", accent, state = if (muted) "Muted" else null, onPress = onMute) {
-            LineIcon(if (muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, if (muted) accent else it)
+            LineIcon(if (muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, if (muted) accent else it, bdp(44f), stroke = 1.9f)
         }
-        Box(Modifier.width(1.5.dp).height(28.dp).background(Color.Black.copy(0.35f)))
-        PillSegment("Volume up", accent, repeat = true, onPress = onUp) { LineIcon(Ico.PLUS, it) }
+        PillSegment("Volume up", accent, last = true, repeat = true, onPress = onUp) { LineIcon(Ico.PLUS, it, bdp(48f), stroke = 1.9f) }
     }
 }
 
+/** .iv: pressed = black .28 tint with an inner top shadow; a 1.5px dark divider on its left. */
 @Composable
 private fun RowScope.PillSegment(
     label: String,
     accent: Color,
+    first: Boolean = false,
+    last: Boolean = false,
     repeat: Boolean = false,
     state: String? = null,
     onPress: () -> Unit,
     content: @Composable (Color) -> Unit,
 ) {
     var down by remember { mutableStateOf(false) }
+    val rip = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()
+    val k = LocalK.current
     Box(
         Modifier.weight(1f).fillMaxHeight()
             .semantics {
@@ -170,21 +165,25 @@ private fun RowScope.PillSegment(
                 if (state != null) stateDescription = state
                 onClick { onPress(); true }
             }
-            .background(if (down) Color.Black.copy(0.28f) else Color.Transparent)
-            .pointerInput(repeat) {
-                detectTapGestures(onPress = {
-                    down = true
-                    onPress()
-                    val rep = if (repeat) scope.launch {
-                        delay(380)
-                        var d = 160L
-                        while (true) { onPress(); delay(d); d = maxOf(70L, d - 12) }
-                    } else null
-                    tryAwaitRelease()
-                    rep?.cancel()
-                    down = false
-                })
-            },
+            .drawBehind {
+                val u = k * density
+                if (down) {
+                    drawRect(Color.Black.copy(0.28f))
+                    // inset 0 3px 8px rgba(0,0,0,.55): a soft dark band along the top edge
+                    drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(
+                        listOf(Color.Black.copy(0.55f), Color.Transparent), 0f, 11f * u))
+                }
+                if (!first) drawRect(Color.Black.copy(0.35f), size = size.copy(width = 1.5f * u))
+            }
+            .drawWithContent {
+                drawContent()
+                val v = rip.value
+                if (v < 1f) {
+                    val r = size.maxDimension * 0.8f * (0.1f + 0.9f * v)
+                    drawCircle(Color.White.copy(alpha = 0.16f * (1f - v)), r, center)
+                }
+            }
+            .pressInput(repeat, scope, { down = it; if (it) scope.ripple(rip) }, onPress),
         contentAlignment = Alignment.Center,
     ) {
         Box(Modifier.clearAndSetSemantics {}) { content(if (down) accent else T.Ink) }

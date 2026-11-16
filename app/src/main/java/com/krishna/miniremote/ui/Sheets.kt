@@ -2,6 +2,18 @@ package com.krishna.miniremote.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,10 +48,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -121,7 +129,11 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
     fun replace(p: Page) { stack[stack.lastIndex] = p }
     fun back() { if (stack.size > 1) stack.removeAt(stack.lastIndex) else onClose() }
 
-    ModalBottomSheet(onDismissRequest = onClose, sheetState = state, containerColor = SheetBg, contentColor = T.Ink) {
+    ModalBottomSheet(
+        onDismissRequest = onClose, sheetState = state, containerColor = SheetBg, contentColor = T.Ink,
+        shape = SheetShape, scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
+        modifier = Modifier.border(1.dp, Line, SheetShape),
+    ) {
         BackHandler(enabled = stack.size > 1) { back() }
         val canBack = stack.size > 1 || page !is Page.Devices
         Column(Modifier.navigationBarsPadding()) {
@@ -164,15 +176,74 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
 
 /* ------------------------------------------------------------ building blocks */
 
+private val SheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+
+/** .grab: 38 x 4 handle, 12 above and 4 below. */
+@Composable
+private fun Grab() = Box(Modifier.padding(top = 12.dp, bottom = 4.dp).size(38.dp, 4.dp).background(Color(0xFF444444), RoundedCornerShape(4.dp)))
+
+/** .field: label above (13, muted), 52 tall, radius 12, #141415, 1px line, 16 text. */
+@Composable
+private fun Field(
+    label: String,
+    value: String,
+    onChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String? = null,
+    isError: Boolean = false,
+    readOnly: Boolean = false,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(12.dp)
+    Column(modifier.fillMaxWidth().padding(bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(label, color = Muted, fontSize = 13.sp)
+        BasicTextField(
+            value, onChange, singleLine = true, readOnly = readOnly,
+            textStyle = TextStyle(color = T.Ink, fontSize = 16.sp, fontFamily = Inter),
+            cursorBrush = SolidColor(T.Ink),
+            keyboardOptions = keyboardOptions, keyboardActions = keyboardActions,
+            modifier = Modifier.fillMaxWidth().height(52.dp).onFocusChanged { focused = it.isFocused }
+                .semantics { contentDescription = label },
+            decorationBox = { inner ->
+                Row(
+                    Modifier.fillMaxSize().background(Color(0xFF141415), shape)
+                        .border(1.dp, when { isError -> DangerInk; focused -> Muted; else -> Line }, shape)
+                        .padding(horizontal = 11.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.weight(1f)) {
+                        if (value.isEmpty() && placeholder != null) Text(placeholder, color = Color(0xFF5D5D62), fontSize = 16.sp)
+                        inner()
+                    }
+                    trailing?.invoke()
+                }
+            },
+        )
+    }
+}
+
+/** .sw: 50 x 30 track (#34c759 on, #3a3a3c off), 24px white knob that slides 20. */
+@Composable
+private fun Toggle(on: Boolean) {
+    val x by androidx.compose.animation.core.animateDpAsState(if (on) 20.dp else 0.dp, label = "sw")
+    val bg by androidx.compose.animation.animateColorAsState(if (on) SwitchOn else Color(0xFF3A3A3C), label = "swbg")
+    Box(Modifier.size(50.dp, 30.dp).background(bg, CircleShape).padding(3.dp)) {
+        Box(Modifier.offset(x = x).size(24.dp).shadow(2.dp, CircleShape).background(Color.White, CircleShape))
+    }
+}
+
 @Composable
 private fun Header(title: String, onClose: () -> Unit, back: (() -> Unit)? = null, gear: (() -> Unit)? = null) {
     Row(
-        Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 14.dp),
+        Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 10.dp, bottom = 12.dp).padding(bottom = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         back?.let { CircleIcon(Ico.CHEVRON_L, "Back", it) }
-        Text(title, color = T.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 2,
+        Text(title, color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.18).sp, maxLines = 2,
             modifier = Modifier.weight(1f).semantics { heading() })
         gear?.let { CircleIcon(Ico.SLIDERS, "Settings", it) }
         CircleIcon(Ico.CLOSE, "Close", onClose)
@@ -182,7 +253,7 @@ private fun Header(title: String, onClose: () -> Unit, back: (() -> Unit)? = nul
 @Composable
 private fun CircleIcon(ico: Ico, label: String, onClick: () -> Unit) {
     Box(
-        Modifier.size(48.dp).clip(CircleShape).background(Fill2)
+        Modifier.size(44.dp).clip(CircleShape).background(Fill2)
             .clickable(role = Role.Button, onClickLabel = null, onClick = onClick)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
@@ -191,22 +262,22 @@ private fun CircleIcon(ico: Ico, label: String, onClick: () -> Unit) {
 
 @Composable
 private fun Body(content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 28.dp), content = content)
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp), content = content)
 }
 
 @Composable
 private fun Lead(text: String, center: Boolean = false) =
-    Text(text, color = LeadInk, fontSize = 15.sp, lineHeight = 23.sp, textAlign = if (center) TextAlign.Center else TextAlign.Start,
-        modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp))
+    Text(text, color = LeadInk, fontSize = 14.5.sp, lineHeight = 23.2.sp, textAlign = if (center) TextAlign.Center else TextAlign.Start,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp))
 
 @Composable
-private fun Hint(text: String, top: Int = 16) =
-    Text(text, color = Muted, fontSize = 13.sp, lineHeight = 20.sp, modifier = Modifier.padding(top = top.dp))
+private fun Hint(text: String, top: Int = 18) =
+    Text(text, color = Muted, fontSize = 12.5.sp, lineHeight = 20.sp, modifier = Modifier.padding(top = top.dp))
 
 @Composable
 private fun SectionTitle(t: String) =
-    Text(t.uppercase(), color = Muted, fontSize = 12.sp, letterSpacing = 1.sp, fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(top = 28.dp, bottom = 4.dp).semantics { heading() })
+    Text(t.uppercase(), color = Muted, fontSize = 12.sp, letterSpacing = 0.96.sp, fontWeight = FontWeight.Medium,
+        modifier = Modifier.padding(top = 32.dp, bottom = 4.dp).semantics { heading() })
 
 @Composable
 private fun Btn(text: String, kind: Int = 0, enabled: Boolean = true, onClick: () -> Unit) {
@@ -221,7 +292,7 @@ private fun Btn(text: String, kind: Int = 0, enabled: Boolean = true, onClick: (
 
 @Composable
 private fun Hero(ico: Ico, bg: Color, fg: Color) {
-    Box(Modifier.fillMaxWidth().height(96.dp).padding(bottom = 4.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxWidth().padding(bottom = 18.dp).height(96.dp), contentAlignment = Alignment.Center) {
         Box(Modifier.size(56.dp).background(bg, CircleShape), contentAlignment = Alignment.Center) { LineIcon(ico, fg, 30.dp) }
     }
 }
@@ -253,10 +324,16 @@ private fun CardRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        dot?.let { Box(Modifier.size(9.dp).background(it, CircleShape)) }
+        dot?.let { c ->
+            // .dot.ok glows: 0 0 8px #4ddc8888
+            Box(Modifier.size(9.dp).drawBehind {
+                if (c == OkGreen) drawCircle(Brush.radialGradient(listOf(c.copy(0.53f), Color.Transparent)), size.minDimension * 1.4f)
+                drawCircle(c)
+            })
+        }
         Column(Modifier.weight(1f)) {
             Text(title, color = T.Ink, fontSize = 15.sp)
-            sub?.let { Text(it, color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp)) }
+            sub?.let { Text(it, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 4.dp)) }
         }
         trailing()
     }
@@ -266,7 +343,7 @@ private fun CardRow(
 
 @Composable
 private fun Badge(text: String) =
-    Text(text, color = Color(0xFFBBBBBB), fontSize = 12.sp, maxLines = 1,
+    Text(text, color = Color(0xFFBBBBBB), fontSize = 11.5.sp, maxLines = 1,
         modifier = Modifier.background(Color(0xFF2C2C2E), RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 3.dp))
 
 private fun statusLine(vm: RemoteVM, d: Device): String {
@@ -275,11 +352,6 @@ private fun statusLine(vm: RemoteVM, d: Device): String {
     }
     return "${d.brand.label} · ${d.host}$st"
 }
-
-private val fieldColors @Composable get() = OutlinedTextFieldDefaults.colors(
-    focusedTextColor = T.Ink, unfocusedTextColor = T.Ink, focusedBorderColor = Color(0xFF8C8C90), unfocusedBorderColor = Line,
-    cursorColor = T.Ink, focusedLabelColor = LeadInk, unfocusedLabelColor = Muted,
-    focusedContainerColor = Color(0xFF141415), unfocusedContainerColor = Color(0xFF141415))
 
 /* ---------------------------------------------------------------- devices */
 
@@ -303,8 +375,7 @@ private fun DevicePage(vm: RemoteVM, d: Device, accent: Color) {
     CardRow("Address", d.host)
     CardRow("Status", if (on) "Connected" else if (vm.activeId == d.id && vm.link == Link.CONNECTING) "Connecting…" else "Not connected")
     Spacer(Modifier.height(8.dp))
-    OutlinedTextField(name, { name = it.take(30) }, label = { Text("Name") }, singleLine = true, colors = fieldColors,
-        shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
+    Field("Name", name, { name = it.take(30) })
     if (on) Btn("Disconnect") { vm.disconnect() } else Btn("Connect") { vm.select(d) }
     Btn("Save name", kind = 1, enabled = name.isNotBlank() && name.trim() != d.name) { vm.rename(d.id, name); vm.say("Saved") }
     Btn(if (arm) "Tap again to forget this TV" else "Forget this TV", kind = 2) {
@@ -347,19 +418,16 @@ private fun ManualPage(vm: RemoteVM, accent: Color, onAdded: (Device) -> Unit) {
     var brand by remember { mutableStateOf(Brand.ROKU) }
     var open by remember { mutableStateOf(false) }
     var err by remember { mutableStateOf<String?>(null) }
-    OutlinedTextField(ip, { ip = it.filter { c -> c.isDigit() || c == '.' }.take(15); err = null }, label = { Text("IP address") },
-        placeholder = { Text("192.168.1.20", color = Color(0xFF5D5D62)) }, singleLine = true, isError = err != null, colors = fieldColors,
-        shape = RoundedCornerShape(12.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        modifier = Modifier.fillMaxWidth())
-    Spacer(Modifier.height(14.dp))
+    Field("IP address", ip, { ip = it.filter { c -> c.isDigit() || c == '.' }.take(15); err = null }, placeholder = "192.168.1.20",
+        isError = err != null, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
     ExposedDropdownMenuBox(expanded = open, onExpandedChange = { open = it }) {
-        OutlinedTextField(brand.label, {}, readOnly = true, label = { Text("Brand") }, colors = fieldColors, shape = RoundedCornerShape(12.dp),
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(open) }, modifier = Modifier.menuAnchor().fillMaxWidth())
+        Field("Brand", brand.label, {}, readOnly = true, modifier = Modifier.menuAnchor(),
+            trailing = { LineIcon(if (open) Ico.UP else Ico.DOWN, Muted, 18.dp) })
         ExposedDropdownMenu(open, { open = false }, containerColor = Color(0xFF26262A)) {
             Brand.entries.forEach { b -> DropdownMenuItem(text = { Text(b.label, color = T.Ink) }, onClick = { brand = b; open = false }) }
         }
     }
-    Text(err ?: "", color = DangerInk, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp).heightIn(min = 18.dp)
+    Text(err ?: "", color = DangerInk, fontSize = 13.sp, modifier = Modifier.padding(top = 0.dp, bottom = 10.dp).heightIn(min = 18.dp)
         .semantics { liveRegion = LiveRegionMode.Assertive })
     Btn("Continue") {
         val (e, d) = vm.addManual(ip, brand)
@@ -410,7 +478,7 @@ private fun PairPage(vm: RemoteVM, d: Device, accent: Color, onClose: () -> Unit
                 }, color = LeadInk, fontSize = 15.sp, lineHeight = 26.sp, modifier = Modifier.padding(bottom = 16.dp))
                 Text(buildAnnotatedString {
                     append("Waiting… ")
-                    withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) { append("${left}s") }
+                    withStyle(SpanStyle(fontFamily = Mono)) { append("${left}s") }
                 }, color = LeadInk, fontSize = 15.sp)
                 brandHelp(d.brand)?.let { Hint("No prompt? $it") }
             }
@@ -466,7 +534,7 @@ private fun CodeEntry(vm: RemoteVM, prompt: PairPrompt) {
                             Modifier.width(44.dp).height(56.dp).background(Color(0xFF141415), RoundedCornerShape(12.dp))
                                 .border(1.dp, if (focus) Muted else Line, RoundedCornerShape(12.dp)),
                             contentAlignment = Alignment.Center,
-                        ) { Text(ch, color = T.Ink, fontSize = 22.sp, fontFamily = FontFamily.Monospace) }
+                        ) { Text(ch, color = T.Ink, fontSize = 22.sp, fontFamily = Mono) }
                     }
                 }
                 Box(Modifier.matchParentSizeCompat()) { inner() }
@@ -487,17 +555,18 @@ private fun Modifier.matchParentSizeCompat(): Modifier = this.fillMaxWidth().hei
 private fun SettingsPage(vm: RemoteVM, accent: Color, manage: () -> Unit) {
     val s = vm.settings
     SectionTitle("Accent colour")
-    Row(Modifier.selectableGroup().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(Modifier.selectableGroup().padding(top = 8.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         ACCENTS.forEach { (name, hex) ->
             val sel = s.accentHex.equals(hex, true)
             Box(
-                Modifier.size(52.dp)
+                Modifier.size(44.dp)
                     .selectable(sel, role = Role.RadioButton) { vm.update(s.copy(accentHex = hex)) }
                     .semantics { contentDescription = name },
                 contentAlignment = Alignment.Center,
             ) {
-                if (sel) Box(Modifier.size(52.dp).border(2.dp, Color.White, CircleShape))
-                Box(Modifier.size(42.dp).background(accentColor(hex), CircleShape).border(2.dp, Color.Black.copy(0.25f), CircleShape))
+                Box(Modifier.size(44.dp).background(accentColor(hex), CircleShape).border(2.dp, Color.Black.copy(0.25f), CircleShape))
+                // ::after ring: 2px white, 5px outside the swatch
+                if (sel) Box(Modifier.requiredSize(54.dp).border(2.dp, Color.White, CircleShape))
             }
         }
     }
@@ -508,20 +577,20 @@ private fun SettingsPage(vm: RemoteVM, accent: Color, manage: () -> Unit) {
     SegRow("Strength", HAPTIC_STRENGTHS, s.hapticStrength) { vm.update(s.copy(hapticStrength = it)) }
     ToggleRow("Sound", "Soft click with every press and scrub", s.sound) { vm.update(s.copy(sound = it)) }
     SegRow("Sound level", SOUND_LEVELS, s.soundLevel) { vm.update(s.copy(soundLevel = it)); vm.feel.fire(com.krishna.miniremote.Feel.PRESS) }
-    Column(Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 2.dp)) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 Text("Scrub distance", color = T.Ink, fontSize = 15.sp)
-                Text("Shorter = faster scrolling", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
+                Text("Shorter = faster scrolling", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
             }
-            Text("${s.scrubStepDp.roundToInt()} dp", color = Muted, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+            Text("${s.scrubStepDp.roundToInt()} dp", color = Muted, fontSize = 13.sp, fontFamily = Mono)
         }
         Fader(s.scrubStepDp, 24f..60f, accent, label = "Scrub distance", valueText = "${s.scrubStepDp.roundToInt()} dp", steps = 17) {
             vm.update(s.copy(scrubStepDp = it))
         }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-            Text("FAST", color = Color(0xFF6C6C70), fontSize = 11.sp, letterSpacing = 1.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
-            Text("SLOW", color = Color(0xFF6C6C70), fontSize = 11.sp, letterSpacing = 1.sp, fontFamily = FontFamily.Monospace)
+            Text("FAST", color = Color(0xFF6C6C70), fontSize = 11.sp, letterSpacing = 0.88.sp, fontFamily = Mono, modifier = Modifier.weight(1f))
+            Text("SLOW", color = Color(0xFF6C6C70), fontSize = 11.sp, letterSpacing = 0.88.sp, fontFamily = Mono)
         }
     }
     Divider()
@@ -530,17 +599,24 @@ private fun SettingsPage(vm: RemoteVM, accent: Color, manage: () -> Unit) {
 
     SectionTitle("Devices")
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 68.dp).clickable(role = Role.Button, onClick = manage).padding(vertical = 12.dp),
+        Modifier.fillMaxWidth().heightIn(min = 68.dp).clickable(role = Role.Button, onClick = manage).padding(vertical = 16.dp, horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
             Text("Manage TVs", color = T.Ink, fontSize = 15.sp)
-            Text("${vm.devices.size} saved", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
+            Text("${vm.devices.size} saved", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
         }
         Chevron()
     }
+    Divider()
     SectionTitle("About")
     Hint("Remote talks only to devices on your local network. No account, no tracking. Pairing keys stay on this phone.", top = 4)
+    // Lets you tell builds apart: CI numbers every build (0.2.<run>).
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val version = remember {
+        runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "dev"
+    }
+    Text("Version $version", color = Muted, fontSize = 12.5.sp, fontFamily = Mono, modifier = Modifier.padding(top = 10.dp))
 }
 
 @Composable
@@ -550,28 +626,28 @@ private fun Divider() = Box(Modifier.fillMaxWidth().height(1.dp).background(Colo
 private fun ToggleRow(title: String, sub: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
     // Whole row is one switch for TalkBack and one big touch target for fingers.
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 68.dp).toggleable(checked, role = Role.Switch, onValueChange = onChange).padding(vertical = 12.dp),
+        Modifier.fillMaxWidth().heightIn(min = 68.dp).toggleable(checked, role = Role.Switch, onValueChange = onChange).padding(vertical = 16.dp, horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Column(Modifier.weight(1f)) {
             Text(title, color = T.Ink, fontSize = 15.sp)
-            sub?.let { Text(it, color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp)) }
+            sub?.let { Text(it, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp)) }
         }
-        Switch(checked, null, colors = SwitchDefaults.colors(checkedTrackColor = SwitchOn, checkedThumbColor = Color.White, checkedBorderColor = Color.Transparent,
-            uncheckedTrackColor = Color(0xFF3A3A3C), uncheckedThumbColor = Color.White, uncheckedBorderColor = Color.Transparent))
+        Toggle(checked)
     }
     Divider()
 }
 
 @Composable
 private fun SegRow(title: String, opts: List<Pair<Float, String>>, value: Float, onPick: (Float) -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).padding(vertical = 16.dp, horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(title, color = T.Ink, fontSize = 15.sp, modifier = Modifier.weight(1f))
         Row(Modifier.background(Fill2, RoundedCornerShape(10.dp)).padding(2.dp).selectableGroup()) {
             opts.forEach { (v, l) ->
                 val sel = v == value
                 Box(
-                    Modifier.heightIn(min = 40.dp).clip(RoundedCornerShape(8.dp))
+                    Modifier.heightIn(min = 34.dp).clip(RoundedCornerShape(8.dp))
                         .background(if (sel) Color(0xFF4A4A4D) else Color.Transparent)
                         .selectable(sel, role = Role.RadioButton) { onPick(v) }
                         .semantics { stateDescription = if (sel) "$title: $l, selected" else "$title: $l" }
@@ -594,23 +670,42 @@ fun statusColor(l: Link, accent: Color): Color = when (l) {
 }
 fun linkWord(l: Link) = when (l) { Link.READY -> "Connected"; Link.CONNECTING -> "Connecting..."; Link.ERROR -> "Can't reach"; Link.IDLE -> "" }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Type on TV. Like the design, this sheet drops from the top (radius on its lower corners) so
+ * the phone keyboard never covers it. The text box takes focus as soon as it opens.
+ */
 @Composable
 fun KeyboardSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
-    val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var text by remember { mutableStateOf("") }
-    ModalBottomSheet(onDismissRequest = onClose, sheetState = state, containerColor = SheetBg, contentColor = T.Ink) {
-        Column(Modifier.navigationBarsPadding()) {
-            Header("Type on TV", onClose)
-            Body {
-                Lead("Open a search box on the TV, then type here and send.")
-                OutlinedTextField(text, { text = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Text for the TV") }, colors = fieldColors, shape = RoundedCornerShape(12.dp),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = { if (text.isNotEmpty()) { vm.typeText(text); text = "" } }))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(Modifier.weight(1f)) { Btn("Delete", kind = 1) { vm.backspace() } }
-                    Box(Modifier.weight(1.4f)) { Btn("Send", enabled = text.isNotEmpty()) { vm.typeText(text); text = "" } }
+    val shown = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
+    BackHandler { onClose() }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(250); runCatching { focus.requestFocus() } }
+    Box(Modifier.fillMaxSize()) {
+        androidx.compose.animation.AnimatedVisibility(shown, enter = androidx.compose.animation.fadeIn()) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(0.55f)).pointerInput(Unit) { detectTapGestures { onClose() } })
+        }
+        androidx.compose.animation.AnimatedVisibility(
+            shown,
+            enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.tween(320, easing = androidx.compose.animation.core.CubicBezierEasing(.2f, .8f, .2f, 1f))) { -it },
+        ) {
+            Column(
+                Modifier.fillMaxWidth().shadow(24.dp, shape).background(SheetBg, shape).border(1.dp, Line, shape)
+                    .pointerInput(Unit) { detectTapGestures { } }
+                    .statusBarsPadding().padding(top = 8.dp),
+            ) {
+                Header("Type on TV", onClose)
+                Body {
+                    Lead("Open a search box on the TV, then type here and send.")
+                    Field("Text for the TV", text, { text = it }, modifier = Modifier.focusRequester(focus),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = { if (text.isNotEmpty()) { vm.typeText(text); text = "" } }))
+                    // .two: 1fr 1.4fr, gap 12
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.weight(1f)) { Btn("Delete", kind = 1) { vm.backspace() } }
+                        Box(Modifier.weight(1.4f)) { Btn("Send", enabled = text.isNotEmpty()) { vm.typeText(text); text = "" } }
+                    }
                 }
             }
         }
