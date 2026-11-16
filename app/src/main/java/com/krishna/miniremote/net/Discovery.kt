@@ -19,7 +19,7 @@ import java.net.Socket
 /**
  * Finds TVs by probing every address on the phone's /24 Wi-Fi subnet.
  * Needs no multicast and no extra permissions. Roku and Samsung answer
- * identifiable HTTP endpoints; LG is detected by its open webOS port.
+ * identifiable HTTP endpoints; LG and Android / Google TV are detected by their open remote ports.
  */
 object Discovery {
     fun localPrefix(): String? =
@@ -62,6 +62,7 @@ object Discovery {
             return Device("samsung-$host", name?.ifBlank { null } ?: "Samsung TV", host, Brand.SAMSUNG)
         }
         if (open(host, 3000) && open(host, 3001)) return Device("lg-$host", "LG TV ($host)", host, Brand.LG)
+        if (open(host, 6466) && open(host, 6467)) return Device("android_tv-$host", "Google TV ($host)", host, Brand.ANDROID_TV)
         return null
     }
 }

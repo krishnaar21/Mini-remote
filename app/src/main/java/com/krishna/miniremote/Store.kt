@@ -14,17 +14,27 @@ class Store(ctx: Context) {
     fun loadSettings(): Settings {
         val d = Settings()
         val hex = p.getString("accent", d.accentHex) ?: d.accentHex
+        fun pick(v: Float, opts: List<Pair<Float, String>>, def: Float) = opts.map { it.first }.firstOrNull { it == v } ?: def
         return Settings(
             haptics = p.getBoolean("haptics", d.haptics),
+            hapticStrength = pick(p.getFloat("strength", d.hapticStrength), HAPTIC_STRENGTHS, d.hapticStrength),
             sound = p.getBoolean("sound", d.sound),
-            accentHex = if (Regex("^[0-9A-Fa-f]{6}$").matches(hex)) hex else d.accentHex,
-            scrubStepDp = p.getFloat("step", d.scrubStepDp).coerceIn(24f, 64f),
+            soundLevel = pick(p.getFloat("soundLevel", d.soundLevel), SOUND_LEVELS, d.soundLevel),
+            // Only colours from the palette; anything else (or an old removed colour) falls back to the default.
+            accentHex = ACCENTS.firstOrNull { it.second.equals(hex, true) }?.second ?: d.accentHex,
+            scrubStepDp = p.getFloat("step", d.scrubStepDp).coerceIn(24f, 60f),
+            gyro = p.getBoolean("gyro", d.gyro),
             keepAwake = p.getBoolean("awake", d.keepAwake),
         )
     }
 
     fun saveSettings(s: Settings) = p.edit()
-        .putBoolean("haptics", s.haptics).putBoolean("sound", s.sound)
+        .putBoolean("haptics", s.haptics).putFloat("strength", s.hapticStrength)
+        .putBoolean("sound", s.sound).putFloat("soundLevel", s.soundLevel)
         .putString("accent", s.accentHex).putFloat("step", s.scrubStepDp)
-        .putBoolean("awake", s.keepAwake).apply()
+        .putBoolean("gyro", s.gyro).putBoolean("awake", s.keepAwake).apply()
+
+    /** Whether the one-time local network explainer has been shown. */
+    fun localSeen(): Boolean = p.getBoolean("localSeen", false)
+    fun setLocalSeen() = p.edit().putBoolean("localSeen", true).apply()
 }

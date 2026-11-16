@@ -1,8 +1,11 @@
 package com.krishna.miniremote.net
 
 import okhttp3.OkHttpClient
+import java.security.MessageDigest
 import java.security.SecureRandom
+import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
+import java.util.Base64
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLContext
 import javax.net.ssl.X509TrustManager
@@ -37,20 +40,53 @@ object Net {
     }
 
     /**
-     * Samsung and LG TVs use self-signed certificates on their local wss ports.
-     * This client skips certificate checks, so adapters must only use it after
-     * HostValidator.isPrivateIPv4(host) passed. TODO: pin the certificate on first pairing.
+     * Samsung and LG TVs use self-signed certificates on their local wss ports, so normal CA
+     * checks can't work. Instead we pin: the first successful pairing records the TV's
+     * certificate fingerprint ([TlsPin.seen]), and every later connection must present the
+     * same one or the handshake fails with [CertChanged]. Only use after
+     * HostValidator.isPrivateIPv4(host) passed. One client per adapter, so TLS sessions are
+     * never shared between TVs.
      */
-    val lanTls: OkHttpClient by lazy {
-        val tm = object : X509TrustManager {
-            override fun checkClientTrusted(c: Array<X509Certificate>, a: String) {}
-            override fun checkServerTrusted(c: Array<X509Certificate>, a: String) {}
-            override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
-        }
-        val ctx = SSLContext.getInstance("TLS").apply { init(null, arrayOf(tm), SecureRandom()) }
-        plain.newBuilder()
-            .sslSocketFactory(ctx.socketFactory, tm)
+    fun pinnedTls(pin: TlsPin): OkHttpClient {
+        val ctx = SSLContext.getInstance("TLS").apply { init(null, arrayOf(pin), SecureRandom()) }
+        return plain.newBuilder()
+            .sslSocketFactory(ctx.socketFactory, pin)
+            // TVs are addressed by IP and their certs don't name it; the pin replaces this check.
             .hostnameVerifier { _, _ -> true }
             .build()
     }
 }
+
+/** Thrown when a paired TV presents a different certificate than the one we pinned. */
+class CertChanged : CertificateException(
+    "This TV's security certificate changed. If you reset or replaced it, remove it and add it again."
+)
+
+/**
+ * Trust manager that accepts exactly one certificate: [expected] (SHA-256 of the leaf, base64),
+ * or — when nothing is pinned yet — whatever the TV presents first, remembered in [seen].
+ */
+class TlsPin(private val expected: String?) : X509TrustManager {
+    @Volatile var seen: String? = null; private set
+
+    override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {
+        val leaf = chain.firstOrNull() ?: throw CertificateException("TV sent no certificate")
+        val fp = fingerprint(leaf)
+        if (expected != null && !MessageDigest.isEqual(fp.toByteArray(), expected.toByteArray())) throw CertChanged()
+        seen = fp
+    }
+
+    override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {
+        throw CertificateException("Client certificates aren't accepted")
+    }
+
+    override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+
+    companion object {
+        fun fingerprint(c: X509Certificate): String =
+            Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256").digest(c.encoded))
+    }
+}
+
+/** True if [t] or anything that caused it is a [CertChanged]. */
+fun Throwable.isCertChanged(): Boolean = generateSequence(this) { it.cause }.take(8).any { it is CertChanged }
