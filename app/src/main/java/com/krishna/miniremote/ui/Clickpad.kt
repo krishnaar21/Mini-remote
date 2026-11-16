@@ -20,6 +20,15 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,6 +42,10 @@ import kotlin.math.abs
  * Round clickpad. Where the finger lands picks the behaviour:
  *  - edge zone: tap = that arrow, hold = repeat, drag along that axis = scrub
  *  - centre well: tap = OK, hold = voice, drag = free scrub on the dominant axis
+ *
+ * Gestures can't be done with TalkBack on, so invisible Up/Left/OK/Right/Down buttons sit
+ * over each zone. They carry semantics only (no pointer input), so finger gestures still
+ * reach the pad underneath.
  */
 @Composable
 fun Clickpad(
@@ -150,9 +163,39 @@ fun Clickpad(
         }
         Text(
             toast ?: "OK",
+            // Announce toasts ("Lost connection", "Choose a TV first") without making "OK" a stop.
+            modifier = Modifier.clearAndSetSemantics {
+                if (toast != null) { contentDescription = toast; liveRegion = LiveRegionMode.Polite }
+            },
             color = if (toast != null) T.Ink else Color(0xFF55555B),
             fontSize = if (toast != null) 15.sp else 17.sp,
             fontWeight = FontWeight.SemiBold,
         )
+
+        val zone = size * 0.28f
+        PadZone("Up", Modifier.align(Alignment.TopCenter).size(zone)) { onKey(RemoteKey.UP) }
+        PadZone("Left", Modifier.align(Alignment.CenterStart).size(zone)) { onKey(RemoteKey.LEFT) }
+        PadZone("OK", Modifier.align(Alignment.Center).size(size * 0.52f), longLabel = "voice search", onLong = onVoice) {
+            onKey(RemoteKey.OK)
+        }
+        PadZone("Right", Modifier.align(Alignment.CenterEnd).size(zone)) { onKey(RemoteKey.RIGHT) }
+        PadZone("Down", Modifier.align(Alignment.BottomCenter).size(zone)) { onKey(RemoteKey.DOWN) }
     }
+}
+
+/** Accessibility-only button over a clickpad zone. Draws nothing and takes no touches. */
+@Composable
+private fun PadZone(
+    label: String,
+    modifier: Modifier,
+    longLabel: String? = null,
+    onLong: (() -> Unit)? = null,
+    onTap: () -> Unit,
+) {
+    Box(modifier.semantics {
+        role = Role.Button
+        contentDescription = label
+        onClick { onTap(); true }
+        if (onLong != null) onLongClick(label = longLabel) { onLong(); true }
+    })
 }

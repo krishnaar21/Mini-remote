@@ -24,6 +24,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -32,12 +39,18 @@ import kotlinx.coroutines.launch
 /**
  * Raised soft-touch button. Pressed = inverted gradient, accent icon and a ripple that
  * starts where the finger landed. Content gets the current icon colour.
+ *
+ * [label] is what TalkBack reads; [state] is read after it (e.g. "Connected").
+ * [actionLabel] replaces TalkBack's "double-tap to activate" hint when the action isn't obvious.
  */
 @Composable
 fun KeyButton(
     shape: Shape,
     accent: Color,
+    label: String,
     modifier: Modifier = Modifier,
+    state: String? = null,
+    actionLabel: String? = null,
     repeat: Boolean = false,
     onPress: () -> Unit,
     content: @Composable (Color) -> Unit,
@@ -51,6 +64,13 @@ fun KeyButton(
 
     Box(
         modifier
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+                contentDescription = label
+                if (!state.isNullOrEmpty()) stateDescription = state
+                // TalkBack double-tap: one press (no repeat), same feedback path as a finger tap.
+                onClick(label = actionLabel) { onPress(); true }
+            }
             .shadow(if (down) 2.dp else 10.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
             .clip(shape)
             .background(Brush.verticalGradient(listOf(top, bot)))
@@ -79,9 +99,12 @@ fun KeyButton(
                 })
             },
         contentAlignment = Alignment.Center,
-    ) { content(if (down) accent else T.Ink) }
+    ) {
+        // Hide icons/text from TalkBack; the button's own label speaks for them.
+        Box(Modifier.clearAndSetSemantics {}, contentAlignment = Alignment.Center) { content(if (down) accent else T.Ink) }
+    }
 }
 
 @Composable
-fun RoundKey(size: Dp, accent: Color, onPress: () -> Unit, content: @Composable (Color) -> Unit) =
-    KeyButton(CircleShape, accent, Modifier.size(size), onPress = onPress, content = content)
+fun RoundKey(size: Dp, accent: Color, label: String, onPress: () -> Unit, content: @Composable (Color) -> Unit) =
+    KeyButton(CircleShape, accent, label, Modifier.size(size), onPress = onPress, content = content)

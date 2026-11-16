@@ -41,7 +41,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import kotlin.math.roundToInt
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,13 +65,15 @@ private val Sheet = Color(0xFF1C1C1F)
 @Composable
 private fun SectionTitle(t: String) =
     Text(t.uppercase(), color = T.Dim, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
+        modifier = Modifier.padding(top = 20.dp, bottom = 8.dp).semantics { heading() })
 
 @Composable
 private fun ToggleRow(label: String, checked: Boolean, accent: Color, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    // Whole row is one switch for TalkBack and one big touch target for fingers.
+    Row(Modifier.fillMaxWidth().toggleable(checked, role = Role.Switch, onValueChange = onChange).padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = T.Ink, fontSize = 16.sp, modifier = Modifier.weight(1f))
-        Switch(checked, onChange, colors = SwitchDefaults.colors(checkedTrackColor = accent, checkedThumbColor = Color.White,
+        Switch(checked, null, colors = SwitchDefaults.colors(checkedTrackColor = accent, checkedThumbColor = Color.White,
             uncheckedTrackColor = Color(0xFF3A3A3D), uncheckedThumbColor = Color(0xFF9A9AA0), uncheckedBorderColor = Color.Transparent))
     }
 }
@@ -75,7 +86,7 @@ fun DevicesSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
         Column(Modifier.navigationBarsPadding()) {
             // sticky header
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("TVs & settings", color = T.Ink, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("TVs & settings", color = T.Ink, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).semantics { heading() })
                 TextButton(onClick = onClose) { Text("Done", color = accent, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
             }
             HorizontalDivider(color = Color.White.copy(0.08f))
@@ -99,17 +110,25 @@ fun DevicesSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
                 item { ToggleRow("Click sounds", vm.settings.sound, accent) { vm.update(vm.settings.copy(sound = it)) } }
                 item {
                     Text("Scrub distance per step", color = T.Ink, fontSize = 16.sp, modifier = Modifier.padding(top = 10.dp))
-                    Fader(vm.settings.scrubStepDp, 24f..64f, accent) { vm.update(vm.settings.copy(scrubStepDp = it)) }
+                    Fader(vm.settings.scrubStepDp, 24f..64f, accent,
+                        label = "Scrub distance per step", valueText = "${vm.settings.scrubStepDp.roundToInt()} dp") { vm.update(vm.settings.copy(scrubStepDp = it)) }
                     Text("Shorter = faster scrolling", color = T.Dim, fontSize = 12.sp)
                 }
                 item { SectionTitle("Accent") }
                 item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    // Radio group: 48dp touch targets around the 38dp swatches, colour names for TalkBack.
+                    Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         ACCENTS.forEach { (name, hex) ->
                             val c = accentColor(hex); val sel = vm.settings.accentHex.equals(hex, true)
-                            Box(Modifier.size(38.dp).background(c, CircleShape)
-                                .border(if (sel) 3.dp else 1.dp, if (sel) Color.White else Color.White.copy(0.2f), CircleShape)
-                                .clickable { vm.update(vm.settings.copy(accentHex = hex)) })
+                            Box(
+                                Modifier.size(48.dp)
+                                    .selectable(sel, role = Role.RadioButton) { vm.update(vm.settings.copy(accentHex = hex)) }
+                                    .semantics { contentDescription = name },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Box(Modifier.size(38.dp).background(c, CircleShape)
+                                    .border(if (sel) 3.dp else 1.dp, if (sel) Color.White else Color.White.copy(0.2f), CircleShape))
+                            }
                         }
                     }
                 }
@@ -131,7 +150,9 @@ private fun DeviceRow(vm: RemoteVM, d: Device, accent: Color) {
     Row(
         Modifier.fillMaxWidth().padding(vertical = 4.dp)
             .background(Color(0xFF2A2A2D), RoundedCornerShape(14.dp))
-            .clickable { vm.select(d) }.padding(14.dp),
+            .clickable(onClickLabel = "use this TV", role = Role.Button) { vm.select(d) }
+            .semantics { if (isActive) stateDescription = "Current TV" }
+            .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(10.dp).background(if (isActive) statusColor(vm.link, accent) else Color(0xFF55555B), CircleShape))
@@ -139,7 +160,9 @@ private fun DeviceRow(vm: RemoteVM, d: Device, accent: Color) {
             Text(d.name, color = T.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Text("${d.brand.label}  ${d.host}" + if (isActive) "  ${linkWord(vm.link)}" else "", color = T.Dim, fontSize = 12.sp)
         }
-        TextButton(onClick = { vm.remove(d) }) { Text("Remove", color = T.Danger, fontSize = 13.sp) }
+        TextButton(onClick = { vm.remove(d) }, modifier = Modifier.semantics { contentDescription = "Remove ${d.name}" }) {
+            Text("Remove", color = T.Danger, fontSize = 13.sp)
+        }
     }
 }
 
@@ -187,9 +210,10 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
     var text by remember { mutableStateOf("") }
     ModalBottomSheet(onDismissRequest = onClose, sheetState = state, containerColor = Sheet, contentColor = T.Ink) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
-            Text("Type on TV", color = T.Ink, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text("Type on TV", color = T.Ink, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
             Text("Open a search box on the TV first, then send.", color = T.Dim, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
             OutlinedTextField(text, { text = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                label = { Text("Text to send") },
                 colors = OutlinedTextFieldDefaults.colors(focusedTextColor = T.Ink, unfocusedTextColor = T.Ink,
                     focusedBorderColor = accent, unfocusedBorderColor = Color(0xFF3A3A3D), cursorColor = accent))
             Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

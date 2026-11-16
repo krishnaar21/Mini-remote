@@ -17,15 +17,30 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 
-/** Retro hardware fader: wide, low thumb with ridges and an accent mark. */
+/**
+ * Retro hardware fader: wide, low thumb with ridges and an accent mark.
+ * Built on Material Slider, so TalkBack volume-key adjust works; [label] and [valueText] name it.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Fader(value: Float, range: ClosedFloatingPointRange<Float>, accent: Color, onChange: (Float) -> Unit) {
+fun Fader(
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    accent: Color,
+    label: String,
+    valueText: String,
+    onChange: (Float) -> Unit,
+) {
     Slider(
         value = value, onValueChange = onChange, valueRange = range,
-        modifier = Modifier.fillMaxWidth().height(40.dp),
+        // 48dp is the minimum touch target; the track and thumb still draw at their own size.
+        modifier = Modifier.fillMaxWidth().height(48.dp)
+            .semantics { contentDescription = label; stateDescription = valueText },
         thumb = {
             val shape = RoundedCornerShape(7.dp)
             Box(

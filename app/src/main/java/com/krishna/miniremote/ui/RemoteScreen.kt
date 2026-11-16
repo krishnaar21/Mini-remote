@@ -65,15 +65,22 @@ fun RemoteScreen(vm: RemoteVM) {
         ) {
             // Top row: mic | TV pill | power
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                RoundKey(56.dp, accent, onPress = { vm.press(RemoteKey.VOICE) }) { LineIcon(Ico.MIC, it) }
-                KeyButton(RoundedCornerShape(50), accent, Modifier.weight(1f).height(56.dp), onPress = { showDevices = true }) {
+                RoundKey(56.dp, accent, "Voice search", onPress = { vm.press(RemoteKey.VOICE) }) { LineIcon(Ico.MIC, it) }
+                KeyButton(
+                    RoundedCornerShape(50), accent,
+                    label = vm.active?.let { "TV: ${it.name}" } ?: "Choose a TV",
+                    modifier = Modifier.weight(1f).height(56.dp),
+                    state = if (vm.active != null) linkWord(vm.link) else null,
+                    actionLabel = "open TVs and settings",
+                    onPress = { showDevices = true },
+                ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Box(Modifier.size(9.dp).background(statusColor(vm.link, accent).copy(alpha = if (vm.active == null) 0.35f else 1f), CircleShape))
                         Text(vm.active?.name ?: "Choose a TV", color = T.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                         LineIcon(Ico.CHEVRON_R, T.Dim, 16.dp)
                     }
                 }
-                RoundKey(56.dp, accent, onPress = { vm.press(RemoteKey.POWER) }) { LineIcon(Ico.POWER, if (it == accent) accent else T.Danger) }
+                RoundKey(56.dp, accent, "Power", onPress = { vm.press(RemoteKey.POWER) }) { LineIcon(Ico.POWER, if (it == accent) accent else T.Danger) }
             }
 
             Clickpad(
@@ -84,21 +91,21 @@ fun RemoteScreen(vm: RemoteVM) {
             )
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                RoundKey(76.dp, accent, onPress = { vm.press(RemoteKey.BACK) }) { LineIcon(Ico.BACK, it, 28.dp) }
-                RoundKey(76.dp, accent, onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { LineIcon(Ico.PLAY, it, 28.dp) }
-                RoundKey(76.dp, accent, onPress = { vm.press(RemoteKey.HOME) }) { LineIcon(Ico.HOME, it, 28.dp) }
+                RoundKey(76.dp, accent, "Back", onPress = { vm.press(RemoteKey.BACK) }) { LineIcon(Ico.BACK, it, 28.dp) }
+                RoundKey(76.dp, accent, "Play or pause", onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { LineIcon(Ico.PLAY, it, 28.dp) }
+                RoundKey(76.dp, accent, "Home", onPress = { vm.press(RemoteKey.HOME) }) { LineIcon(Ico.HOME, it, 28.dp) }
             }
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                KeyButton(RoundedCornerShape(50), accent, Modifier.weight(1f).height(56.dp), onPress = { showKeys = true }) {
+                KeyButton(RoundedCornerShape(50), accent, "Type on TV", Modifier.weight(1f).height(56.dp), actionLabel = "open keyboard", onPress = { showKeys = true }) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         LineIcon(Ico.KEYBOARD, it); Text("Type", color = it, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    KeyButton(CircleShape, accent, Modifier.size(56.dp), repeat = true, onPress = { vm.press(RemoteKey.VOL_DOWN, quiet = true) }) { LineIcon(Ico.MINUS, it) }
-                    KeyButton(CircleShape, accent, Modifier.size(56.dp), onPress = { vm.press(RemoteKey.MUTE) }) { LineIcon(Ico.SPEAKER, it) }
-                    KeyButton(CircleShape, accent, Modifier.size(56.dp), repeat = true, onPress = { vm.press(RemoteKey.VOL_UP, quiet = true) }) { LineIcon(Ico.PLUS, it) }
+                    KeyButton(CircleShape, accent, "Volume down", Modifier.size(56.dp), repeat = true, onPress = { vm.press(RemoteKey.VOL_DOWN, quiet = true) }) { LineIcon(Ico.MINUS, it) }
+                    KeyButton(CircleShape, accent, "Mute", Modifier.size(56.dp), onPress = { vm.press(RemoteKey.MUTE) }) { LineIcon(Ico.SPEAKER, it) }
+                    KeyButton(CircleShape, accent, "Volume up", Modifier.size(56.dp), repeat = true, onPress = { vm.press(RemoteKey.VOL_UP, quiet = true) }) { LineIcon(Ico.PLUS, it) }
                 }
             }
         }

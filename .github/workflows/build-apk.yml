@@ -2,6 +2,7 @@ name: Build APK
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -28,6 +29,8 @@ jobs:
           name: MiniRemote-apk
           path: MiniRemote.apk
       - name: Publish as the latest release (stable download link)
+        # Only builds of main replace the public download; PR builds stay as run artifacts.
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
