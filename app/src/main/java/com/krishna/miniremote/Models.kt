@@ -64,6 +64,8 @@ data class Settings(
     /** Button highlights follow the phone's tilt. */
     val gyro: Boolean = true,
     val keepAwake: Boolean = true,
+    /** Check the latest-build release on launch and download a newer APK in the background. */
+    val autoUpdate: Boolean = true,
 )
 
 val HAPTIC_STRENGTHS = listOf(0.6f to "Light", 1f to "Medium", 1.5f to "Strong")

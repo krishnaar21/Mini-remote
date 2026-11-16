@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -40,8 +41,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -95,7 +95,8 @@ import kotlin.math.roundToInt
 
 /* ---------------------------------------------------------------- palette */
 
-private val SheetBg = Color(0xFF1B1B1C)
+/** Sheets use the remote's own charcoal so they read as part of the same object. */
+private val SheetBg = T.Bg
 private val CardBg = Color(0xFF222223)
 private val Line = Color(0xFF2E2E30)
 private val Muted = Color(0xFF8C8C90)
@@ -132,7 +133,6 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onClose, sheetState = state, containerColor = SheetBg, contentColor = T.Ink,
         shape = SheetShape, scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
-        modifier = Modifier.border(1.dp, Line, SheetShape),
     ) {
         BackHandler(enabled = stack.size > 1) { back() }
         val canBack = stack.size > 1 || page !is Page.Devices
@@ -209,8 +209,8 @@ private fun Field(
                 .semantics { contentDescription = label },
             decorationBox = { inner ->
                 Row(
-                    Modifier.fillMaxSize().background(Color(0xFF141415), shape)
-                        .border(1.dp, when { isError -> DangerInk; focused -> Muted; else -> Line }, shape)
+                    Modifier.fillMaxSize().softFace(HOLLOW, sheen = false, corner = 12.dp, dpUnits = true)
+                        .then(when { isError -> Modifier.border(1.dp, DangerInk, shape); focused -> Modifier.border(1.dp, Muted, shape); else -> Modifier })
                         .padding(horizontal = 11.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -230,8 +230,9 @@ private fun Field(
 private fun Toggle(on: Boolean) {
     val x by androidx.compose.animation.core.animateDpAsState(if (on) 20.dp else 0.dp, label = "sw")
     val bg by androidx.compose.animation.animateColorAsState(if (on) SwitchOn else Color(0xFF3A3A3C), label = "swbg")
-    Box(Modifier.size(50.dp, 30.dp).background(bg, CircleShape).padding(3.dp)) {
-        Box(Modifier.offset(x = x).size(24.dp).shadow(2.dp, CircleShape).background(Color.White, CircleShape))
+    // Recessed track (tinted green when on) with a raised light knob.
+    Box(Modifier.size(50.dp, 30.dp).softFace(HOLLOW, sheen = false, dpUnits = true).background(bg.copy(alpha = if (on) 0.9f else 0f), CircleShape).padding(3.dp)) {
+        Box(Modifier.offset(x = x).size(24.dp).softFace(LIGHT, dpUnits = true))
     }
 }
 
@@ -253,11 +254,27 @@ private fun Header(title: String, onClose: () -> Unit, back: (() -> Unit)? = nul
 @Composable
 private fun CircleIcon(ico: Ico, label: String, onClick: () -> Unit) {
     Box(
-        Modifier.size(44.dp).clip(CircleShape).background(Fill2)
-            .clickable(role = Role.Button, onClickLabel = null, onClick = onClick)
+        Modifier.size(44.dp).pressable(CARD, CARD_DOWN, null, label = null, onClick = onClick)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) { LineIcon(ico, T.Ink, 20.dp) }
+}
+
+/**
+ * Soft-touch press behaviour for sheet controls: [up] at rest, [down] (no sheen) while the
+ * finger is on it. [corner] null = pill/circle. Shadows are in dp.
+ */
+@Composable
+private fun Modifier.pressable(
+    up: Face, down: Face, corner: androidx.compose.ui.unit.Dp?, enabled: Boolean = true,
+    role: Role = Role.Button, label: String? = null, onClick: () -> Unit,
+): Modifier {
+    val src = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val shape = corner?.let { RoundedCornerShape(it) } ?: CircleShape
+    return this.softFace(if (pressed) down else up, sheen = !pressed, corner = corner, dpUnits = true)
+        .clip(shape)
+        .clickable(src, indication = null, enabled = enabled, role = role, onClickLabel = label, onClick = onClick)
 }
 
 @Composable
@@ -282,18 +299,21 @@ private fun SectionTitle(t: String) =
 @Composable
 private fun Btn(text: String, kind: Int = 0, enabled: Boolean = true, onClick: () -> Unit) {
     // 0 = primary (white), 1 = secondary, 2 = danger
-    val (bg, fg) = when (kind) { 1 -> Fill2 to T.Ink; 2 -> DangerBg to DangerInk; else -> Color.White to Color(0xFF111111) }
-    Button(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = bg, contentColor = fg, disabledContainerColor = bg.copy(0.4f), disabledContentColor = fg.copy(0.5f)),
-        modifier = Modifier.fillMaxWidth().padding(top = 12.dp).heightIn(min = 54.dp)) {
-        Text(text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    val (faces, fg) = when (kind) { 1 -> (CARD to CARD_DOWN) to T.Ink; 2 -> (DANGER to DANGER_DOWN) to DangerInk; else -> (LIGHT to LIGHT_DOWN) to Color(0xFF111111) }
+    Box(
+        Modifier.fillMaxWidth().padding(top = 12.dp).heightIn(min = 54.dp)
+            .graphicsLayer { alpha = if (enabled) 1f else 0.45f }
+            .pressable(faces.first, faces.second, 16.dp, enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, color = fg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
 @Composable
 private fun Hero(ico: Ico, bg: Color, fg: Color) {
     Box(Modifier.fillMaxWidth().padding(bottom = 18.dp).height(96.dp), contentAlignment = Alignment.Center) {
-        Box(Modifier.size(56.dp).background(bg, CircleShape), contentAlignment = Alignment.Center) { LineIcon(ico, fg, 30.dp) }
+        Box(Modifier.size(56.dp).softFace(Face(listOf(mix(bg, 0.8f, Color.White), bg), CARD.shadows), dpUnits = true), contentAlignment = Alignment.Center) { LineIcon(ico, fg, 30.dp) }
     }
 }
 
@@ -314,11 +334,10 @@ private fun CardRow(
     clickLabel: String? = null,
     trailing: @Composable () -> Unit = {},
 ) {
-    val shape = RoundedCornerShape(16.dp)
     Row(
-        Modifier.fillMaxWidth().padding(bottom = 10.dp).heightIn(min = 66.dp)
-            .clip(shape).background(CardBg).border(1.dp, Line, shape)
-            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClickLabel = clickLabel, onClick = onClick) else Modifier)
+        Modifier.fillMaxWidth().padding(bottom = 12.dp).heightIn(min = 66.dp)
+            .then(if (onClick != null) Modifier.pressable(CARD, CARD_DOWN, 16.dp, label = clickLabel, onClick = onClick)
+                  else Modifier.softFace(CARD, corner = 16.dp, dpUnits = true))
             .semantics(mergeDescendants = true) {}
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -531,8 +550,8 @@ private fun CodeEntry(vm: RemoteVM, prompt: PairPrompt) {
                         val ch = code.getOrNull(i)?.toString() ?: ""
                         val focus = i == code.length
                         Box(
-                            Modifier.width(44.dp).height(56.dp).background(Color(0xFF141415), RoundedCornerShape(12.dp))
-                                .border(1.dp, if (focus) Muted else Line, RoundedCornerShape(12.dp)),
+                            Modifier.width(44.dp).height(56.dp).softFace(HOLLOW, sheen = false, corner = 12.dp, dpUnits = true)
+                                .then(if (focus) Modifier.border(1.dp, Muted, RoundedCornerShape(12.dp)) else Modifier),
                             contentAlignment = Alignment.Center,
                         ) { Text(ch, color = T.Ink, fontSize = 22.sp, fontFamily = Mono) }
                     }
@@ -609,6 +628,36 @@ private fun SettingsPage(vm: RemoteVM, accent: Color, manage: () -> Unit) {
         Chevron()
     }
     Divider()
+    SectionTitle("Updates")
+    ToggleRow("Automatic updates", "Download new builds in the background, then ask to install", s.autoUpdate) {
+        vm.update(s.copy(autoUpdate = it)); if (it) vm.checkForUpdate()
+    }
+    val u = vm.update
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 68.dp)
+            .clickable(role = Role.Button, enabled = u !is RemoteVM.Update.Checking && u !is RemoteVM.Update.Downloading) {
+                if (u is RemoteVM.Update.Ready) vm.installUpdate() else vm.checkForUpdate(manual = true)
+            }
+            .padding(vertical = 16.dp, horizontal = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
+            Text(if (u is RemoteVM.Update.Ready) "Install update" else "Check for updates", color = T.Ink, fontSize = 15.sp)
+            Text(
+                when (u) {
+                    RemoteVM.Update.Idle -> "Looks at the latest build on GitHub"
+                    RemoteVM.Update.Checking -> "Checking…"
+                    RemoteVM.Update.UpToDate -> "You're on the latest build"
+                    is RemoteVM.Update.Downloading -> "Downloading ${u.info.name}… ${(u.progress * 100).toInt()}%"
+                    is RemoteVM.Update.Ready -> "Version ${u.info.name} is downloaded"
+                    is RemoteVM.Update.Failed -> u.message
+                },
+                color = if (u is RemoteVM.Update.Failed) DangerInk else Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        Chevron()
+    }
+    Divider()
     SectionTitle("About")
     Hint("Remote talks only to devices on your local network. No account, no tracking. Pairing keys stay on this phone.", top = 4)
     // Lets you tell builds apart: CI numbers every build (0.2.<run>).
@@ -643,12 +692,12 @@ private fun ToggleRow(title: String, sub: String?, checked: Boolean, onChange: (
 private fun SegRow(title: String, opts: List<Pair<Float, String>>, value: Float, onPick: (Float) -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).padding(vertical = 16.dp, horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(title, color = T.Ink, fontSize = 15.sp, modifier = Modifier.weight(1f))
-        Row(Modifier.background(Fill2, RoundedCornerShape(10.dp)).padding(2.dp).selectableGroup()) {
+        Row(Modifier.softFace(HOLLOW, sheen = false, corner = 10.dp, dpUnits = true).padding(3.dp).selectableGroup()) {
             opts.forEach { (v, l) ->
                 val sel = v == value
                 Box(
                     Modifier.heightIn(min = 34.dp).clip(RoundedCornerShape(8.dp))
-                        .background(if (sel) Color(0xFF4A4A4D) else Color.Transparent)
+                        .then(if (sel) Modifier.softFace(CARD, corner = 8.dp, dpUnits = true) else Modifier)
                         .selectable(sel, role = Role.RadioButton) { onPick(v) }
                         .semantics { stateDescription = if (sel) "$title: $l, selected" else "$title: $l" }
                         .padding(horizontal = 12.dp),

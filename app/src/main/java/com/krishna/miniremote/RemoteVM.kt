@@ -54,7 +54,56 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     private var toastJob: Job? = null
     private val queue = Channel<RemoteKey>(64, BufferOverflow.DROP_OLDEST)
 
+    /* ------------------------------------------------------------ updates */
+
+    sealed interface Update {
+        data object Idle : Update
+        data object Checking : Update
+        data object UpToDate : Update
+        data class Downloading(val info: Updater.Info, val progress: Float) : Update
+        data class Ready(val info: Updater.Info, val apk: java.io.File) : Update
+        data class Failed(val message: String) : Update
+    }
+    var update by mutableStateOf<Update>(Update.Idle); private set
+    private var updateJob: Job? = null
+
+    /** Looks for a newer build and downloads it. [manual] = the user asked (so "up to date" is shown). */
+    fun checkForUpdate(manual: Boolean = false) {
+        if (updateJob?.isActive == true) return
+        val ctx = getApplication<Application>()
+        updateJob = viewModelScope.launch {
+            update = Update.Checking
+            update = runCatching<Update> {
+                val info = Updater.check(ctx) ?: return@runCatching Update.UpToDate
+                update = Update.Downloading(info, 0f)
+                var last = 0f
+                val apk = Updater.download(ctx, info) { p ->
+                    // Only repaint every 2% so the download doesn't flood the UI thread.
+                    if (p - last >= 0.02f || p >= 1f) { last = p; update = Update.Downloading(info, p) }
+                }
+                Update.Ready(info, apk)
+            }.getOrElse { e ->
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (manual) Update.Failed(e.message ?: "Couldn't check for updates") else Update.Idle
+            }
+            if (!manual && update == Update.UpToDate) update = Update.Idle
+        }
+    }
+
+    /** Starts Android's installer, or first sends the user to allow installs from this app. */
+    fun installUpdate() {
+        val r = update as? Update.Ready ?: return
+        val ctx = getApplication<Application>()
+        runCatching {
+            if (!Updater.canInstall(ctx)) { Updater.openInstallPermission(ctx); say("Allow installs, then tap Install again") }
+            else Updater.install(ctx, r.apk)
+        }.onFailure { say("Couldn't open the installer") }
+    }
+
+    fun dismissUpdate() { if (update !is Update.Downloading) update = Update.Idle }
+
     init {
+        if (settings.autoUpdate) checkForUpdate()
         applyFeel(settings)
         viewModelScope.launch {
             for (k in queue) {
