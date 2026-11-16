@@ -78,14 +78,14 @@ val WELL_DOWN = Face(listOf(Color(0xFF0D0D0F), Color(0xFF202023)), listOf(
 
 fun flat(c: Color, shadows: List<Sh>) = Face(listOf(c, c), shadows)
 
-/** Pill or circle (corner radius = half the short side), which is every shape on the remote. */
-private fun stadium(w: Float, h: Float, grow: Float = 0f, dy: Float = 0f) = android.graphics.Path().apply {
-    val r = min(w, h) / 2f + grow
+/** Rounded rect; corner radius [cr] (px), or a pill/circle when null (every shape on the remote). */
+private fun stadium(w: Float, h: Float, grow: Float = 0f, dy: Float = 0f, cr: Float? = null) = android.graphics.Path().apply {
+    val r = max(0f, (cr ?: (min(w, h) / 2f)) + grow)
     addRoundRect(RectF(-grow, -grow + dy, w + grow, h + grow + dy), r, r, android.graphics.Path.Direction.CW)
 }
 
-fun stadiumPath(w: Float, h: Float) = Path().apply {
-    addRoundRect(RoundRect(0f, 0f, w, h, CornerRadius(min(w, h) / 2f)))
+fun stadiumPath(w: Float, h: Float, cr: Float? = null) = Path().apply {
+    addRoundRect(RoundRect(0f, 0f, w, h, CornerRadius(cr ?: (min(w, h) / 2f))))
 }
 
 /** CSS blur length -> Android blur radius (CSS sigma is blur/2; Android sigma ~ 0.577 r + 0.5). */
@@ -98,13 +98,13 @@ private fun paint(c: Color, blur: Float) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
  * Renders a face with its shadows into a bitmap once, in software, so blur works on every
  * Android version and the per-frame cost is one bitmap draw. [u] is pixels per board pixel.
  */
-private fun render(f: Face, w: Float, h: Float, u: Float): Pair<ImageBitmap, Float> {
+private fun render(f: Face, w: Float, h: Float, u: Float, cr: Float?): Pair<ImageBitmap, Float> {
     val outer = f.shadows.filter { !it.inset }
     val pad = (outer.maxOfOrNull { (abs(it.dy) + it.blur * 1.3f + it.spread) * u } ?: 0f) + 2f
     val bmp = Bitmap.createBitmap((w + pad * 2).toInt() + 1, (h + pad * 2).toInt() + 1, Bitmap.Config.ARGB_8888)
     val c = android.graphics.Canvas(bmp)
     c.translate(pad, pad)
-    for (s in outer.asReversed()) c.drawPath(stadium(w, h, s.spread * u, s.dy * u), paint(s.color, s.blur * u))
+    for (s in outer.asReversed()) c.drawPath(stadium(w, h, s.spread * u, s.dy * u, cr), paint(s.color, s.blur * u))
 
     val a = Math.toRadians(f.angle.toDouble())
     val dx = sin(a).toFloat(); val dy = -cos(a).toFloat()
@@ -114,14 +114,14 @@ private fun render(f: Face, w: Float, h: Float, u: Float): Pair<ImageBitmap, Flo
         shader = LinearGradient(cx - dx * len / 2, cy - dy * len / 2, cx + dx * len / 2, cy + dy * len / 2,
             f.colors.map { it.toArgb() }.toIntArray(), f.stops?.toFloatArray(), Shader.TileMode.CLAMP)
     }
-    val body = stadium(w, h)
+    val body = stadium(w, h, cr = cr)
     c.drawPath(body, fill)
 
     c.save()
     c.clipPath(body)
     for (s in f.shadows.filter { it.inset }.asReversed()) {
         val hole = android.graphics.Path().apply { addRect(-w, -h, w * 2, h * 2, android.graphics.Path.Direction.CW) }
-        hole.op(stadium(w, h, -s.spread * u, s.dy * u), android.graphics.Path.Op.DIFFERENCE)
+        hole.op(stadium(w, h, -s.spread * u, s.dy * u, cr), android.graphics.Path.Op.DIFFERENCE)
         c.drawPath(hole, paint(s.color, s.blur * u))
     }
     c.restore()
@@ -134,18 +134,47 @@ private class FaceCache { var w = 0f; var h = 0f; val m = HashMap<Face, Pair<Ima
  * Paints [face] (with its CSS shadows) behind the content, then the tilt sheen on top when [sheen].
  * Bitmaps are cached per face and size, so switching between rest and pressed is free after the first time.
  */
-fun Modifier.softFace(face: Face, sheen: Boolean = true): Modifier = composed {
+fun Modifier.softFace(face: Face, sheen: Boolean = true, corner: Dp? = null, dpUnits: Boolean = false): Modifier = composed {
     val k = LocalK.current
     val density = LocalDensity.current.density
     val tilt = LocalTilt.current
-    val cache = remember(k, density) { FaceCache() }
+    // Remote faces use board pixels; sheet faces give their shadows in dp ([dpUnits]).
+    val u = if (dpUnits) density else k * density
+    val cr = corner?.let { it.value * density }
+    val cache = remember(u, cr) { FaceCache() }
     drawBehind {
         if (size.width != cache.w || size.height != cache.h) { cache.m.clear(); cache.w = size.width; cache.h = size.height }
-        val (img, pad) = cache.m.getOrPut(face) { render(face, size.width, size.height, k * density) }
+        val (img, pad) = cache.m.getOrPut(face) { render(face, size.width, size.height, u, cr) }
         drawImage(img, Offset(-pad, -pad))
-        if (sheen) clipPath(stadiumPath(size.width, size.height)) { sheen(tilt.value, 0.10f) }
+        if (sheen) clipPath(stadiumPath(size.width, size.height, cr)) { sheen(tilt.value, 0.07f) }
     }
 }
+
+/* ---- Sheet faces: the remote's charcoal soft-touch language at sheet scale (lengths in dp). ---- */
+
+/** Raised card / secondary button / round header button. */
+val CARD = Face(listOf(Color(0xFF333336), Color(0xFF242427)), listOf(
+    Sh(0f, 0f, B.copy(.6f), spread = 1f), Sh(4f, 10f, B.copy(.45f)),
+    Sh(1f, 0f, W.copy(.09f), inset = true), Sh(-2f, 3f, B.copy(.3f), inset = true)))
+
+val CARD_DOWN = Face(listOf(Color(0xFF222225), Color(0xFF303033)), listOf(
+    Sh(0f, 0f, B.copy(.6f), spread = 1f), Sh(1f, 2f, B.copy(.45f)), Sh(2f, 6f, B.copy(.5f), inset = true)))
+
+/** Recessed well: text fields, code boxes, switch and segmented tracks. */
+val HOLLOW = Face(listOf(Color(0xFF141416), Color(0xFF1F1F22)), listOf(
+    Sh(0f, 0f, B.copy(.7f), spread = 1f), Sh(1f, 0f, W.copy(.06f)),
+    Sh(3f, 6f, B.copy(.6f), inset = true)))
+
+/** Primary button: a light soft-touch key. */
+val LIGHT = Face(listOf(Color(0xFFF7F7F9), Color(0xFFD6D6DA)), listOf(
+    Sh(0f, 0f, B.copy(.6f), spread = 1f), Sh(4f, 10f, B.copy(.45f)),
+    Sh(1f, 0f, W.copy(.9f), inset = true), Sh(-2f, 3f, B.copy(.18f), inset = true)))
+
+val LIGHT_DOWN = Face(listOf(Color(0xFFD0D0D4), Color(0xFFEDEDF0)), listOf(
+    Sh(0f, 0f, B.copy(.6f), spread = 1f), Sh(1f, 2f, B.copy(.45f)), Sh(2f, 6f, B.copy(.3f), inset = true)))
+
+val DANGER = Face(listOf(Color(0xFF4A2626), Color(0xFF341B1B)), CARD.shadows)
+val DANGER_DOWN = Face(listOf(Color(0xFF341B1B), Color(0xFF452424)), CARD_DOWN.shadows)
 
 /** Clip helper for ripples and pressed tints so they stay inside the pill. */
 fun DrawScope.insideStadium(block: DrawScope.() -> Unit) = clipPath(stadiumPath(size.width, size.height), block = block)
