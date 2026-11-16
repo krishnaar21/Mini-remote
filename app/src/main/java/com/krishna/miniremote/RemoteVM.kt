@@ -2,19 +2,20 @@ package com.krishna.miniremote
 
 import android.app.Application
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.krishna.miniremote.net.Discovery
 import com.krishna.miniremote.net.HostValidator
 import com.krishna.miniremote.net.RemoteAdapter
 import com.krishna.miniremote.net.Unsupported
 import com.krishna.miniremote.net.UserFacing
-import kotlinx.coroutines.CompletableDeferred
 import com.krishna.miniremote.net.adapterFor
 import com.krishna.miniremote.net.isCertChanged
-import com.krishna.miniremote.net.Discovery
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
@@ -31,13 +32,20 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     var link by mutableStateOf(Link.IDLE); private set
     var toast by mutableStateOf<String?>(null); private set
     var scanning by mutableStateOf(false); private set
-    var scanNote by mutableStateOf<String?>(null); private set
-    var mutedHint by mutableStateOf(false); private set
+    /** TVs found by the last scan that aren't saved yet. */
+    var found by mutableStateOf<List<Device>>(emptyList()); private set
+    /** Why the last connection attempt failed, worded for the user. */
+    var lastError by mutableStateOf<String?>(null); private set
+    /** Bumps every time a command goes out; the transmit light in the TV pill flashes on it. */
+    var txCount by mutableIntStateOf(0); private set
+    /** Mute is a toggle on every TV we support, so we track it locally to colour the button. */
+    var muted by mutableStateOf(false); private set
     /** Non-null while an Android / Google TV is showing a pairing code and we're waiting for it. */
     var pairPrompt by mutableStateOf<PairPrompt?>(null); private set
     private var codeAnswer: CompletableDeferred<String?>? = null
 
     val active: Device? get() = devices.firstOrNull { it.id == activeId }
+    val localSeen: Boolean get() = store.localSeen()
 
     private var adapter: RemoteAdapter? = null
     private var connectJob: Job? = null
@@ -45,12 +53,12 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     private val queue = Channel<RemoteKey>(64, BufferOverflow.DROP_OLDEST)
 
     init {
-        feel.haptics = settings.haptics; feel.sound = settings.sound
+        applyFeel(settings)
         viewModelScope.launch {
             for (k in queue) {
                 val a = adapter
                 if (link != Link.READY || a == null) continue
-                try { a.send(k) } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                try { a.send(k); txCount++ } catch (e: CancellationException) { throw e } catch (e: Exception) {
                     feel.fire(Feel.ERROR)
                     say(if (e is Unsupported) e.message ?: "Not supported" else "Lost connection")
                     if (e !is Unsupported) { link = Link.ERROR }
@@ -63,7 +71,9 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     fun press(key: RemoteKey, quiet: Boolean = false) {
         if (active == null) { feel.fire(Feel.ERROR); say("Choose a TV first"); return }
         if (link == Link.ERROR) active?.let { connect(it) }
-        feel.fire(when (key) { RemoteKey.POWER -> Feel.HEAVY; RemoteKey.OK -> Feel.PRESS; else -> Feel.PRESS })
+        feel.fire(if (key == RemoteKey.POWER) Feel.HEAVY else Feel.PRESS)
+        if (key == RemoteKey.MUTE) muted = !muted
+        if (key == RemoteKey.VOL_UP) muted = false
         if (!quiet) say(key.word)
         queue.trySend(key)
     }
@@ -81,6 +91,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         connectJob?.cancel()
         adapter?.close(); adapter = null
         link = Link.CONNECTING
+        lastError = null
         connectJob = viewModelScope.launch {
             try {
                 val a = adapterFor(d,
@@ -94,17 +105,26 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 feel.fire(Feel.SUCCESS)
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 link = Link.ERROR
-                say(when {
+                val msg = when {
                     e is UserFacing -> e.message ?: "Not supported"
                     e.isCertChanged() -> "${d.name}'s certificate changed. Remove and add it again if you reset it."
                     else -> "Couldn't reach ${d.name}"
-                })
+                }
+                lastError = msg
+                say(msg)
                 feel.fire(Feel.ERROR)
             }
         }
     }
 
-    /** Shows the pairing dialog and suspends until the user enters a code (or cancels: null). */
+    fun disconnect() {
+        connectJob?.cancel()
+        adapter?.close(); adapter = null
+        codeAnswer?.complete(null)
+        link = Link.IDLE
+    }
+
+    /** Shows the pairing code entry and suspends until the user enters a code (or cancels: null). */
     private suspend fun askCode(tvName: String, error: String?): String? {
         val d = CompletableDeferred<String?>()
         codeAnswer?.complete(null)
@@ -125,43 +145,55 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         store.saveDevices(devices)
     }
 
-    fun addManual(name: String, host: String, brand: Brand): String? {
-        val h = host.trim()
-        if (!HostValidator.isPrivateIPv4(h)) return "Enter a local address like 192.168.1.20"
-        val d = Device("${brand.name.lowercase()}-$h", name.trim().ifBlank { brand.label }, h, brand)
+    /** Saves a TV (replacing one with the same id) and connects to it. */
+    fun addAndSelect(d: Device) {
         devices = devices.filter { it.id != d.id } + d
         store.saveDevices(devices)
+        found = found.filter { it.host != d.host }
         select(d)
-        return null
+    }
+
+    /** Returns an error to show, or the new device. */
+    fun addManual(host: String, brand: Brand): Pair<String?, Device?> {
+        val h = host.trim()
+        if (!HostValidator.isPrivateIPv4(h)) return "Enter a home-network address like 192.168.1.20." to null
+        val d = Device("${brand.name.lowercase()}-$h", "${brand.label} $h", h, brand)
+        addAndSelect(d)
+        return null to d
+    }
+
+    fun rename(id: String, name: String) {
+        val n = name.trim().take(30)
+        if (n.isNotEmpty()) updateDevice(id) { it.copy(name = n) }
     }
 
     fun remove(d: Device) {
         devices = devices.filter { it.id != d.id }
         store.saveDevices(devices)
         if (activeId == d.id) {
-            adapter?.close(); adapter = null; activeId = null; store.saveActive(null); link = Link.IDLE
+            disconnect(); activeId = null; store.saveActive(null)
         }
     }
 
+    fun markLocalSeen() = store.setLocalSeen()
+
     fun scan() {
         if (scanning) return
-        scanning = true; scanNote = null
+        scanning = true; found = emptyList()
         viewModelScope.launch {
             try {
-                val found = Discovery.scan()
-                val known = devices.associateBy { it.id }
-                val merged = devices + found.filter { it.id !in known }
-                devices = merged; store.saveDevices(merged)
-                scanNote = if (found.isEmpty()) "No TVs found. Check that the phone and TV are on the same Wi-Fi, or add by IP."
-                else "Found ${found.size} device${if (found.size == 1) "" else "s"}"
-            } catch (e: Exception) { scanNote = "Scan failed" } finally { scanning = false }
+                val hosts = devices.map { it.host }.toSet()
+                found = Discovery.scan().filter { it.host !in hosts }
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                found = emptyList()
+            } finally { scanning = false }
         }
     }
 
     fun typeText(text: String) {
         val a = adapter ?: return say("Connect to a TV first")
         viewModelScope.launch {
-            try { a.typeText(text); feel.fire(Feel.SUCCESS) } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            try { a.typeText(text); txCount++; feel.fire(Feel.SUCCESS) } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 feel.fire(Feel.ERROR); say(if (e is Unsupported) e.message ?: "Not supported" else "Couldn't type")
             }
         }
@@ -169,12 +201,17 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
 
     fun backspace() {
         val a = adapter ?: return
-        viewModelScope.launch { runCatching { a.backspace() }.onFailure { say(it.message ?: "Not supported") } }
+        viewModelScope.launch { runCatching { a.backspace(); txCount++ }.onFailure { say(it.message ?: "Not supported") } }
     }
 
     fun update(s: Settings) {
         settings = s; store.saveSettings(s)
+        applyFeel(s)
+    }
+
+    private fun applyFeel(s: Settings) {
         feel.haptics = s.haptics; feel.sound = s.sound
+        feel.strength = s.hapticStrength; feel.level = s.soundLevel
     }
 
     override fun onCleared() { adapter?.close() }

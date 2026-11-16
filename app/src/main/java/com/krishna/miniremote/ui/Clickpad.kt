@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
@@ -57,7 +58,12 @@ fun Clickpad(
     onKey: (RemoteKey) -> Unit,
     onTick: (RemoteKey) -> Unit,
     onVoice: () -> Unit,
+    /** No TV connected: the pad dims, shows a hint, and any tap calls [onOffline]. */
+    offline: Boolean = false,
+    onOffline: () -> Unit = {},
 ) {
+    val isOffline = androidx.compose.runtime.rememberUpdatedState(offline)
+    val tilt = LocalTilt.current
     val density = LocalDensity.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val stepPx = with(density) { stepDp.dp.toPx() }
@@ -71,6 +77,11 @@ fun Clickpad(
             .pointerInput(stepPx) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
+                    if (isOffline.value) {
+                        do { val e = awaitPointerEvent() } while (e.changes.any { it.pressed })
+                        onOffline()
+                        return@awaitEachGesture
+                    }
                     val c = Offset(this.size.width / 2f, this.size.height / 2f)
                     val wellR = this.size.width * 0.26f
                     val rel = down.position - c
@@ -140,6 +151,11 @@ fun Clickpad(
                 Offset(0f, 0f), Offset(this.size.width, this.size.height)), r, c)
             drawCircle(Color.White.copy(0.10f), r - 1f, c, style = Stroke(2f))
             drawCircle(Color.Black.copy(0.6f), r, c, style = Stroke(2f))
+            // gyro sheen on the raised ring
+            val t = tilt.value
+            val hc = Offset(this.size.width * (0.5f + t.x * 0.34f), this.size.height * (0.08f + t.y * 0.12f))
+            drawCircle(Brush.radialGradient(listOf(Color.White.copy(0.10f), Color.Transparent), hc, this.size.width * 0.55f), r, c)
+            if (offline) return@Canvas
             // concave well
             val wr = this.size.width * 0.26f
             drawCircle(Brush.verticalGradient(
@@ -161,6 +177,22 @@ fun Clickpad(
             chev(RemoteKey.DOWN, Offset(c.x, c.y + off), Offset(-len * 1.6f, -len), Offset(len * 1.6f, -len))
             chev(RemoteKey.LEFT, Offset(c.x - off, c.y), Offset(len, -len * 1.6f), Offset(len, len * 1.6f))
             chev(RemoteKey.RIGHT, Offset(c.x + off, c.y), Offset(-len, -len * 1.6f), Offset(-len, len * 1.6f))
+        }
+        if (offline) {
+            Column(
+                Modifier.semantics(mergeDescendants = true) {
+                    role = Role.Button
+                    contentDescription = "No TV connected"
+                    onClick(label = "choose a TV") { onOffline(); true }
+                },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+            ) {
+                LineIcon(Ico.TV, Color(0xFF6F6F75), 40.dp)
+                Text("No TV connected", color = Color(0xFF6F6F75), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("Tap to choose a TV", color = Color(0xFF55555B), fontSize = 13.sp)
+            }
+            return@Box
         }
         Text(
             toast ?: "OK",

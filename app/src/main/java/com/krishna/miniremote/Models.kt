@@ -53,19 +53,29 @@ data class Device(
 
 data class Settings(
     val haptics: Boolean = true,
+    /** 0.6 Light, 1 Medium, 1.5 Strong. */
+    val hapticStrength: Float = 1f,
     val sound: Boolean = true,
-    val accentHex: String = "0A84FF",
+    /** 0.5 Soft, 1 Medium, 1.7 Loud. */
+    val soundLevel: Float = 1f,
+    val accentHex: String = "FF453A",
+    /** 24..60, in steps of 2. */
     val scrubStepDp: Float = 36f,
+    /** Button highlights follow the phone's tilt. */
+    val gyro: Boolean = true,
     val keepAwake: Boolean = true,
 )
 
+val HAPTIC_STRENGTHS = listOf(0.6f to "Light", 1f to "Medium", 1.5f to "Strong")
+val SOUND_LEVELS = listOf(0.5f to "Soft", 1f to "Medium", 1.7f to "Loud")
+
 val ACCENTS = listOf(
-    "Blue" to "0A84FF",
+    "Red" to "FF453A",
     "Green" to "30D158",
+    "Blue" to "0A84FF",
     "Purple" to "BF5AF2",
     "Pink" to "FF375F",
-    "Yellow" to "FFD60A",
-    "Silver" to "E5E5EA",
+    "White" to "F5F5F7",
 )
 
 enum class Link { IDLE, CONNECTING, READY, ERROR }

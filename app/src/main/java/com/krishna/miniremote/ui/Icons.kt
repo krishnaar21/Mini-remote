@@ -16,7 +16,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-enum class Ico { UP, DOWN, LEFT, RIGHT, MIC, POWER, BACK, PLAY, HOME, KEYBOARD, MINUS, PLUS, SPEAKER, CHEVRON_R, GEAR, CLOSE }
+enum class Ico { UP, DOWN, LEFT, RIGHT, MIC, POWER, BACK, PLAY, HOME, KEYBOARD, MINUS, PLUS, SPEAKER, SPEAKER_MUTED, CHEVRON_R, CHEVRON_L, GEAR, CLOSE, SLIDERS, WIFI, CHECK, ALERT, TV }
 
 /** Light line icons drawn on a 24x24 grid so they match the soft-touch look without extra libraries. */
 @Composable
@@ -41,6 +41,27 @@ fun LineIcon(ico: Ico, color: Color, size: Dp = 24.dp, modifier: Modifier = Modi
             Ico.PLUS -> { line(5f, 12f, 19f, 12f); line(12f, 5f, 12f, 19f) }
             Ico.MINUS -> line(5f, 12f, 19f, 12f)
             Ico.CLOSE -> { line(6f, 6f, 18f, 18f); line(18f, 6f, 6f, 18f) }
+            Ico.CHEVRON_L -> poly(false, 15f to 6f, 9f to 12f, 15f to 18f)
+            Ico.SPEAKER_MUTED -> {
+                poly(true, 4f to 10f, 8f to 10f, 12.5f to 6f, 12.5f to 18f, 8f to 14f, 4f to 14f)
+                line(4f, 4f, 20f, 20f)
+            }
+            Ico.SLIDERS -> {
+                line(21f, 4f, 14f, 4f); line(10f, 4f, 3f, 4f); line(21f, 12f, 12f, 12f); line(8f, 12f, 3f, 12f)
+                line(21f, 20f, 16f, 20f); line(12f, 20f, 3f, 20f); line(14f, 2f, 14f, 6f); line(8f, 10f, 8f, 14f); line(16f, 18f, 16f, 22f)
+            }
+            Ico.WIFI -> {
+                drawArc(color, 225f, 90f, false, o(2f, 6f), Size(20f * k, 20f * k), style = st)
+                drawArc(color, 225f, 90f, false, o(5f, 9f), Size(14f * k, 14f * k), style = st)
+                drawArc(color, 225f, 90f, false, o(8.5f, 12.5f), Size(7f * k, 7f * k), style = st)
+                drawCircle(color, 1.2f * k, o(12f, 19.5f))
+            }
+            Ico.CHECK -> poly(false, 20f to 6f, 9f to 17f, 4f to 12f)
+            Ico.ALERT -> { line(12f, 7f, 12f, 13f); drawCircle(color, 1.2f * k, o(12f, 17f)) }
+            Ico.TV -> {
+                drawRoundRect(color, o(2f, 7f), Size(20f * k, 15f * k), CornerRadius(2f * k), style = st)
+                poly(false, 17f to 2f, 12f to 7f, 7f to 2f)
+            }
             Ico.POWER -> {
                 drawArc(color, -50f, 280f, false, o(5f, 6f), Size(14f * k, 14f * k), style = st)
                 line(12f, 3.5f, 12f, 12f)

@@ -16,6 +16,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,9 +59,21 @@ private fun grain(): ImageBitmap {
 fun RemoteScreen(vm: RemoteVM) {
     val accent = accentColor(vm.settings.accentHex)
     val grainBrush = remember { ShaderBrush(ImageShader(grain(), TileMode.Repeated, TileMode.Repeated)) }
-    var showDevices by remember { mutableStateOf(false) }
+    // Which sheet page is open (null = closed). The pill opens Devices; the offline pad does too.
+    var sheet by remember { mutableStateOf<Page?>(null) }
     var showKeys by remember { mutableStateOf(false) }
+    val tilt = rememberTilt(vm.settings.gyro)
+    val offline = vm.active == null || vm.link == Link.ERROR
 
+    // Transmit light: the dot in the TV pill flashes the accent colour each time a command goes out.
+    val lit = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(vm.txCount) {
+        if (vm.txCount > 0) { lit.snapTo(1f); lit.animateTo(0f, androidx.compose.animation.core.tween(380)) }
+    }
+    val blink = rememberInfiniteTransition(label = "blink").animateFloat(
+        0.2f, 1f, infiniteRepeatable(androidx.compose.animation.core.tween(500), RepeatMode.Reverse), label = "blink")
+
+    CompositionLocalProvider(LocalTilt provides tilt) {
     BoxWithConstraints(Modifier.fillMaxSize().background(T.Bg).drawBehind { drawRect(grainBrush) }.systemBarsPadding()) {
         val padSize = (maxWidth - 64.dp).coerceIn(220.dp, 340.dp)
         Column(
@@ -72,10 +90,18 @@ fun RemoteScreen(vm: RemoteVM) {
                     modifier = Modifier.weight(1f).height(56.dp),
                     state = if (vm.active != null) linkWord(vm.link) else null,
                     actionLabel = "open TVs and settings",
-                    onPress = { showDevices = true },
+                    onPress = { sheet = Page.Devices },
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Box(Modifier.size(9.dp).background(statusColor(vm.link, accent).copy(alpha = if (vm.active == null) 0.35f else 1f), CircleShape))
+                        val dotAlpha = when {
+                            vm.active == null || vm.link == Link.ERROR -> 0.4f
+                            vm.link == Link.CONNECTING -> blink.value
+                            else -> 0.16f + 0.84f * lit.value
+                        }
+                        val dotColor = if (vm.active == null || vm.link == Link.ERROR) Color(0xFF666666) else accent
+                        Box(Modifier.size(10.dp)
+                            .drawBehind { if (lit.value > 0f) drawCircle(accent.copy(0.6f * lit.value), size.minDimension * 1.6f) }
+                            .background(dotColor.copy(alpha = dotAlpha), CircleShape))
                         Text(vm.active?.name ?: "Choose a TV", color = T.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                         LineIcon(Ico.CHEVRON_R, T.Dim, 16.dp)
                     }
@@ -88,6 +114,8 @@ fun RemoteScreen(vm: RemoteVM) {
                 onKey = { vm.press(it, quiet = it == RemoteKey.OK) },
                 onTick = { vm.scrubTick(it) },
                 onVoice = { vm.feel.fire(com.krishna.miniremote.Feel.HEAVY); vm.press(RemoteKey.VOICE) },
+                offline = offline,
+                onOffline = { vm.feel.fire(com.krishna.miniremote.Feel.PRESS); sheet = Page.Devices },
             )
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -102,16 +130,19 @@ fun RemoteScreen(vm: RemoteVM) {
                         LineIcon(Ico.KEYBOARD, it); Text("Type", color = it, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
-                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    KeyButton(CircleShape, accent, "Volume down", Modifier.size(56.dp), repeat = true, onPress = { vm.press(RemoteKey.VOL_DOWN, quiet = true) }) { LineIcon(Ico.MINUS, it) }
-                    KeyButton(CircleShape, accent, "Mute", Modifier.size(56.dp), onPress = { vm.press(RemoteKey.MUTE) }) { LineIcon(Ico.SPEAKER, it) }
-                    KeyButton(CircleShape, accent, "Volume up", Modifier.size(56.dp), repeat = true, onPress = { vm.press(RemoteKey.VOL_UP, quiet = true) }) { LineIcon(Ico.PLUS, it) }
-                }
+                VolumePill(
+                    accent, vm.muted, Modifier.weight(1.08f).height(56.dp),
+                    onDown = { vm.press(RemoteKey.VOL_DOWN, quiet = true) },
+                    onMute = { vm.press(RemoteKey.MUTE) },
+                    onUp = { vm.press(RemoteKey.VOL_UP, quiet = true) },
+                )
             }
         }
     }
 
-    if (showDevices) DevicesSheet(vm, accent) { showDevices = false }
+    sheet?.let { start -> RemoteSheet(vm, accent, start) { sheet = null } }
     if (showKeys) KeyboardSheet(vm, accent) { showKeys = false }
-    vm.pairPrompt?.let { PairCodeDialog(vm, it, accent) }
+    // Pairing normally happens inside the sheet; this covers a pairing that starts with it closed.
+    if (sheet == null) vm.pairPrompt?.let { PairCodeDialog(vm, it, accent) }
+    }
 }
