@@ -45,6 +45,7 @@ fun Clickpad(
     onVoice: () -> Unit,
 ) {
     val density = LocalDensity.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val stepPx = with(density) { stepDp.dp.toPx() }
     val deadPx = with(density) { 8.dp.toPx() }
     var litDir by remember { mutableStateOf<RemoteKey?>(null) }
@@ -54,7 +55,6 @@ fun Clickpad(
         Modifier
             .size(size)
             .pointerInput(stepPx) {
-                val scope = this
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     val c = Offset(this.size.width / 2f, this.size.height / 2f)
