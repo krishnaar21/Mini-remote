@@ -15,7 +15,7 @@ Nothing is backed up to the cloud or copied to a new phone. Use **Settings › P
 ## Network connections
 - **Your TVs**, on your home Wi-Fi only. The app refuses public internet addresses for TV control and scans only your phone's local Wi-Fi subnet when you search for TVs.
 - **GitHub** (github.com), to check for and download app updates, when Automatic updates is on.
-- **Simple Icons** (cdn.simpleicons.org) and **Google's favicon service** (www.google.com/s2/favicons), to download app logos, when App logos is on. Only the app's name or website (for example "netflix" or "hotstar.com") is requested.
+- **Simple Icons** (cdn.simpleicons.org), the **apps' own websites** (their app icon, e.g. netflix.com/apple-touch-icon.png) and **Google's favicon service** (www.google.com/s2/favicons), to download app logos, when App logos is on. Only the app's name or website (for example "netflix" or "hotstar.com") is requested.
 
 ## Voice search
 The microphone is used only while you tap the mic in the Search panel, and it stops when you finish speaking or tap it again. Android's speech recognizer turns speech into text, on the phone where possible (otherwise through your phone's speech service, for example Google's). Mini Remote receives only the text and types it on your TV. No audio is saved.

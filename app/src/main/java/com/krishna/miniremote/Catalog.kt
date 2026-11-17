@@ -33,7 +33,7 @@ object Catalog {
         CatalogApp("prime", "Prime Video", 0xFF0F79AF, 0xFFFFFFFF,
             mapOf(R to "13", S to "3201910019365", L to "amazon", A to "com.amazon.amazonvideo.livingroom"), vendor = "Amazon", link = "https://app.primevideo.com", logo = "primevideo", site = "primevideo.com"),
         CatalogApp("hotstar", "JioHotstar", 0xFF0C1B4D, 0xFFFFFFFF,
-            mapOf(A to "in.startv.hotstar.dplus.tv"), vendor = "JioStar", logo = "hotstar", site = "hotstar.com"),
+            mapOf(A to "in.startv.hotstar.dplus.tv"), vendor = "JioStar", logo = "hotstar", site = "jiohotstar.com"),
         CatalogApp("disney", "Disney+", 0xFF0E2A5C, 0xFFFFFFFF,
             mapOf(R to "291097", S to "3201901017640", L to "com.disney.disneyplus-prod", A to "com.disney.disneyplus"), vendor = "Disney", link = "https://www.disneyplus.com", logo = "disneyplus", site = "disneyplus.com"),
         CatalogApp("sonyliv", "SonyLIV", 0xFF111111, 0xFFF5F5F5,

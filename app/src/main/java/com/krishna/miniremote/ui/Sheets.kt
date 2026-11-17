@@ -1149,7 +1149,7 @@ internal fun PrivacyPage(vm: RemoteVM) {
     Group {
         InfoBlock("Storage", "TVs, pairing keys (encrypted), quick access and settings. On this phone only; never backed up.")
         Divider()
-        InfoBlock("Network", "Only TVs on your Wi-Fi. Updates from GitHub; logos from Simple Icons or Google's favicon service. Both optional.")
+        InfoBlock("Network", "Only TVs on your Wi-Fi. Updates from GitHub; logos from Simple Icons, the apps' own websites or Google's favicon service. Both optional.")
         Divider()
         InfoBlock("Voice", "The mic listens only while you tap it in Search. Speech is turned into text on the phone where possible (otherwise by the phone's speech service); only the text goes to your TV. Nothing is saved.")
         Divider()

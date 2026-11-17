@@ -27,6 +27,19 @@ object Logos {
             .followRedirects(false).build()
     }
 
+    /** For the app's own website: follows HTTPS redirects (sites often serve icons from a CDN), never to plain HTTP. */
+    private val site by lazy {
+        OkHttpClient.Builder().connectTimeout(6, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS)
+            .followRedirects(true).followSslRedirects(false).build()
+    }
+
+    private fun fetchPng(c: OkHttpClient, url: String): ByteArray? = runCatching {
+        c.newCall(Request.Builder().url(url).header("User-Agent", "Mozilla/5.0 (Linux; Android) MiniRemote").build()).execute().use { r ->
+            if (!r.isSuccessful || r.request.url.scheme != "https") null
+            else r.body?.bytes()?.takeIf { it.size in 200..400_000 }
+        }
+    }.getOrNull()
+
     /** Simple Icons slug for an app name ("Prime Video" -> "primevideo"). */
     fun slugFor(name: String): String = name.lowercase().filter { it.isLetterOrDigit() }
 
@@ -55,8 +68,9 @@ object Logos {
     }
 
     /**
-     * The app's own website icon (full colour, PNG) for apps Simple Icons doesn't carry, through
-     * Google's public favicon service. Only the website's domain is sent. Cached like the logos.
+     * The app's own icon (full colour) for apps Simple Icons doesn't carry: first the official
+     * website's app icon (apple-touch-icon, 180px), then Google's public favicon service. Only
+     * the website is contacted, with no personal data. Cached like the logos.
      */
     suspend fun siteIcon(ctx: Context, domain: String, px: Int): Bitmap? = withContext(Dispatchers.IO) {
         if (domain.isEmpty() || !domain.all { it.isLetterOrDigit() || it == '.' || it == '-' }) return@withContext null
@@ -65,14 +79,25 @@ object Logos {
         if (key in misses) return@withContext null
         val dir = File(ctx.cacheDir, "logos").apply { mkdirs() }
         val file = File(dir, "site-$domain.png")
-        val bytes = if (file.exists()) file.readBytes() else runCatching {
-            http.newCall(Request.Builder().url("https://www.google.com/s2/favicons?domain=$domain&sz=128").build()).execute().use { r ->
-                if (!r.isSuccessful) null else r.body?.bytes()?.takeIf { it.size in 200..300_000 }
+        fun decode(b: ByteArray?) = b?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }
+        var bmp = if (file.exists()) decode(file.readBytes()) else null
+        if (bmp == null) {
+            val www = if (domain.count { it == '.' } == 1) "www.$domain" else domain
+            val tries = listOf(
+                site to "https://$www/apple-touch-icon.png",
+                site to "https://$domain/apple-touch-icon.png",
+                site to "https://$www/apple-touch-icon-precomposed.png",
+                http to "https://www.google.com/s2/favicons?domain=$domain&sz=256",
+            )
+            for ((c, url) in tries) {
+                val b = fetchPng(c, url) ?: continue
+                val d = decode(b) ?: continue
+                // Too small (or the generic globe) isn't a logo.
+                if (d.width < 96) continue
+                file.writeBytes(b); bmp = d; break
             }
-        }.getOrNull()?.also { file.writeBytes(it) }
-        val bmp = bytes?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }
-        // The service returns a tiny generic globe when a site has no icon: treat that as none.
-        if (bmp == null || bmp.width < 48) { synchronized(misses) { misses += key }; return@withContext null }
+        }
+        if (bmp == null) { synchronized(misses) { misses += key }; return@withContext null }
         mem.put(key, bmp)
         bmp
     }
