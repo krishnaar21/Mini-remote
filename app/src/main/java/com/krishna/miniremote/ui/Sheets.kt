@@ -631,20 +631,24 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
     Divider()
     }
     SectionTitle("Updates")
-    ToggleRow("Automatic updates", "Download new builds in the background, then ask to install", s.autoUpdate) {
+    ToggleRow("Automatic updates", "Check for new builds, download them, and notify you to install", s.autoUpdate) {
         vm.update(s.copy(autoUpdate = it)); if (it) vm.checkForUpdate()
     }
     val u = vm.update
     Row(
         Modifier.fillMaxWidth().heightIn(min = 68.dp)
             .clickable(role = Role.Button, enabled = u !is RemoteVM.Update.Checking && u !is RemoteVM.Update.Downloading) {
-                if (u is RemoteVM.Update.Ready) vm.installUpdate() else vm.checkForUpdate(manual = true)
+                when (u) {
+                    is RemoteVM.Update.Ready -> vm.installUpdate()
+                    is RemoteVM.Update.Manual -> vm.openReleasePage()
+                    else -> vm.checkForUpdate(manual = true)
+                }
             }
             .padding(vertical = 16.dp, horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
-            Text(if (u is RemoteVM.Update.Ready) "Install update" else "Check for updates", color = T.Ink, fontSize = 15.sp)
+            Text(when (u) { is RemoteVM.Update.Ready -> "Install update"; is RemoteVM.Update.Manual -> "Download update"; else -> "Check for updates" }, color = T.Ink, fontSize = 15.sp)
             Text(
                 when (u) {
                     RemoteVM.Update.Idle -> "Looks at the latest build on GitHub"
@@ -653,6 +657,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
                     is RemoteVM.Update.Downloading -> "Downloading ${u.info.name}… ${(u.progress * 100).toInt()}%"
                     is RemoteVM.Update.Ready -> "Version ${u.info.name} is downloaded"
                     is RemoteVM.Update.Failed -> u.message
+                    is RemoteVM.Update.Manual -> "Version ${u.info.name} needs a reinstall: tap to download it"
                 },
                 color = if (u is RemoteVM.Update.Failed) DangerInk else Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp),
             )

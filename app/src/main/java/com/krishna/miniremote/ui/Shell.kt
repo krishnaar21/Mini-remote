@@ -160,9 +160,9 @@ fun AppShell(vm: RemoteVM) {
                     val inWell = onRemote && deck == Deck.DIAL && !tray
                     ToastChip(if (inWell) null else vm.toast, Modifier.align(Alignment.BottomCenter).padding(bottom = if (tray) 230.dp else 72.dp))
                     when (val u = vm.update) {
-                        is RemoteVM.Update.Downloading, is RemoteVM.Update.Ready ->
+                        is RemoteVM.Update.Downloading, is RemoteVM.Update.Ready, is RemoteVM.Update.Manual ->
                             Box(Modifier.align(Alignment.TopCenter).padding(top = 4.dp).height(32.dp)) {
-                                UpdatePill(u, accent, onInstall = { vm.installUpdate() }, onDismiss = { vm.dismissUpdate() })
+                                UpdatePill(u, accent, onInstall = { if (u is RemoteVM.Update.Manual) vm.openReleasePage() else vm.installUpdate() }, onDismiss = { vm.dismissUpdate() })
                             }
                         else -> {}
                     }
@@ -300,9 +300,10 @@ fun ToastChip(text: String?, modifier: Modifier = Modifier) {
 /** "Update 0.2.N ready · Install" (or download progress), with a close button. */
 @Composable
 private fun UpdatePill(u: RemoteVM.Update, accent: Color, onInstall: () -> Unit, onDismiss: () -> Unit) {
-    val ready = u as? RemoteVM.Update.Ready
+    val ready: Any? = (u as? RemoteVM.Update.Ready) ?: (u as? RemoteVM.Update.Manual)
     val text = when (u) {
         is RemoteVM.Update.Ready -> "Update ${u.info.name} ready · Install"
+        is RemoteVM.Update.Manual -> "${u.info.name} available · Download"
         is RemoteVM.Update.Downloading -> "Downloading update ${(u.progress * 100).toInt()}%"
         else -> ""
     }

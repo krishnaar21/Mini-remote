@@ -104,14 +104,31 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         data class Downloading(val info: Updater.Info, val progress: Float) : Update
         data class Ready(val info: Updater.Info, val apk: java.io.File) : Update
         data class Failed(val message: String) : Update
+        /** Newer build, but signed with a different key: get it from the release page instead. */
+        data class Manual(val info: Updater.Info) : Update
     }
     var update by mutableStateOf<Update>(Update.Idle); private set
     private var updateJob: Job? = null
 
     /** Looks for a newer build and downloads it. [manual] = the user asked (so "up to date" is shown). */
+    private var lastCheck = 0L
+    /** Set when the "update ready" notification was tapped before the download finished. */
+    private var installWhenReady = false
+
+    /** Checks again when the app comes back, at most every 30 minutes (auto updates only). */
+    fun maybeCheckForUpdate() {
+        val u = update
+        if (!settings.autoUpdate || u is Update.Ready || u is Update.Downloading || u is Update.Manual) return
+        if (System.currentTimeMillis() - lastCheck > 30 * 60_000L) checkForUpdate()
+    }
+
+    /** The update notification was tapped: install now, or as soon as the download is done. */
+    fun installFromNotification() { if (update is Update.Ready) installUpdate() else { installWhenReady = true; checkForUpdate() } }
+
     fun checkForUpdate(manual: Boolean = false) {
         if (updateJob?.isActive == true) return
         val ctx = getApplication<Application>()
+        lastCheck = System.currentTimeMillis()
         updateJob = viewModelScope.launch {
             update = Update.Checking
             update = runCatching<Update> {
@@ -123,17 +140,21 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                     if (p - last >= 0.02f || p >= 1f) { last = p; update = Update.Downloading(info, p) }
                 }
                 if (!Updater.sameSigner(ctx, apk)) {
-                    // Android would reject it; say why instead of showing an Install button that fails.
-                    return@runCatching Update.Failed(
-                        "Version ${info.name} is signed with a different key. Uninstall this app, then install it from the GitHub release."
-                    )
+                    // Android would reject it over this app; point to the release page instead.
+                    Updater.notify(ctx, "Mini Remote ${info.name} is available", "Tap to download it. It needs a reinstall this time.",
+                        android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(Updater.RELEASE_PAGE)))
+                    return@runCatching Update.Manual(info)
                 }
+                Updater.notify(ctx, "Update ${info.name} is ready", "Tap to install the new Mini Remote.",
+                    android.content.Intent(ctx, MainActivity::class.java).putExtra(Updater.EXTRA_INSTALL, true)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP))
                 Update.Ready(info, apk)
             }.getOrElse { e ->
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 if (manual) Update.Failed(e.message ?: "Couldn't check for updates") else Update.Idle
             }
             if (!manual && (update == Update.UpToDate || update is Update.Failed)) update = Update.Idle
+            if (installWhenReady && update is Update.Ready) { installWhenReady = false; installUpdate() }
         }
     }
 
@@ -148,6 +169,12 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     }
 
     fun dismissUpdate() { if (update !is Update.Downloading) update = Update.Idle }
+
+    /** Opens the GitHub release page (for builds that can't install over this one). */
+    fun openReleasePage() {
+        val ctx = getApplication<Application>()
+        runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(Updater.RELEASE_PAGE)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
 
     init {
         if (settings.autoUpdate) checkForUpdate()

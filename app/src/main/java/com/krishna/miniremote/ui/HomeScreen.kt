@@ -128,8 +128,8 @@ fun HomeScreen(
         Modifier.fillMaxSize().then(swipe).padding(horizontal = 16.dp).padding(top = 6.dp, bottom = NAV_H + 34.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Top, as on the Apple TV Remote: mute · TV picker · power.
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        // Top, as on the Apple TV Remote: mute · TV picker · power, inset from the screen edges.
+        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             KeyButton(accent, "Mute", Modifier.size(44.dp), state = if (vm.muted) "Muted" else null, pressedScale = 1f, onPress = { vm.press(RemoteKey.MUTE) }) { c, _ ->
                 LineIcon(if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, if (vm.muted) accent else c, 19.dp)
             }
@@ -216,22 +216,24 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
         vm.link == Link.CONNECTING -> Color(0xFFFDD663)
         else -> Color(0xFFF2B8B5)
     }
+    Box(modifier.padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
     Column(
-        modifier.clip(RoundedCornerShape(14.dp))
+        Modifier.clip(CircleShape).background(M.High)
             .clickable(onClickLabel = "choose a TV", role = Role.Button, onClick = openDevices)
             .semantics(mergeDescendants = true) {
                 contentDescription = d?.let { "TV: ${it.name}" } ?: "Choose a TV"
                 stateDescription = sub
             }
-            .padding(vertical = 6.dp),
+            .padding(horizontal = 20.dp, vertical = 5.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(d?.let { shortName(it.name, it.brand.label) } ?: "Choose a TV", color = T.Ink, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+            Text(d?.let { shortName(it.name, it.brand.label) } ?: "Choose a TV", color = T.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             LineIcon(Ico.DOWN, T.Dim, 15.dp, stroke = 2.2f)
         }
-        Text(sub, color = subCol, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(sub, color = subCol, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
     }
 }
 

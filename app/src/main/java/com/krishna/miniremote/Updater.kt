@@ -113,6 +113,27 @@ object Updater {
         }
     }.getOrDefault(true)
 
+    const val RELEASE_PAGE = "https://github.com/krishnaar21/mini-remote/releases/tag/latest-build"
+    const val EXTRA_INSTALL = "com.krishna.miniremote.INSTALL_UPDATE"
+    private const val CHANNEL = "updates"
+
+    /** A notification for a new build: tap opens [tap]. Silent if notifications are off. */
+    fun notify(ctx: Context, title: String, text: String, tap: Intent) {
+        val nm = androidx.core.app.NotificationManagerCompat.from(ctx)
+        if (!nm.areNotificationsEnabled()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            nm.createNotificationChannel(android.app.NotificationChannel(CHANNEL, "App updates", android.app.NotificationManager.IMPORTANCE_DEFAULT))
+        }
+        val pi = android.app.PendingIntent.getActivity(ctx, 1, tap,
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+        val n = androidx.core.app.NotificationCompat.Builder(ctx, CHANNEL)
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle(title).setContentText(text)
+            .setContentIntent(pi).setAutoCancel(true)
+            .build()
+        runCatching { nm.notify(42, n) } // SecurityException if the permission was just revoked
+    }
+
     /** Android 8+ asks once per app for "install unknown apps". */
     fun canInstall(ctx: Context) = Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ctx.packageManager.canRequestPackageInstalls()
 

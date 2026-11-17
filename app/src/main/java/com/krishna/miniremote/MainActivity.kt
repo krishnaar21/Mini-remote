@@ -31,6 +31,25 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val askNotifications = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) {}
+
+    private fun handle(intent: android.content.Intent?) {
+        if (intent?.getBooleanExtra(Updater.EXTRA_INSTALL, false) == true) {
+            intent.removeExtra(Updater.EXTRA_INSTALL)
+            vm.installFromNotification()
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        handle(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        vm.maybeCheckForUpdate()
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         val k = tvVolumeKey(keyCode) ?: return super.onKeyDown(keyCode, event)
         if (event.repeatCount == 0) vm.press(k) else vm.scrubTick(k)
@@ -43,6 +62,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        handle(intent)
+        // Android 13+: ask once so a ready update can show a notification.
+        if (vm.settings.autoUpdate && android.os.Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) askNotifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         setContent {
             val accent = com.krishna.miniremote.ui.accentColor(vm.settings.accentHex)
             val onAccent = if (accent.luminance() > 0.5f) Color(0xFF1B1B1B) else Color.White
