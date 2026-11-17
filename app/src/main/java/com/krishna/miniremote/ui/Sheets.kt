@@ -406,7 +406,6 @@ internal fun DevicesPage(vm: RemoteVM, open: (String) -> Unit, add: () -> Unit) 
         CardRow(d.name, statusLine(vm, d), dot = if (on) OkGreen else Color(0xFF555555), onClick = { open(d.id) }, clickLabel = "open") { Chevron() }
     }
     Btn("Add a TV", onClick = add)
-    Hint("Soundbar volume goes through your TV over HDMI-CEC / ARC, so there's nothing to pair for it.", top = 18)
 }
 
 @Composable

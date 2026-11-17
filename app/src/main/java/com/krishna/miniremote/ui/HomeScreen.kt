@@ -215,11 +215,11 @@ private fun BottomPanel(
                     if (total < -24.dp.toPx()) set(true) else if (total > 24.dp.toPx()) set(false)
                 }) { c, dy -> c.consume(); total += dy }
             }
-            .padding(start = 16.dp, end = 16.dp, bottom = NAV_H + 40.dp),
+            .padding(start = 16.dp, end = 16.dp, top = if (open) 6.dp else 0.dp, bottom = if (open) NAV_H + 26.dp else NAV_H + 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
-            Modifier.size(72.dp, 32.dp).clip(CircleShape)
+            Modifier.padding(bottom = 12.dp).size(72.dp, 30.dp).clip(CircleShape)
                 .clickable(onClickLabel = if (open) "hide volume and channels" else "show volume and channels", role = Role.Button) { set(!open) },
             contentAlignment = Alignment.Center,
         ) { LineIcon(if (open) Ico.DOWN else Ico.UP, T.Dim, 22.dp, stroke = 2.4f) }
@@ -233,17 +233,20 @@ private fun BottomPanel(
             KeyButton(accent, "Search", k, actionLabel = "search or type on TV", pressedScale = 1f, onPress = openKeys) { c, _ -> LineIcon(Ico.SEARCH, c, 21.dp) }
         }
         androidx.compose.animation.AnimatedVisibility(open, enter = androidx.compose.animation.expandVertically() + fadeIn(), exit = androidx.compose.animation.shrinkVertically() + fadeOut()) {
-            Column(Modifier.padding(top = 18.dp).width(308.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                VolumePill(
-                    accent, vm.muted, Modifier.fillMaxWidth().height(54.dp),
-                    onDown = { vm.press(RemoteKey.VOL_DOWN, quiet = true) },
-                    onMute = { vm.press(RemoteKey.MUTE) },
-                    onUp = { vm.press(RemoteKey.VOL_UP, quiet = true) },
-                )
-                Row(Modifier.fillMaxWidth().height(54.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Same width as the four keys; each row is a pill plus one round key, like the keys above.
+            Column(Modifier.padding(top = 26.dp, bottom = 6.dp).width(308.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(Modifier.fillMaxWidth().height(56.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    ChannelPill(accent, Modifier.weight(1f).fillMaxHeight(), word = "VOL", downLabel = "Volume down", upLabel = "Volume up",
+                        onDown = { vm.press(RemoteKey.VOL_DOWN, quiet = true) }, onUp = { vm.press(RemoteKey.VOL_UP, quiet = true) })
+                    KeyButton(accent, "Mute", Modifier.size(56.dp), state = if (vm.muted) "Muted" else null, pressedScale = 1f,
+                        onPress = { vm.press(RemoteKey.MUTE) }) { c, _ ->
+                        LineIcon(if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, if (vm.muted) accent else c, 20.dp)
+                    }
+                }
+                Row(Modifier.fillMaxWidth().height(56.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     ChannelPill(accent, Modifier.weight(1f).fillMaxHeight(),
                         onDown = { vm.press(RemoteKey.CH_DOWN) }, onUp = { vm.press(RemoteKey.CH_UP) })
-                    KeyButton(accent, "Number pad", Modifier.size(54.dp), state = if (numpad) "Showing" else null, pressedScale = 1f,
+                    KeyButton(accent, "Number pad", Modifier.size(56.dp), state = if (numpad) "Showing" else null, pressedScale = 1f,
                         restColor = if (numpad) accent else T.Ink, onPress = onNumpad) { c, _ ->
                         Text("123", color = c, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     }

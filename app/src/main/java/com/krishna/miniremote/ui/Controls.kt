@@ -246,14 +246,23 @@ private fun ColumnScope.RockerSeg(label: String, accent: Color, onPress: () -> U
     }
 }
 
-/** − | CH | +: channel down and up (both repeat while held), with a plain label between. */
+/** − | CH | +: down and up (both repeat while held), with a plain label between. Also used for VOL. */
 @Composable
-fun ChannelPill(accent: Color, modifier: Modifier = Modifier, onDown: () -> Unit, onUp: () -> Unit) {
+fun ChannelPill(
+    accent: Color,
+    modifier: Modifier = Modifier,
+    word: String = "CH",
+    downLabel: String = "Channel down",
+    upLabel: String = "Channel up",
+    onDown: () -> Unit,
+    onUp: () -> Unit,
+) {
     Row(modifier.softFace(ROCKER).clip(androidx.compose.foundation.shape.CircleShape), verticalAlignment = Alignment.CenterVertically) {
-        PillSegment("Channel down", accent, first = true, repeat = true, onPress = onDown) { LineIcon(Ico.MINUS, it, 18.dp, stroke = 1.9f) }
-        Box(Modifier.weight(1f).fillMaxHeight().clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
-            Text("CH", color = T.Dim, fontSize = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.sp)
+        // first = true on both ends: no divider lines, one calm pill.
+        PillSegment(downLabel, accent, first = true, repeat = true, onPress = onDown) { LineIcon(Ico.MINUS, it, 18.dp, stroke = 1.9f) }
+        Box(Modifier.weight(0.8f).fillMaxHeight().clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
+            Text(word, color = T.Dim, fontSize = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.sp)
         }
-        PillSegment("Channel up", accent, repeat = true, onPress = onUp) { LineIcon(Ico.PLUS, it, 18.dp, stroke = 1.9f) }
+        PillSegment(upLabel, accent, first = true, repeat = true, onPress = onUp) { LineIcon(Ico.PLUS, it, 18.dp, stroke = 1.9f) }
     }
 }
