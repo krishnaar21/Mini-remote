@@ -121,6 +121,7 @@ sealed interface Page {
     data class Pairing(val id: String) : Page
     data object Settings : Page
     data object Licenses : Page
+    data object Privacy : Page
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -170,13 +171,17 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
                     if (d == null) { LaunchedEffect(Unit) { back() }; return@Column }
                     PairPage(vm, d, accent, onClose, back = ::back)
                 }
+                Page.Privacy -> {
+                    Header("Privacy & data", onClose, back = ::back)
+                    Body { PrivacyPage(vm) }
+                }
                 Page.Licenses -> {
                     Header("Open-source licences", onClose, back = ::back)
                     Body { LicensesPage() }
                 }
                 Page.Settings -> {
                     Header("Settings", onClose, back = if (canBack) ::back else null)
-                    Body { SettingsPage(vm, accent, manage = null, openLicenses = { go(Page.Licenses) }) }
+                    Body { SettingsPage(vm, accent, manage = null, openLicenses = { go(Page.Licenses) }, openPrivacy = { go(Page.Privacy) }) }
                 }
             }
         }
@@ -632,7 +637,7 @@ internal fun Modifier.matchParentSizeCompat(): Modifier = this.fillMaxWidth().he
 /* ---------------------------------------------------------------- settings */
 
 @Composable
-internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, openLicenses: (() -> Unit)? = null) {
+internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, openLicenses: (() -> Unit)? = null, openPrivacy: (() -> Unit)? = null) {
     val s = vm.settings
     SectionTitle("Remote")
     Group {
@@ -750,24 +755,20 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
         Chevron()
     }
     }
-    SectionTitle("Privacy & data")
-    Group {
-        InfoBlock("Stored on this phone", "Your TVs' names and addresses, their pairing keys (encrypted with a key held in the phone's secure hardware), quick access, channels and settings. Nothing is backed up or synced.")
-        Divider()
-        InfoBlock("Network", "Controls only TVs on your home Wi-Fi; public addresses are refused. Update checks go to GitHub, and app logos come from Simple Icons; both can be turned off.")
-        Divider()
-        InfoBlock("Voice search", "Uses your phone's speech service to turn speech into words, then sends the words to your TV. The app itself never records audio.")
-        Divider()
-        InfoBlock("Permissions", "Network and Wi-Fi (find and control TVs), vibration, notifications and installing updates. No location, contacts, microphone or files.")
-    }
-    var ask by remember { mutableStateOf<String?>(null) }
-    Btn("Forget all TVs", kind = 1) { ask = "tvs" }
-    Btn("Erase all data", kind = 2) { ask = "all" }
-    when (ask) {
-        "tvs" -> ConfirmSheet("Forget all TVs?", "Removes every TV and its pairing keys. You'll pair each TV again to use it.",
-            "Forget all TVs", danger = true, onConfirm = { vm.forgetAllTvs() }, onDismiss = { ask = null })
-        "all" -> ConfirmSheet("Erase all data?", "Removes TVs, pairing keys, quick access, channels and settings. The app starts fresh.",
-            "Erase everything", danger = true, onConfirm = { vm.eraseAll() }, onDismiss = { ask = null })
+    if (openPrivacy != null) {
+        SectionTitle("Privacy & data")
+        Group {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable(role = Role.Button, onClick = openPrivacy).padding(vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Privacy & data", color = T.Ink, fontSize = 15.sp)
+                    Text("What's stored, what goes online, erase data", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
+                }
+                Chevron()
+            }
+        }
     }
 
     SectionTitle("About")
@@ -1006,4 +1007,28 @@ internal fun LicensesPage() {
                 Text(text, color = Muted, fontSize = 11.sp, lineHeight = 15.sp, fontFamily = Mono, modifier = Modifier.padding(top = 12.dp))
             }
         }
+}
+
+/** Privacy & data: what's kept, what goes online, permissions, and the erase buttons. */
+@Composable
+internal fun PrivacyPage(vm: RemoteVM) {
+    Group {
+        InfoBlock("Stored on this phone", "Your TVs' names and addresses, their pairing keys (encrypted with a key held in the phone's secure hardware), quick access, channels and settings. Nothing is backed up or synced.")
+        Divider()
+        InfoBlock("Network", "Controls only TVs on your home Wi-Fi; public addresses are refused. Update checks go to GitHub, and app logos come from Simple Icons; both can be turned off.")
+        Divider()
+        InfoBlock("Voice search", "Uses your phone's speech service to turn speech into words, then sends the words to your TV. The app itself never records audio.")
+        Divider()
+        InfoBlock("Permissions", "Network and Wi-Fi (find and control TVs), vibration, notifications and installing updates. No location, contacts, microphone or files.")
+    }
+    var ask by remember { mutableStateOf<String?>(null) }
+    Btn("Forget all TVs", kind = 1) { ask = "tvs" }
+    Btn("Erase all data", kind = 2) { ask = "all" }
+    when (ask) {
+        "tvs" -> ConfirmSheet("Forget all TVs?", "Removes every TV and its pairing keys. You'll pair each TV again to use it.",
+            "Forget all TVs", danger = true, onConfirm = { vm.forgetAllTvs() }, onDismiss = { ask = null })
+        "all" -> ConfirmSheet("Erase all data?", "Removes TVs, pairing keys, quick access, channels and settings. The app starts fresh.",
+            "Erase everything", danger = true, onConfirm = { vm.eraseAll() }, onDismiss = { ask = null })
+    }
+
 }

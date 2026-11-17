@@ -120,7 +120,7 @@ fun HomeScreen(
             lastTwoTap[0] = 0L
             val next = if (vm.settings.controlStyle == "trackpad") "dial" else "trackpad"
             vm.update(vm.settings.copy(controlStyle = next))
-            vm.feel.fire(Feel.DETENT); vm.say(if (next == "dial") "Dial" else "Trackpad")
+            vm.feel.fire(Feel.DETENT) // just the switch: no message, no key sent
         } else lastTwoTap[0] = now
     }
     val setTray by rememberUpdatedState(onTray)
