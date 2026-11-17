@@ -65,7 +65,6 @@ fun HomeScreen(
     onDeck: (Deck) -> Unit,
     openDevices: () -> Unit,
     openKeys: () -> Unit,
-    openSearch: () -> Unit,
 ) {
     val current by rememberUpdatedState(deck)
     fun swipe(by: Int) {
@@ -91,7 +90,7 @@ fun HomeScreen(
                     fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 TvLine(vm, openDevices)
             }
-            KeyButton(accent, "Search", Modifier.size(46.dp), actionLabel = "search on TV", onPress = openSearch) { c, _ ->
+            KeyButton(accent, "Search and type", Modifier.size(46.dp), actionLabel = "search or type on TV", onPress = openKeys) { c, _ ->
                 LineIcon(Ico.SEARCH, c, 19.dp)
             }
             KeyButton(accent, "Power", Modifier.size(46.dp), restColor = accent, onPress = { vm.press(RemoteKey.POWER) }) { c, _ ->
@@ -138,7 +137,7 @@ fun HomeScreen(
             DeckDots(deck, accent, Modifier.align(Alignment.BottomCenter)) { onDeck(it); vm.feel.fire(Feel.TICK) }
         }
 
-        Cluster(vm, accent, openKeys, Modifier.fillMaxWidth().height(140.dp))
+        Cluster(vm, accent, Modifier.fillMaxWidth())
     }
 }
 
@@ -172,28 +171,26 @@ private fun TvLine(vm: RemoteVM, openDevices: () -> Unit) {
     }
 }
 
-/** VOL rocker | back, mute, HOME, play, keyboard | CH rocker. */
+/**
+ * Two calm rows: Back · Home · Play/Pause, then the volume pill (− mute +) beside the
+ * channel pill (− CH +).
+ */
 @Composable
-private fun Cluster(vm: RemoteVM, accent: Color, openKeys: () -> Unit, modifier: Modifier) {
-    Row(modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        VerticalRocker(accent, "VOL", "Volume up", "Volume down", Ico.PLUS, Ico.MINUS, Modifier.width(60.dp).fillMaxHeight(),
-            onUp = { vm.press(RemoteKey.VOL_UP, quiet = true) }, onDown = { vm.press(RemoteKey.VOL_DOWN, quiet = true) })
-        Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 12.dp)) {
-            val small = Modifier.size(50.dp)
-            KeyButton(accent, "Back", small.align(Alignment.TopStart), onPress = { vm.press(RemoteKey.BACK) }) { c, _ -> LineIcon(Ico.BACK, c, 20.dp) }
-            KeyButton(accent, "Mute", small.align(Alignment.BottomStart), state = if (vm.muted) "Muted" else null,
-                onPress = { vm.press(RemoteKey.MUTE) }) { c, _ ->
-                LineIcon(if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, if (vm.muted) accent else c, 20.dp)
-            }
-            KeyButton(accent, "Home", Modifier.size(78.dp).align(Alignment.Center), restColor = Color.White,
-                onPress = { vm.press(RemoteKey.HOME) }) { c, _ -> LineIcon(Ico.HOME, c, 28.dp) }
-            KeyButton(accent, "Play or pause", small.align(Alignment.TopEnd), onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { c, _ -> LineIcon(Ico.PLAY, c, 19.dp) }
-            KeyButton(accent, "Keyboard", small.align(Alignment.BottomEnd), actionLabel = "type on TV", onPress = openKeys) { c, _ ->
-                LineIcon(Ico.KEYBOARD, c, 20.dp)
-            }
+private fun Cluster(vm: RemoteVM, accent: Color, modifier: Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            KeyButton(accent, "Back", Modifier.size(54.dp), onPress = { vm.press(RemoteKey.BACK) }) { c, _ -> LineIcon(Ico.BACK, c, 21.dp) }
+            KeyButton(accent, "Home", Modifier.size(64.dp), restColor = Color.White, onPress = { vm.press(RemoteKey.HOME) }) { c, _ -> LineIcon(Ico.HOME, c, 24.dp) }
+            KeyButton(accent, "Play or pause", Modifier.size(54.dp), onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { c, _ -> LineIcon(Ico.PLAY, c, 20.dp) }
         }
-        VerticalRocker(accent, "CH", "Channel up", "Channel down", Ico.PLUS, Ico.MINUS, Modifier.width(60.dp).fillMaxHeight(),
-            onUp = { vm.press(RemoteKey.CH_UP) }, onDown = { vm.press(RemoteKey.CH_DOWN) })
+        Row(Modifier.fillMaxWidth().height(52.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            VolumePill(accent, vm.muted, Modifier.weight(1f).fillMaxHeight(),
+                onDown = { vm.press(RemoteKey.VOL_DOWN, quiet = true) },
+                onMute = { vm.press(RemoteKey.MUTE) },
+                onUp = { vm.press(RemoteKey.VOL_UP, quiet = true) })
+            ChannelPill(accent, Modifier.weight(1f).fillMaxHeight(),
+                onDown = { vm.press(RemoteKey.CH_DOWN) }, onUp = { vm.press(RemoteKey.CH_UP) })
+        }
     }
 }
 

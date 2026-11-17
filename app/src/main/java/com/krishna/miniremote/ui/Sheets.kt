@@ -139,7 +139,7 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
         Column(Modifier.navigationBarsPadding()) {
             when (page) {
                 Page.Devices -> {
-                    Header("Devices", onClose, gear = { go(Page.Settings) })
+                    Header("Devices", onClose)
                     Body { DevicesPage(vm, open = { go(Page.DeviceInfo(it)) }, add = { go(if (vm.localSeen) Page.Scan else Page.Local) }) }
                 }
                 is Page.DeviceInfo -> {
@@ -730,8 +730,9 @@ fun linkWord(l: Link) = when (l) { Link.READY -> "Connected"; Link.CONNECTING ->
  * the phone keyboard never covers it. The text box takes focus as soon as it opens.
  */
 @Composable
-fun KeyboardSheet(vm: RemoteVM, accent: Color, search: Boolean = false, onClose: () -> Unit) {
+fun KeyboardSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
     var text by remember { mutableStateOf("") }
+    var search by remember { mutableStateOf(true) }
     val shown = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
     val shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
@@ -752,6 +753,9 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, search: Boolean = false, onClose:
             ) {
                 Header(if (search) "Search on TV" else "Type on TV", onClose)
                 Body {
+                    // One sheet for both: search the TV, or type into a box that's already open on it.
+                    SegRow("Mode", listOf(true to "Search", false to "Type"), search) { search = it }
+                    Spacer(Modifier.height(14.dp))
                     if (search) {
                         Lead("Find movies, shows and apps. The TV opens its own search with your words.")
                         Field("Search for", text, { text = it }, modifier = Modifier.focusRequester(focus), placeholder = "Movies, shows, apps",

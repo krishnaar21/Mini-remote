@@ -102,7 +102,7 @@ fun AppShell(vm: RemoteVM) {
     val grainBrush = remember { ShaderBrush(ImageShader(grain(), TileMode.Repeated, TileMode.Repeated)) }
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
     var sheet by remember { mutableStateOf<Page?>(null) }
-    var keys by remember { mutableStateOf<Boolean?>(null) } // true = search, false = type
+    var keys by remember { mutableStateOf(false) }
     val style = vm.settings.controlStyle
     var deck by remember { mutableStateOf(if (style == "trackpad") Deck.TRACKPAD else Deck.DIAL) }
     // The Settings choice is the permanent one: changing it switches Home right away.
@@ -120,7 +120,7 @@ fun AppShell(vm: RemoteVM) {
                             Tab.HOME -> HomeScreen(
                                 vm, accent, deck, onDeck = { deck = it },
                                 openDevices = { sheet = Page.Devices },
-                                openKeys = { keys = false }, openSearch = { keys = true },
+                                openKeys = { keys = true },
                             )
                             Tab.CHANNELS -> ChannelsScreen(vm, accent, openDevices = { sheet = Page.Devices })
                             Tab.PROFILE -> ProfileScreen(vm, accent, open = { sheet = it })
@@ -144,7 +144,7 @@ fun AppShell(vm: RemoteVM) {
             }
         }
         sheet?.let { start -> RemoteSheet(vm, accent, start) { sheet = null } }
-        keys?.let { search -> KeyboardSheet(vm, accent, search = search) { keys = null } }
+        if (keys) KeyboardSheet(vm, accent) { keys = false }
         if (sheet == null) vm.pairPrompt?.let { PairCodeDialog(vm, it, accent) }
     }
 }

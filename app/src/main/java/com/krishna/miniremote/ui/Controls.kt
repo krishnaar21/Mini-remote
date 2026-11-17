@@ -245,3 +245,15 @@ private fun ColumnScope.RockerSeg(label: String, accent: Color, onPress: () -> U
         Box(Modifier.clearAndSetSemantics {}) { content(if (down) accent else T.Ink) }
     }
 }
+
+/** − | CH | +: channel down and up (both repeat while held), with a plain label between. */
+@Composable
+fun ChannelPill(accent: Color, modifier: Modifier = Modifier, onDown: () -> Unit, onUp: () -> Unit) {
+    Row(modifier.softFace(ROCKER).clip(androidx.compose.foundation.shape.CircleShape), verticalAlignment = Alignment.CenterVertically) {
+        PillSegment("Channel down", accent, first = true, repeat = true, onPress = onDown) { LineIcon(Ico.MINUS, it, 18.dp, stroke = 1.9f) }
+        Box(Modifier.weight(1f).fillMaxHeight().clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
+            Text("CH", color = T.Dim, fontSize = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.sp)
+        }
+        PillSegment("Channel up", accent, repeat = true, onPress = onUp) { LineIcon(Ico.PLUS, it, 18.dp, stroke = 1.9f) }
+    }
+}
