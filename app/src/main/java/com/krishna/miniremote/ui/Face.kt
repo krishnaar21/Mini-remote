@@ -78,75 +78,47 @@ val WELL_DOWN = Face(listOf(Color(0xFF0D0D0F), Color(0xFF202023)), listOf(
 
 fun flat(c: Color, shadows: List<Sh>) = Face(listOf(c, c), shadows)
 
-/** Rounded rect; corner radius [cr] (px), or a pill/circle when null (every shape on the remote). */
-private fun stadium(w: Float, h: Float, grow: Float = 0f, dy: Float = 0f, cr: Float? = null) = android.graphics.Path().apply {
-    val r = max(0f, (cr ?: (min(w, h) / 2f)) + grow)
-    addRoundRect(RectF(-grow, -grow + dy, w + grow, h + grow + dy), r, r, android.graphics.Path.Direction.CW)
-}
-
 fun stadiumPath(w: Float, h: Float, cr: Float? = null) = Path().apply {
     addRoundRect(RoundRect(0f, 0f, w, h, CornerRadius(cr ?: (min(w, h) / 2f))))
 }
 
-/** CSS blur length -> Android blur radius (CSS sigma is blur/2; Android sigma ~ 0.577 r + 0.5). */
-private fun paint(c: Color, blur: Float) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    color = c.toArgb()
-    if (blur > 0f) maskFilter = BlurMaskFilter(max(0.5f, blur * 0.866f - 0.87f), BlurMaskFilter.Blur.NORMAL)
+/**
+ * Material 3 surface colours (dark, neutral). Every [Face] in the app maps to one of these
+ * tonal fills: no bevels, no inner shadows. Raised = lighter container, pressed = one step lighter.
+ */
+object M {
+    val Container = Color(0xFF1F1F21)
+    val High = Color(0xFF29292B)
+    val Highest = Color(0xFF343437)
+    val Pressed = Color(0xFF3E3E42)
 }
 
-/**
- * Renders a face with its shadows into a bitmap once, in software, so blur works on every
- * Android version and the per-frame cost is one bitmap draw. [u] is pixels per board pixel.
- */
-private fun render(f: Face, w: Float, h: Float, u: Float, cr: Float?): Pair<ImageBitmap, Float> {
-    val outer = f.shadows.filter { !it.inset }
-    val pad = (outer.maxOfOrNull { (abs(it.dy) + it.blur * 1.3f + it.spread) * u } ?: 0f) + 2f
-    val bmp = Bitmap.createBitmap((w + pad * 2).toInt() + 1, (h + pad * 2).toInt() + 1, Bitmap.Config.ARGB_8888)
-    val c = android.graphics.Canvas(bmp)
-    c.translate(pad, pad)
-    for (s in outer.asReversed()) c.drawPath(stadium(w, h, s.spread * u, s.dy * u, cr), paint(s.color, s.blur * u))
-
-    val a = Math.toRadians(f.angle.toDouble())
-    val dx = sin(a).toFloat(); val dy = -cos(a).toFloat()
-    val len = abs(w * dx) + abs(h * dy)
-    val cx = w / 2; val cy = h / 2
-    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        shader = LinearGradient(cx - dx * len / 2, cy - dy * len / 2, cx + dx * len / 2, cy + dy * len / 2,
-            f.colors.map { it.toArgb() }.toIntArray(), f.stops?.toFloatArray(), Shader.TileMode.CLAMP)
-    }
-    val body = stadium(w, h, cr = cr)
-    c.drawPath(body, fill)
-
-    c.save()
-    c.clipPath(body)
-    for (s in f.shadows.filter { it.inset }.asReversed()) {
-        val hole = android.graphics.Path().apply { addRect(-w, -h, w * 2, h * 2, android.graphics.Path.Direction.CW) }
-        hole.op(stadium(w, h, -s.spread * u, s.dy * u, cr), android.graphics.Path.Op.DIFFERENCE)
-        c.drawPath(hole, paint(s.color, s.blur * u))
-    }
-    c.restore()
-    return bmp.asImageBitmap() to pad
+private fun flatColor(f: Face): Color = when (f) {
+    KEY_UP -> M.High
+    KEY_DOWN -> M.Pressed
+    PAD -> M.Container
+    WELL -> M.Highest
+    WELL_DOWN -> M.Pressed
+    CARD -> M.Container
+    CARD_DOWN -> M.High
+    HOLLOW -> M.High
+    LIGHT -> Color(0xFFE3E3E3)
+    LIGHT_DOWN -> Color(0xFFC9C9C9)
+    DANGER -> Color(0xFF601410)
+    DANGER_DOWN -> Color(0xFF7A1B16)
+    NAV_FACE -> M.High
+    else -> f.colors.first()
 }
 
-private class FaceCache { var w = 0f; var h = 0f; val m = HashMap<Face, Pair<ImageBitmap, Float>>() }
-
-/**
- * Paints [face] (with its CSS shadows) behind the content, then the tilt sheen on top when [sheen].
- * Bitmaps are cached per face and size, so switching between rest and pressed is free after the first time.
- */
+/** Fills the element with [face]'s Material tonal colour, as a pill/circle or with [corner]. */
+@Suppress("UNUSED_PARAMETER")
 fun Modifier.softFace(face: Face, sheen: Boolean = true, corner: Dp? = null, dpUnits: Boolean = false): Modifier = composed {
-    val k = LocalK.current
     val density = LocalDensity.current.density
-    val tilt = LocalTilt.current
-    // Remote faces use board pixels; sheet faces give their shadows in dp ([dpUnits]).
-    val u = if (dpUnits) density else k * density
     val cr = corner?.let { it.value * density }
-    val cache = remember(u, cr) { FaceCache() }
+    val fill = remember(face) { flatColor(face) }
     drawBehind {
-        if (size.width != cache.w || size.height != cache.h) { cache.m.clear(); cache.w = size.width; cache.h = size.height }
-        val (img, pad) = cache.m.getOrPut(face) { render(face, size.width, size.height, u, cr) }
-        drawImage(img, Offset(-pad, -pad))
-        if (sheen) clipPath(stadiumPath(size.width, size.height, cr)) { sheen(tilt.value, 0.07f) }
+        val r = cr ?: (min(size.width, size.height) / 2f)
+        drawRoundRect(fill, cornerRadius = CornerRadius(r))
     }
 }
 

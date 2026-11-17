@@ -96,7 +96,7 @@ import kotlin.math.roundToInt
 /* ---------------------------------------------------------------- palette */
 
 /** Sheets use the remote's own charcoal so they read as part of the same object. */
-internal val SheetBg = T.Bg
+internal val SheetBg = Color(0xFF1C1C1E)
 internal val CardBg = Color(0xFF222223)
 internal val Line = Color(0xFF2E2E30)
 internal val Muted = Color(0xFF8C8C90)
@@ -228,12 +228,8 @@ internal fun Field(
 /** .sw: 50 x 30 track (#34c759 on, #3a3a3c off), 24px white knob that slides 20. */
 @Composable
 internal fun Toggle(on: Boolean) {
-    val x by androidx.compose.animation.core.animateDpAsState(if (on) 20.dp else 0.dp, label = "sw")
-    val bg by androidx.compose.animation.animateColorAsState(if (on) SwitchOn else Color(0xFF3A3A3C), label = "swbg")
-    // Recessed track (tinted green when on) with a raised light knob.
-    Box(Modifier.size(50.dp, 30.dp).softFace(HOLLOW, sheen = false, dpUnits = true).background(bg.copy(alpha = if (on) 0.9f else 0f), CircleShape).padding(3.dp)) {
-        Box(Modifier.offset(x = x).size(24.dp).softFace(LIGHT, dpUnits = true))
-    }
+    // The Material 3 switch; the whole row handles the tap, so this one only shows the state.
+    androidx.compose.material3.Switch(checked = on, onCheckedChange = null)
 }
 
 @Composable
@@ -617,7 +613,6 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
         }
     }
     Divider()
-    ToggleRow("Gyroscope lighting", "Highlights shift as you tilt the phone", s.gyro) { vm.update(s.copy(gyro = it)) }
     ToggleRow("Keep screen on", "While the remote is open", s.keepAwake) { vm.update(s.copy(keepAwake = it)) }
 
     if (manage != null) {

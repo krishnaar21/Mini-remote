@@ -8,21 +8,17 @@ import com.krishna.miniremote.R
 
 /** Colours from the design preview (its final "charcoal soft-touch" layer). */
 object T {
-    val Bg = Color(0xFF242427)
-    val FaceTop = Color(0xFF38383B)
-    val FaceBot = Color(0xFF212124)
-    val Ink = Color(0xFFECECEF)
-    val Dim = Color(0xFF86868C)
-    val Well = Color(0xFF121214)
-    val Danger = Color(0xFFFF453A)
+    val Bg = Color(0xFF131314)
+    val FaceTop = Color(0xFF29292B)
+    val FaceBot = Color(0xFF29292B)
+    val Ink = Color(0xFFE3E3E3)
+    val Dim = Color(0xFF9AA0A6)
+    val Well = Color(0xFF1F1F21)
+    val Danger = Color(0xFFF2B8B5)
 }
 
-/** Inter stands in for the preview's system font (SF Pro); IBM Plex Mono for its mono labels. Latin subsets. */
-val Inter = FontFamily(
-    Font(R.font.inter_regular, FontWeight.Normal),
-    Font(R.font.inter_medium, FontWeight.Medium),
-    Font(R.font.inter_semibold, FontWeight.SemiBold),
-)
+/** Material uses the system font (Roboto on most phones). Kept under this name so every screen follows. */
+val Inter: FontFamily = FontFamily.Default
 val Mono = FontFamily(
     Font(R.font.plexmono_regular, FontWeight.Normal),
     Font(R.font.plexmono_medium, FontWeight.Medium),

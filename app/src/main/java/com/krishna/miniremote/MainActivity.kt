@@ -9,6 +9,8 @@ import androidx.activity.viewModels
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.luminance
 import com.krishna.miniremote.ui.Inter
 import com.krishna.miniremote.ui.AppShell
 import androidx.compose.material3.Typography
@@ -22,8 +24,20 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
+            val accent = com.krishna.miniremote.ui.accentColor(vm.settings.accentHex)
+            val onAccent = if (accent.luminance() > 0.5f) Color(0xFF1B1B1B) else Color.White
             MaterialTheme(
-                colorScheme = darkColorScheme(background = Color(0xFF242427), surface = Color(0xFF1B1B1C)),
+                // Material 3 dark, neutral surfaces, with the chosen accent as the primary colour.
+                colorScheme = darkColorScheme(
+                    primary = accent, onPrimary = onAccent,
+                    primaryContainer = accent.copy(alpha = 0.3f).compositeOver(Color(0xFF131314)), onPrimaryContainer = Color.White,
+                    secondaryContainer = accent.copy(alpha = 0.22f).compositeOver(Color(0xFF131314)), onSecondaryContainer = Color.White,
+                    background = Color(0xFF131314), surface = Color(0xFF131314),
+                    surfaceContainerLowest = Color(0xFF0E0E0F), surfaceContainerLow = Color(0xFF1B1B1C),
+                    surfaceContainer = Color(0xFF1F1F21), surfaceContainerHigh = Color(0xFF29292B), surfaceContainerHighest = Color(0xFF343437),
+                    onSurface = Color(0xFFE3E3E3), onSurfaceVariant = Color(0xFFC4C7C5),
+                    outline = Color(0xFF8E918F), outlineVariant = Color(0xFF444746),
+                ),
                 typography = Typography().withFont(Inter),
             ) {
                 AppShell(vm)

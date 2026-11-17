@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -99,7 +100,6 @@ fun keyIcon(k: RemoteKey, muted: Boolean): Ico? = when (k) {
 @Composable
 fun AppShell(vm: RemoteVM) {
     val accent = accentColor(vm.settings.accentHex)
-    val grainBrush = remember { ShaderBrush(ImageShader(grain(), TileMode.Repeated, TileMode.Repeated)) }
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
     var sheet by remember { mutableStateOf<Page?>(null) }
     var keys by remember { mutableStateOf(false) }
@@ -107,11 +107,11 @@ fun AppShell(vm: RemoteVM) {
     var deck by remember { mutableStateOf(if (style == "trackpad") Deck.TRACKPAD else Deck.DIAL) }
     // The Settings choice is the permanent one: changing it switches Home right away.
     LaunchedEffect(style) { deck = if (style == "trackpad") Deck.TRACKPAD else Deck.DIAL }
-    val tilt = rememberTilt(vm.settings.gyro)
+    val tilt = rememberTilt(false) // the flat Material faces have no sheen to tilt
     BackHandler(enabled = tab != Tab.HOME) { tab = Tab.HOME }
 
     CompositionLocalProvider(LocalTilt provides tilt) {
-        BoxWithConstraints(Modifier.fillMaxSize().background(T.Bg).drawBehind { drawRect(grainBrush, alpha = 0.30f) }) {
+        BoxWithConstraints(Modifier.fillMaxSize().background(T.Bg)) {
             val k = (maxWidth.value - 32f).coerceAtMost(420f) / 920f
             CompositionLocalProvider(LocalK provides k) {
                 Box(Modifier.fillMaxSize().systemBarsPadding()) {
@@ -136,7 +136,7 @@ fun AppShell(vm: RemoteVM) {
                             }
                         else -> {}
                     }
-                    NavPill(tab, accent, initials(vm.settings.profileName), Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp)) {
+                    NavPill(tab, accent, initials(vm.settings.profileName), Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp)) {
                         if (it != tab) vm.feel.fire(com.krishna.miniremote.Feel.TICK)
                         tab = it
                     }
@@ -153,7 +153,7 @@ fun AppShell(vm: RemoteVM) {
 @Composable
 fun NavPill(tab: Tab, accent: Color, initial: String, modifier: Modifier = Modifier, onPick: (Tab) -> Unit) {
     Row(
-        modifier.height(NAV_H).softFace(NAV_FACE, dpUnits = true).padding(6.dp).selectableGroup(),
+        modifier.height(NAV_H).shadow(6.dp, CircleShape).background(M.High, CircleShape).padding(6.dp).selectableGroup(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -161,8 +161,8 @@ fun NavPill(tab: Tab, accent: Color, initial: String, modifier: Modifier = Modif
             val sel = t == tab
             Box(
                 Modifier.width(66.dp).fillMaxHeight()
-                    .then(if (sel) Modifier.softFace(HOLLOW, sheen = false, dpUnits = true) else Modifier)
                     .clip(CircleShape)
+                    .background(if (sel) accent.copy(alpha = 0.22f) else Color.Transparent)
                     .selectable(sel, role = Role.Tab) { onPick(t) }
                     .semantics { contentDescription = t.label },
                 contentAlignment = Alignment.Center,
