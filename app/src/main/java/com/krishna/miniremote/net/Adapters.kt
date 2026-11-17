@@ -381,15 +381,10 @@ class LgAdapter(
             tryConnect("wss://$host:3001", secure)
             return
         }
-        // Encrypted port first, so the pairing key never crosses Wi-Fi in the clear when the TV supports it.
-        try {
-            tryConnect("wss://$host:3001", secure)
-            tls.seen?.let(onPin)
-        } catch (e: Exception) {
-            if (e.isCertChanged() || e is kotlinx.coroutines.CancellationException && e !is kotlinx.coroutines.TimeoutCancellationException) throw e
-            // Older webOS versions only have the plain port.
-            tryConnect("ws://$host:3000", Net.plain)
-        }
+        // Encrypted only (port 3001). Mini Remote supports TVs from 2017 on; with current firmware
+        // they have the secure port, so the pairing key never crosses Wi-Fi in the clear.
+        tryConnect("wss://$host:3001", secure)
+        tls.seen?.let(onPin)
     }
 
     private suspend fun request(uri: String, payload: JSONObject = JSONObject()): JSONObject {

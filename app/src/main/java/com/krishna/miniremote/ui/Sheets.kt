@@ -476,7 +476,7 @@ internal fun DevicePage(vm: RemoteVM, d: Device, accent: Color) {
 @Composable
 internal fun LocalPage(onContinue: () -> Unit) {
     TvIllustration(Color(0xFF6FB1FF))
-    Lead("Finds TVs on your Wi-Fi. No account needed.", center = true)
+    Lead("Finds TVs on your Wi-Fi. For TVs from 2017 on.", center = true)
     Btn("Continue", onClick = onContinue)
 }
 
@@ -885,7 +885,7 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
     ) { ok -> if (ok) voice.start() else vm.say("Microphone permission is off") }
     fun mic() {
         when {
-            voice.listening -> voice.stop()
+            voice.on -> voice.cancel()
             !voice.available -> vm.say("No speech service on this phone")
             androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED -> voice.start()
@@ -912,9 +912,16 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
                 Body {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Box(Modifier.weight(1f).height(52.dp)) {
-                            if (voice.listening) {
-                                // While listening, the box becomes a live wave.
-                                VoiceWave(voice.level, accent, Modifier.fillMaxSize().softFace(HOLLOW, sheen = false, corner = 14.dp, dpUnits = true))
+                            if (voice.on) {
+                                // Voice mode: the box and the mic make way for one calm line.
+                                Row(
+                                    Modifier.fillMaxSize().softFace(HOLLOW, sheen = false, corner = 14.dp, dpUnits = true).padding(horizontal = 16.dp)
+                                        .semantics { liveRegion = LiveRegionMode.Polite },
+                                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    Box(Modifier.size(8.dp).background(if (voice.listening) accent else Muted, CircleShape))
+                                    Text("Voice mode on…", color = T.Ink, fontSize = 16.sp)
+                                }
                             } else {
                                 BasicTextField(
                                     text, { change(it) }, singleLine = true,
@@ -938,52 +945,41 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
                                 )
                             }
                         }
-                        // The mic: its own square key, outside the box. Tap again to stop.
-                        Box(
+                        // The mic: its own square key, outside the box. Hidden in voice mode.
+                        if (!voice.on) Box(
                             Modifier.size(52.dp).clip(RoundedCornerShape(14.dp))
-                                .background(if (voice.listening) accent else M.High)
-                                .clickable(onClickLabel = if (voice.listening) "stop listening" else "speak", role = Role.Button) { mic() }
-                                .semantics { contentDescription = if (voice.listening) "Stop" else "Voice" },
+                                .background(M.High)
+                                .clickable(onClickLabel = "voice mode", role = Role.Button) { mic() }
+                                .semantics { contentDescription = "Voice" },
                             contentAlignment = Alignment.Center,
-                        ) {
-                            if (voice.listening) Box(Modifier.size(16.dp).background(Color.White, RoundedCornerShape(3.dp)))
-                            else LineIcon(Ico.MIC, T.Ink, 22.dp)
-                        }
+                        ) { LineIcon(Ico.MIC, T.Ink, 22.dp) }
                     }
                     // What you're saying, as you say it.
                     Text(
-                        when { voice.listening && voice.partial.isNotEmpty() -> voice.partial; voice.listening -> "Listening…"; voice.error != null -> voice.error!!; else -> "Typed on the TV as you go." },
-                        color = if (voice.listening) T.Ink else Muted, fontSize = if (voice.listening) 16.sp else 12.5.sp,
+                        when {
+                            voice.on && voice.partial.isNotEmpty() -> voice.partial
+                            voice.on && text.isNotEmpty() -> text
+                            voice.on -> "Speak now"
+                            voice.error != null -> voice.error!!
+                            else -> "Typed on the TV as you go."
+                        },
+                        color = if (voice.on && (voice.partial.isNotEmpty() || text.isNotEmpty())) T.Ink else Muted,
+                        fontSize = if (voice.on) 16.sp else 12.5.sp,
                         modifier = Modifier.fillMaxWidth().padding(top = 12.dp, start = 4.dp).semantics { liveRegion = LiveRegionMode.Polite },
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Box(Modifier.weight(1f)) { Btn("Delete", kind = 1) { if (text.isNotEmpty()) change(text.dropLast(1)) else vm.backspace() } }
-                        Box(Modifier.weight(1.4f)) { Btn("Done") { onClose() } }
+                        if (voice.on) {
+                            Box(Modifier.weight(1f)) { Btn("Clear", kind = 1) { change("") } }
+                            Box(Modifier.weight(1.4f)) { Btn("Cancel") { voice.cancel() } }
+                        } else {
+                            Box(Modifier.weight(1f)) { Btn("Delete", kind = 1) { if (text.isNotEmpty()) change(text.dropLast(1)) else vm.backspace() } }
+                            Box(Modifier.weight(1.4f)) { Btn("Done") { onClose() } }
+                        }
                     }
                 }
             }
         }
     }
-}
-
-/** Bars that move with the speaker's voice level (0..1). */
-@Composable
-internal fun VoiceWave(level: Float, accent: Color, modifier: Modifier) {
-    val t = rememberInfiniteTransition(label = "wave")
-    val phase by t.animateFloat(0f, (2 * Math.PI).toFloat(), infiniteRepeatable(androidx.compose.animation.core.tween(900, easing = androidx.compose.animation.core.LinearEasing)), label = "phase")
-    val lv by androidx.compose.animation.core.animateFloatAsState(level, androidx.compose.animation.core.tween(90), label = "lv")
-    Box(modifier.drawBehind {
-        val n = 28
-        val gap = size.width / (n + 1)
-        val bw = 3.dp.toPx()
-        for (i in 1..n) {
-            val x = i * gap
-            val wobble = (kotlin.math.sin(phase + i * 0.55f) + 1f) / 2f
-            val h = size.height * (0.12f + 0.68f * lv * (0.35f + 0.65f * wobble))
-            drawRoundRect(accent, topLeft = Offset(x - bw / 2, (size.height - h) / 2), size = androidx.compose.ui.geometry.Size(bw, h),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(bw / 2))
-        }
-    })
 }
 
 /**
@@ -992,6 +988,8 @@ internal fun VoiceWave(level: Float, accent: Color, modifier: Modifier) {
  * [onFinal] gets the result. Listens only while the user asks.
  */
 internal class VoiceInput(private val ctx: android.content.Context) {
+    /** Voice mode: keeps listening, phrase after phrase, until [cancel]. */
+    var on by mutableStateOf(false); private set
     var listening by mutableStateOf(false); private set
     var level by mutableStateOf(0f); private set
     var partial by mutableStateOf(""); private set
@@ -1000,7 +998,12 @@ internal class VoiceInput(private val ctx: android.content.Context) {
     val available: Boolean get() = android.speech.SpeechRecognizer.isRecognitionAvailable(ctx)
     private var rec: android.speech.SpeechRecognizer? = null
 
-    fun start() {
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private fun again() { if (on) main.postDelayed({ if (on) listen() }, 250) }
+
+    fun start() { on = true; listen() }
+
+    private fun listen() {
         error = null; partial = ""; level = 0f
         val r = rec ?: android.speech.SpeechRecognizer.createSpeechRecognizer(ctx).also { rec = it }
         r.setRecognitionListener(object : android.speech.RecognitionListener {
@@ -1011,6 +1014,9 @@ internal class VoiceInput(private val ctx: android.content.Context) {
             override fun onEndOfSpeech() { level = 0f }
             override fun onError(code: Int) {
                 listening = false; level = 0f
+                // Silence or nothing understood: keep listening in voice mode.
+                if (on && (code == android.speech.SpeechRecognizer.ERROR_NO_MATCH || code == android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT)) { again(); return }
+                on = false
                 error = when (code) {
                     android.speech.SpeechRecognizer.ERROR_NO_MATCH, android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Didn't catch that. Tap the mic and try again."
                     android.speech.SpeechRecognizer.ERROR_NETWORK, android.speech.SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Speech needs a connection on this phone."
@@ -1023,6 +1029,7 @@ internal class VoiceInput(private val ctx: android.content.Context) {
                 val said = results?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
                 partial = ""
                 if (said.isNotBlank()) onFinal(said)
+                again()
             }
             override fun onPartialResults(partialResults: android.os.Bundle?) {
                 partial = partialResults?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
@@ -1034,11 +1041,12 @@ internal class VoiceInput(private val ctx: android.content.Context) {
             .putExtra(android.speech.RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             .putExtra(android.speech.RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
         listening = true
-        runCatching { r.startListening(i) }.onFailure { listening = false; error = "Couldn't listen. Try again." }
+        runCatching { r.startListening(i) }.onFailure { listening = false; on = false; error = "Couldn't listen. Try again." }
     }
 
-    fun stop() { runCatching { rec?.stopListening() }; listening = false; level = 0f }
-    fun destroy() { runCatching { rec?.destroy() }; rec = null }
+    /** Leaves voice mode; whatever was half heard is dropped. */
+    fun cancel() { on = false; main.removeCallbacksAndMessages(null); runCatching { rec?.cancel() }; listening = false; level = 0f; partial = "" }
+    fun destroy() { cancel(); runCatching { rec?.destroy() }; rec = null }
 }
 
 /** Fallback when a pairing code is needed while the sheet is closed. */
