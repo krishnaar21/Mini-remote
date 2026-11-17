@@ -18,10 +18,11 @@ Nothing is backed up to the cloud or copied to a new phone. Use **Settings › P
 - **Simple Icons** (cdn.simpleicons.org) and **Google's favicon service** (www.google.com/s2/favicons), to download app logos, when App logos is on. Only the app's name or website (for example "netflix" or "hotstar.com") is requested.
 
 ## Voice search
-Voice search uses your phone's speech recognition service (for example, Google's). That service turns your speech into text under its own privacy policy. Mini Remote receives only the text and sends it to your TV. The app never records audio itself and has no microphone permission.
+The microphone is used only while you tap the mic in the Search panel, and it stops when you finish speaking or tap it again. Android's speech recognizer turns speech into text, on the phone where possible (otherwise through your phone's speech service, for example Google's). Mini Remote receives only the text and types it on your TV. No audio is saved.
 
 ## Permissions
 - **Internet, network state, Wi-Fi state:** find and control TVs on your network; check for updates.
+- **Microphone:** voice search, only while listening.
 - **Vibrate:** haptic feedback.
 - **Post notifications:** tell you when an update is ready.
 - **Request install packages:** hand a downloaded update to Android's installer. You always confirm.

@@ -54,6 +54,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -863,24 +868,29 @@ fun linkWord(l: Link) = when (l) { Link.READY -> "Connected"; Link.CONNECTING ->
  */
 @Composable
 fun KeyboardSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     var text by remember { mutableStateOf("") }
-    // Voice search: the phone's own speech recogniser fills in the words, then we search the TV.
-    val speech = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
-    ) { res ->
-        val said = res.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-        if (!said.isNullOrBlank()) { vm.sendText(said); text = "" }
-    }
-    fun listen() {
-        val i = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Search on TV")
-        // No speech service on the phone: fall back to the TV's own voice search.
-        try { speech.launch(i) } catch (e: android.content.ActivityNotFoundException) { vm.press(com.krishna.miniremote.RemoteKey.VOICE) }
-    }
     val shown = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
     val shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
+    val voice = remember { VoiceInput(ctx) }
+    DisposableEffect(Unit) { onDispose { voice.destroy() } }
+    /** Every change goes to the TV as you type: new letters typed, removed ones deleted. */
+    fun change(new: String) { vm.liveType(text, new); text = new }
+    // Spoken words are added to what's there (with a space) and typed on the TV.
+    voice.onFinal = { said -> change(if (text.isBlank()) said else text.trimEnd() + " " + said) }
+    val askMic = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { ok -> if (ok) voice.start() else vm.say("Microphone permission is off") }
+    fun mic() {
+        when {
+            voice.listening -> voice.stop()
+            !voice.available -> vm.say("No speech service on this phone")
+            androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED -> voice.start()
+            else -> askMic.launch(android.Manifest.permission.RECORD_AUDIO)
+        }
+    }
     BackHandler { onClose() }
     // Open the TV's search screen right away, then focus the box.
     LaunchedEffect(Unit) { vm.openTvSearch(); kotlinx.coroutines.delay(250); runCatching { focus.requestFocus() } }
@@ -899,26 +909,135 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
             ) {
                 Header("Search", onClose)
                 Body {
-                    Lead("Type or speak, then send.")
-                    Field("Search", text, { text = it }, modifier = Modifier.focusRequester(focus), placeholder = "Movies, shows, apps",
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        keyboardActions = KeyboardActions(onSend = { if (text.isNotBlank()) { vm.sendText(text); text = "" } }),
-                        trailing = {
-                            Box(
-                                Modifier.size(40.dp).clip(CircleShape).background(accent.copy(alpha = 0.18f))
-                                    .clickable(onClickLabel = "speak", role = Role.Button) { listen() }
-                                    .semantics { contentDescription = "Voice" },
-                                contentAlignment = Alignment.Center,
-                            ) { LineIcon(Ico.MIC, accent, 20.dp) }
-                        })
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Box(Modifier.weight(1f).height(52.dp)) {
+                            if (voice.listening) {
+                                // While listening, the box becomes a live wave.
+                                VoiceWave(voice.level, accent, Modifier.fillMaxSize().softFace(HOLLOW, sheen = false, corner = 14.dp, dpUnits = true))
+                            } else {
+                                BasicTextField(
+                                    text, { change(it) }, singleLine = true,
+                                    textStyle = TextStyle(color = T.Ink, fontSize = 16.sp, fontFamily = Inter),
+                                    cursorBrush = SolidColor(T.Ink),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                    keyboardActions = KeyboardActions(onDone = { onClose() }),
+                                    modifier = Modifier.fillMaxSize().focusRequester(focus).semantics { contentDescription = "Search on TV" },
+                                    decorationBox = { inner ->
+                                        Row(
+                                            Modifier.fillMaxSize().softFace(HOLLOW, sheen = false, corner = 14.dp, dpUnits = true).padding(horizontal = 14.dp),
+                                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        ) {
+                                            LineIcon(Ico.SEARCH, Muted, 18.dp)
+                                            Box(Modifier.weight(1f)) {
+                                                if (text.isEmpty()) Text("Search or type", color = Color(0xFF8A8A8E), fontSize = 16.sp)
+                                                inner()
+                                            }
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                        // The mic: its own square key, outside the box. Tap again to stop.
+                        Box(
+                            Modifier.size(52.dp).clip(RoundedCornerShape(14.dp))
+                                .background(if (voice.listening) accent else M.High)
+                                .clickable(onClickLabel = if (voice.listening) "stop listening" else "speak", role = Role.Button) { mic() }
+                                .semantics { contentDescription = if (voice.listening) "Stop" else "Voice" },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (voice.listening) Box(Modifier.size(16.dp).background(Color.White, RoundedCornerShape(3.dp)))
+                            else LineIcon(Ico.MIC, T.Ink, 22.dp)
+                        }
+                    }
+                    // What you're saying, as you say it.
+                    Text(
+                        when { voice.listening && voice.partial.isNotEmpty() -> voice.partial; voice.listening -> "Listening…"; voice.error != null -> voice.error!!; else -> "Typed on the TV as you go." },
+                        color = if (voice.listening) T.Ink else Muted, fontSize = if (voice.listening) 16.sp else 12.5.sp,
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp, start = 4.dp).semantics { liveRegion = LiveRegionMode.Polite },
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Box(Modifier.weight(1f)) { Btn("Delete", kind = 1) { vm.backspace() } }
-                        Box(Modifier.weight(1.4f)) { Btn("Send", enabled = text.isNotBlank()) { vm.sendText(text); text = "" } }
+                        Box(Modifier.weight(1f)) { Btn("Delete", kind = 1) { if (text.isNotEmpty()) change(text.dropLast(1)) else vm.backspace() } }
+                        Box(Modifier.weight(1.4f)) { Btn("Done") { onClose() } }
                     }
                 }
             }
         }
     }
+}
+
+/** Bars that move with the speaker's voice level (0..1). */
+@Composable
+internal fun VoiceWave(level: Float, accent: Color, modifier: Modifier) {
+    val t = rememberInfiniteTransition(label = "wave")
+    val phase by t.animateFloat(0f, (2 * Math.PI).toFloat(), infiniteRepeatable(androidx.compose.animation.core.tween(900, easing = androidx.compose.animation.core.LinearEasing)), label = "phase")
+    val lv by androidx.compose.animation.core.animateFloatAsState(level, androidx.compose.animation.core.tween(90), label = "lv")
+    Box(modifier.drawBehind {
+        val n = 28
+        val gap = size.width / (n + 1)
+        val bw = 3.dp.toPx()
+        for (i in 1..n) {
+            val x = i * gap
+            val wobble = (kotlin.math.sin(phase + i * 0.55f) + 1f) / 2f
+            val h = size.height * (0.12f + 0.68f * lv * (0.35f + 0.65f * wobble))
+            drawRoundRect(accent, topLeft = Offset(x - bw / 2, (size.height - h) / 2), size = androidx.compose.ui.geometry.Size(bw, h),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(bw / 2))
+        }
+    })
+}
+
+/**
+ * Speech to text inside the app (no system popup): Android's SpeechRecognizer, preferring
+ * on-device recognition. [level] drives the wave, [partial] shows words as they're heard,
+ * [onFinal] gets the result. Listens only while the user asks.
+ */
+internal class VoiceInput(private val ctx: android.content.Context) {
+    var listening by mutableStateOf(false); private set
+    var level by mutableStateOf(0f); private set
+    var partial by mutableStateOf(""); private set
+    var error by mutableStateOf<String?>(null); private set
+    var onFinal: (String) -> Unit = {}
+    val available: Boolean get() = android.speech.SpeechRecognizer.isRecognitionAvailable(ctx)
+    private var rec: android.speech.SpeechRecognizer? = null
+
+    fun start() {
+        error = null; partial = ""; level = 0f
+        val r = rec ?: android.speech.SpeechRecognizer.createSpeechRecognizer(ctx).also { rec = it }
+        r.setRecognitionListener(object : android.speech.RecognitionListener {
+            override fun onReadyForSpeech(params: android.os.Bundle?) { listening = true }
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) { level = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f) }
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() { level = 0f }
+            override fun onError(code: Int) {
+                listening = false; level = 0f
+                error = when (code) {
+                    android.speech.SpeechRecognizer.ERROR_NO_MATCH, android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Didn't catch that. Tap the mic and try again."
+                    android.speech.SpeechRecognizer.ERROR_NETWORK, android.speech.SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Speech needs a connection on this phone."
+                    android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission is off."
+                    else -> "Couldn't listen. Try again."
+                }
+            }
+            override fun onResults(results: android.os.Bundle?) {
+                listening = false; level = 0f
+                val said = results?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+                partial = ""
+                if (said.isNotBlank()) onFinal(said)
+            }
+            override fun onPartialResults(partialResults: android.os.Bundle?) {
+                partial = partialResults?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+            }
+            override fun onEvent(eventType: Int, params: android.os.Bundle?) {}
+        })
+        val i = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+        listening = true
+        runCatching { r.startListening(i) }.onFailure { listening = false; error = "Couldn't listen. Try again." }
+    }
+
+    fun stop() { runCatching { rec?.stopListening() }; listening = false; level = 0f }
+    fun destroy() { runCatching { rec?.destroy() }; rec = null }
 }
 
 /** Fallback when a pairing code is needed while the sheet is closed. */
@@ -1004,9 +1123,9 @@ internal fun PrivacyPage(vm: RemoteVM) {
         Divider()
         InfoBlock("Network", "Only TVs on your Wi-Fi. Updates from GitHub; logos from Simple Icons or Google's favicon service. Both optional.")
         Divider()
-        InfoBlock("Voice", "Your phone's speech service turns speech into text. The app never records audio.")
+        InfoBlock("Voice", "The mic listens only while you tap it in Search. Speech is turned into text on the phone where possible (otherwise by the phone's speech service); only the text goes to your TV. Nothing is saved.")
         Divider()
-        InfoBlock("Permissions", "Network, vibration, notifications, installing updates. No location, contacts, mic or files.")
+        InfoBlock("Permissions", "Network, microphone (voice search, while listening), vibration, notifications, installing updates. No location, contacts or files.")
     }
     var ask by remember { mutableStateOf<String?>(null) }
     Btn("Forget all TVs", kind = 1) { ask = "tvs" }

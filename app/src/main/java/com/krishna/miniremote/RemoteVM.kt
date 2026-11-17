@@ -58,6 +58,9 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     private var connectJob: Job? = null
     private var toastJob: Job? = null
     private val queue = Channel<RemoteKey>(64, BufferOverflow.DROP_OLDEST)
+    /** Live typing, in order: text to type, or "\b" for one backspace. */
+    private val textOps = Channel<String>(Channel.UNLIMITED)
+    private var typeWarned = false
     private var autoJob: Job? = null
 
     /** What the TV shows (Roku and LG can tell), and whether the dial is in Watch mode. */
@@ -196,6 +199,24 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
             }
         }
         autoConnect()
+        viewModelScope.launch {
+            for (op in textOps) {
+                val a = adapter
+                if (link != Link.READY || a == null) continue
+                try { if (op == "\b") a.backspace() else a.typeText(op); txCount++ } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                    if (!typeWarned) { typeWarned = true; say(if (e is UserFacing) e.message ?: "Couldn't type" else "Couldn't type") }
+                }
+            }
+        }
+    }
+
+    /** Mirrors an edit of the search box on the TV: deletes what changed, types what's new. */
+    fun liveType(old: String, new: String) {
+        if (active == null) { say("Choose a TV first"); return }
+        var common = 0
+        while (common < old.length && common < new.length && old[common] == new[common]) common++
+        repeat(old.length - common) { textOps.trySend("\b") }
+        if (new.length > common) textOps.trySend(new.substring(common))
     }
 
     /** Whether a saved TV has its pairing done, so connecting needs nothing from the user. */
