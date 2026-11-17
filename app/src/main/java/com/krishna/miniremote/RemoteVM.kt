@@ -81,12 +81,18 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                     // Only repaint every 2% so the download doesn't flood the UI thread.
                     if (p - last >= 0.02f || p >= 1f) { last = p; update = Update.Downloading(info, p) }
                 }
+                if (!Updater.sameSigner(ctx, apk)) {
+                    // Android would reject it; say why instead of showing an Install button that fails.
+                    return@runCatching Update.Failed(
+                        "Version ${info.name} is signed with a different key. Uninstall this app, then install it from the GitHub release."
+                    )
+                }
                 Update.Ready(info, apk)
             }.getOrElse { e ->
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 if (manual) Update.Failed(e.message ?: "Couldn't check for updates") else Update.Idle
             }
-            if (!manual && update == Update.UpToDate) update = Update.Idle
+            if (!manual && (update == Update.UpToDate || update is Update.Failed)) update = Update.Idle
         }
     }
 

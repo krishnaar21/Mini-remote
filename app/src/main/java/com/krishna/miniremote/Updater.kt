@@ -2,6 +2,7 @@ package com.krishna.miniremote
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -25,7 +26,7 @@ import java.util.concurrent.TimeUnit
  * confirms the install in Android's own dialog.
  */
 object Updater {
-    private const val BASE = "https://github.com/krishnaar21/Mini-remote/releases/download/latest-build/"
+    private const val BASE = "https://github.com/krishnaar21/mini-remote/releases/download/latest-build/"
     private const val MAX_APK = 60L * 1024 * 1024
 
     data class Info(val code: Long, val name: String, val sha256: String)
@@ -91,6 +92,26 @@ object Updater {
         f.inputStream().use { i -> val b = ByteArray(64 * 1024); while (true) { val n = i.read(b); if (n < 0) break; md.update(b, 0, n) } }
         return md.digest().joinToString("") { "%02x".format(it) }
     }
+
+    /**
+     * Whether [apk] is signed with the same key as this installed app. Android refuses to install
+     * an update signed differently, so there's no point offering it. Unknown means yes.
+     */
+    @Suppress("DEPRECATION")
+    fun sameSigner(ctx: Context, apk: File): Boolean = runCatching {
+        val pm = ctx.packageManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val info = pm.getPackageArchiveInfo(apk.path, PackageManager.GET_SIGNING_CERTIFICATES)?.signingInfo
+                ?: return@runCatching true
+            val certs = if (info.hasMultipleSigners()) info.apkContentsSigners else info.signingCertificateHistory
+            certs.isNullOrEmpty() || certs.any { pm.hasSigningCertificate(ctx.packageName, it.toByteArray(), PackageManager.CERT_INPUT_RAW_X509) }
+        } else {
+            val theirs = pm.getPackageArchiveInfo(apk.path, PackageManager.GET_SIGNATURES)?.signatures
+                ?: return@runCatching true
+            val mine = pm.getPackageInfo(ctx.packageName, PackageManager.GET_SIGNATURES).signatures.orEmpty()
+            theirs.toSet() == mine.toSet()
+        }
+    }.getOrDefault(true)
 
     /** Android 8+ asks once per app for "install unknown apps". */
     fun canInstall(ctx: Context) = Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ctx.packageManager.canRequestPackageInstalls()
