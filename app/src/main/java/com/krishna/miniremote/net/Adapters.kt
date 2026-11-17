@@ -268,6 +268,8 @@ class LgAdapter(
             listOf(
                 "LAUNCH", "CONTROL_AUDIO", "CONTROL_POWER", "CONTROL_INPUT_TEXT",
                 "CONTROL_MOUSE_AND_KEYBOARD", "CONTROL_INPUT_MEDIA_PLAYBACK",
+                // Lets the Channels tab list installed apps (the TV asks once to allow it).
+                "READ_INSTALLED_APPS",
             )
         )
     )
