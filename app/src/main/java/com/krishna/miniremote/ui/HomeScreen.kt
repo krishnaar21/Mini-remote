@@ -163,6 +163,15 @@ fun HomeScreen(
             )
         }
     }
+    val trackpadAt: @Composable (Dp) -> Unit = { s ->
+        CompositionLocalProvider(LocalK provides s.value / 780f) {
+            Trackpad(
+                size = s, height = s, accent = accent, stepDp = vm.settings.scrubStepDp, offline = offline,
+                onKey = onKey, onTick = onTick, onVoice = voice, onOffline = offlineTap,
+                onTwoFinger = onTwo, onTwoFingerTap = onTwoTap,
+            )
+        }
+    }
     // Dial, trackpad or number pad, as big as [m] allows.
     val padArea: @Composable (Deck, Modifier) -> Unit = { d, m ->
         BoxWithConstraints(m, contentAlignment = Alignment.Center) {
@@ -175,17 +184,10 @@ fun HomeScreen(
                         CompositionLocalProvider(LocalK provides s.value / 780f) { Numpad(vm, accent, Modifier.size(s)) }
                     }
                     Deck.DIAL -> dialAt(minOf(w - 8.dp, h, 340.dp), false, null)
-                    Deck.TRACKPAD -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                        // A bit narrower than the screen, about square, near the top.
-                        val tw = minOf(w * 0.86f, 330.dp)
-                        val th = minOf(h, tw * 1.08f)
-                        CompositionLocalProvider(LocalK provides tw.value / 780f) {
-                            Trackpad(
-                                size = tw, height = th, accent = accent, stepDp = vm.settings.scrubStepDp, offline = offline,
-                                onKey = onKey, onTick = onTick, onVoice = voice, onOffline = offlineTap,
-                                onTwoFinger = onTwo, onTwoFingerTap = onTwoTap,
-                            )
-                        }
+                    Deck.TRACKPAD -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        // Same place and size as the dial.
+                        val tw = minOf(w - 8.dp, h, 340.dp)
+                        trackpadAt(tw)
                     }
                 }
             }
@@ -193,10 +195,12 @@ fun HomeScreen(
     }
     // The dial inside the volume ring (the trackpad and number pad have no ring).
     val ringArea: @Composable (Modifier) -> Unit = { m ->
-        if (deck != Deck.DIAL) padArea(deck, m)
+        if (deck == Deck.NUMPAD) padArea(deck, m)
         else BoxWithConstraints(m, contentAlignment = Alignment.Center) {
             val s = minOf(maxWidth - 8.dp - RING_BAND * 2, maxHeight - RING_BAND * 2, 300.dp)
+            // The trackpad takes the dial's place, ring included: same centre, same size.
             val v = vm.tvVolume
+            if (deck == Deck.TRACKPAD) trackpadAt(s + RING_BAND * 2) else
             RingDial(s, accent, level = v?.let { if (it.muted) 0f else it.level.toFloat() / it.max }, value = v?.let { if (it.muted) "Muted" else "${it.level}" }, onStep = { up -> vm.scrubTick(if (up) RemoteKey.VOL_UP else RemoteKey.VOL_DOWN) }) { turning -> dialAt(s, true, if (turning) v?.let { if (it.muted) "Muted" else "${it.level}" } ?: "Volume" else null) }
         }
     }
