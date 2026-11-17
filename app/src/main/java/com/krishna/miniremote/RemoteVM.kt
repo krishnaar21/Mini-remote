@@ -45,6 +45,8 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     var txCount by mutableIntStateOf(0); private set
     /** Mute is a toggle on every TV we support, so we track it locally to colour the button. */
     var muted by mutableStateOf(false); private set
+    /** Play / pause is a toggle too: tracked locally so the key shows one icon at a time. */
+    var playing by mutableStateOf(false); private set
     /** Non-null while an Android / Google TV is showing a pairing code and we're waiting for it. */
     var pairPrompt by mutableStateOf<PairPrompt?>(null); private set
     private var codeAnswer: CompletableDeferred<String?>? = null
@@ -200,8 +202,9 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         if (link == Link.ERROR) active?.let { connect(it) }
         feel.fire(if (key == RemoteKey.POWER) Feel.HEAVY else Feel.PRESS)
         if (key == RemoteKey.MUTE) muted = !muted
+        if (key == RemoteKey.PLAY_PAUSE) playing = !playing
         if (key == RemoteKey.VOL_UP) muted = false
-        if (!quiet) say(key.word, key)
+        if (!quiet) say(if (key == RemoteKey.PLAY_PAUSE) (if (playing) "Play" else "Pause") else key.word, key)
         queue.trySend(key)
     }
 

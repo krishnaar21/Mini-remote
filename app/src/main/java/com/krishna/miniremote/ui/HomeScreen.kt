@@ -131,12 +131,12 @@ fun HomeScreen(
       Column(Modifier.weight(1f).padding(horizontal = 16.dp).padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         // Top, as on the Apple TV Remote: mute · TV picker · power, inset from the screen edges.
         Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            KeyButton(accent, "Mute", Modifier.size(44.dp), state = if (vm.muted) "Muted" else null, pressedScale = 1f, onPress = { vm.press(RemoteKey.MUTE) }) { c, _ ->
-                LineIcon(if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, if (vm.muted) accent else c, 19.dp)
+            KeyButton(accent, "Mute", Modifier.size(52.dp), state = if (vm.muted) "Muted" else null, pressedScale = 1f, onPress = { vm.press(RemoteKey.MUTE) }) { c, _ ->
+                LineIcon(if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, if (vm.muted) accent else c, 22.dp)
             }
             TvPicker(vm, Modifier.weight(1f), openDevices)
-            KeyButton(accent, "Power", Modifier.size(44.dp), restColor = accent, pressedScale = 1f, onPress = { vm.press(RemoteKey.POWER) }) { c, _ ->
-                LineIcon(Ico.POWER, c, 19.dp)
+            KeyButton(accent, "Power", Modifier.size(52.dp), restColor = accent, pressedScale = 1f, onPress = { vm.press(RemoteKey.POWER) }) { c, _ ->
+                LineIcon(Ico.POWER, c, 22.dp)
             }
         }
 
@@ -163,7 +163,7 @@ fun HomeScreen(
                             CompositionLocalProvider(LocalK provides s.value / 780f) {
                                 Clickpad(
                                     size = s, accent = accent, stepDp = vm.settings.scrubStepDp, toast = vm.toast,
-                                    toastIcon = vm.toastKey?.let { keyIcon(it, vm.muted) },
+                                    toastIcon = vm.toastKey?.let { keyIcon(it, vm.muted, vm.playing) },
                                     onKey = onKey, onTick = onTick,
                                     onVoice = { vm.feel.fire(Feel.HEAVY); vm.press(RemoteKey.VOICE) },
                                     offline = offline, onOffline = { vm.feel.fire(Feel.PRESS); openDevices() },
@@ -215,7 +215,7 @@ private fun BottomPanel(
                     if (total < -24.dp.toPx()) set(true) else if (total > 24.dp.toPx()) set(false)
                 }) { c, dy -> c.consume(); total += dy }
             }
-            .padding(start = 16.dp, end = 16.dp, bottom = NAV_H + 22.dp),
+            .padding(start = 16.dp, end = 16.dp, bottom = NAV_H + 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
@@ -227,7 +227,9 @@ private fun BottomPanel(
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             KeyButton(accent, "Back", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.BACK) }) { c, _ -> LineIcon(Ico.CHEVRON_L, c, 24.dp, stroke = 2.2f) }
             KeyButton(accent, "Home", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.HOME) }) { c, _ -> LineIcon(Ico.TV, c, 22.dp) }
-            KeyButton(accent, "Play or pause", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { c, _ -> LineIcon(Ico.PLAY, c, 21.dp) }
+            KeyButton(accent, if (vm.playing) "Pause" else "Play", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { c, _ ->
+                LineIcon(if (vm.playing) Ico.PAUSE else Ico.PLAY_ONLY, c, if (vm.playing) 22.dp else 20.dp, stroke = if (vm.playing) 2.4f else 1.8f)
+            }
             KeyButton(accent, "Search", k, actionLabel = "search or type on TV", pressedScale = 1f, onPress = openKeys) { c, _ -> LineIcon(Ico.SEARCH, c, 21.dp) }
         }
         androidx.compose.animation.AnimatedVisibility(open, enter = androidx.compose.animation.expandVertically() + fadeIn(), exit = androidx.compose.animation.shrinkVertically() + fadeOut()) {

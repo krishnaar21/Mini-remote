@@ -59,7 +59,8 @@ enum class Ico(val d: String) {
     NUMPAD("M6 5h0.01 M12 5h0.01 M18 5h0.01 M6 10h0.01 M12 10h0.01 M18 10h0.01 M6 15h0.01 M12 15h0.01 M18 15h0.01 M12 20h0.01"),
     REFRESH("M20 12a8 8 0 0 1 -14.3 4.9 M4 12a8 8 0 0 1 14.3 -4.9 M18.5 3v4h-4 M5.5 21v-4h4"),
     STAR("M12 3l2.6 5.6l6 0.7l-4.5 4.1l1.2 6l-5.3 -3l-5.3 3l1.2 -6l-4.5 -4.1l6 -0.7Z"),
-    PLAY_ONLY("M7 5L19 12L7 19Z");
+    PLAY_ONLY("M7 5L19 12L7 19Z"),
+    PAUSE("M8 5v14 M16 5v14");
 
     internal val path: Path by lazy { PathParser().parsePathString(d).toPath() }
 }

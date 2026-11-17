@@ -258,9 +258,9 @@ fun Clickpad(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(bdp(8f)),
                 ) {
-                    if (toastIcon != null) LineIcon(toastIcon, accent, bdp(84f), stroke = 1.8f)
-                    Text(toast, color = Color(0xFFD4D4D9), fontSize = bsp(28f), fontWeight = FontWeight.Medium,
-                        lineHeight = bsp(34f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    if (toastIcon != null) LineIcon(toastIcon, accent, bdp(56f), stroke = 2f)
+                    Text(toast, color = Color(0xFFD4D4D9), fontSize = bsp(23f), fontWeight = FontWeight.Medium,
+                        lineHeight = bsp(29f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }
             }
         }
