@@ -4,9 +4,10 @@ Universal TV remote with a soft-touch charcoal design. Kotlin + Jetpack Compose.
 
 - Control over local Wi-Fi: **Roku** (ECP), **Samsung** Tizen, **LG** webOS, **Android TV / Google TV** (remote protocol v2, pair with the code on screen). Fire TV runs Fire OS and doesn't support this protocol.
 - **Material design**, dark, with your accent colour.
-- **Home (Apple TV Remote style):** TV picker on top with what's on screen, one big touch surface (or the dial, set in Settings), and round keys: Back, Home, Play, Mute, Search, Voice. **Watch / Navigate:** on live TV or an input the surface changes volume (up/down) and channel (left/right); in menus it moves around. Roku and LG switch by themselves. Volume and channels also hide in the tab bar (swipe up), and the phone's volume buttons work. OK: tap = OK, double tap = mute, hold = voice.
+- **Remote page (Apple TV Remote style):** mute · TV picker (with what's on screen) · power on top; one big touch surface or the dial (Settings); Back, Home, Play and Search below. One finger navigates; two fingers slide for volume (up/down) and channels (sideways). Swipe up for a volume / channel / number tray, and the phone's volume buttons work too. OK: tap = OK, double tap = mute, hold = voice.
+- **Pages, not tabs:** swipe between Remote, Apps and Settings.
+- **Search** by typing or by voice (the phone's speech recognition).
 - **Channels tab:** a quick access row you pin to, apps the TV reports (Roku, Samsung, LG), popular apps (Netflix, YouTube, Prime Video, JioHotstar…), and your own TV channels by number.
-- **Profile & settings** on one page, under a floating icon-only tab pill.
 - Round clickpad: tap, hold to repeat, drag to scrub (landing zone picks the axis), hold OK for voice.
 - Haptics, synthesized click sounds, accent colours, retro fader, keyboard sheet.
 - Local-network only: private IPv4 addresses are enforced in code.

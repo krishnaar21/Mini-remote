@@ -41,7 +41,7 @@ fun ProfileScreen(vm: RemoteVM, accent: Color, open: (Page) -> Unit) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp).padding(bottom = NAV_H + 40.dp),
     ) {
-        PageTitle("Profile & settings")
+        PageTitle("Settings")
         Column(
             Modifier.fillMaxWidth().softFace(CARD, corner = 24.dp, dpUnits = true).padding(vertical = 24.dp, horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,

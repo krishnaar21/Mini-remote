@@ -78,22 +78,12 @@ enum class Deck(val label: String, val ico: Ico) {
 /** How long OK waits for a second tap (double tap = mute). */
 private const val DOUBLE_TAP_MS = 260L
 
-/** In Watch mode the dial's arrows become volume (up / down) and channel (left / right). */
-private fun watchKey(k: RemoteKey): RemoteKey = when (k) {
-    RemoteKey.UP -> RemoteKey.VOL_UP
-    RemoteKey.DOWN -> RemoteKey.VOL_DOWN
-    RemoteKey.LEFT -> RemoteKey.CH_DOWN
-    RemoteKey.RIGHT -> RemoteKey.CH_UP
-    else -> k
-}
-
 /**
- * Home, after the Apple TV Remote: the TV picker centred on top (with what's on screen under
- * it) and power on the right; one big touch surface (or the dial); two rows of round keys.
+ * Home, after the Apple TV Remote: mute, the TV picker (with what's on screen) and power on
+ * top; one big touch surface (or the dial); four round keys below.
  *
- * Watch / Navigate: on live TV or an input the surface changes volume (up / down) and channel
- * (left / right); in the TV's menus and apps it moves around. Roku and LG switch by themselves.
- * OK: tap = OK, double tap = mute, hold = voice. Swipe up for volume and channels.
+ * One finger navigates; two fingers slide for volume (up / down) and channels (sideways).
+ * OK: tap = OK, double tap = mute, hold = voice. Swipe up for the volume / channel tray.
  */
 @Composable
 fun HomeScreen(
@@ -106,8 +96,6 @@ fun HomeScreen(
 ) {
     val scope = rememberCoroutineScope()
     val pendingOk = remember { arrayOfNulls<Job>(1) }
-    val watching = vm.watching && deck != Deck.NUMPAD
-    val watchNow by rememberUpdatedState(watching)
     fun okTap() {
         val waiting = pendingOk[0]
         if (waiting?.isActive == true) {
@@ -117,14 +105,10 @@ fun HomeScreen(
             pendingOk[0] = scope.launch { delay(DOUBLE_TAP_MS); pendingOk[0] = null; vm.press(RemoteKey.OK, quiet = true) }
         }
     }
-    val onKey: (RemoteKey) -> Unit = { k ->
-        when {
-            k == RemoteKey.OK -> okTap()
-            watchNow -> vm.press(watchKey(k), quiet = true)
-            else -> vm.press(k)
-        }
-    }
-    val onTick: (RemoteKey) -> Unit = { k -> vm.scrubTick(if (watchNow) watchKey(k) else k) }
+    val onKey: (RemoteKey) -> Unit = { k -> if (k == RemoteKey.OK) okTap() else vm.press(k) }
+    val onTick: (RemoteKey) -> Unit = { k -> vm.scrubTick(k) }
+    // One surface does both: one finger navigates, two fingers change volume and channels.
+    val onTwo: (RemoteKey) -> Unit = { k -> vm.scrubTick(k); if (k == RemoteKey.CH_UP || k == RemoteKey.CH_DOWN) vm.say(k.word, k) }
     val tray by rememberUpdatedState(onTray)
     val swipe = Modifier.pointerInput(Unit) {
         var total = 0f
@@ -144,16 +128,16 @@ fun HomeScreen(
         Modifier.fillMaxSize().then(swipe).padding(horizontal = 16.dp).padding(top = 6.dp, bottom = NAV_H + 34.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Top: TV picker in the middle, power on the right (a spacer keeps the picker centred).
+        // Top, as on the Apple TV Remote: mute · TV picker · power.
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Spacer(Modifier.size(44.dp))
+            KeyButton(accent, "Mute", Modifier.size(44.dp), state = if (vm.muted) "Muted" else null, pressedScale = 1f, onPress = { vm.press(RemoteKey.MUTE) }) { c, _ ->
+                LineIcon(if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, if (vm.muted) accent else c, 19.dp)
+            }
             TvPicker(vm, Modifier.weight(1f), openDevices)
             KeyButton(accent, "Power", Modifier.size(44.dp), restColor = accent, pressedScale = 1f, onPress = { vm.press(RemoteKey.POWER) }) { c, _ ->
                 LineIcon(Ico.POWER, c, 19.dp)
             }
         }
-        Spacer(Modifier.height(10.dp))
-        if (deck != Deck.NUMPAD && vm.active != null) ModeSwitch(watching, accent) { vm.setWatching(it) }
 
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
             val w = maxWidth
@@ -182,7 +166,7 @@ fun HomeScreen(
                                     onKey = onKey, onTick = onTick,
                                     onVoice = { vm.feel.fire(Feel.HEAVY); vm.press(RemoteKey.VOICE) },
                                     offline = offline, onOffline = { vm.feel.fire(Feel.PRESS); openDevices() },
-                                    watch = watching,
+                                    onTwoFinger = onTwo,
                                 )
                             }
                         }
@@ -196,7 +180,7 @@ fun HomeScreen(
                                     onKey = onKey, onTick = onTick,
                                     onVoice = { vm.feel.fire(Feel.HEAVY); vm.press(RemoteKey.VOICE) },
                                     onOffline = { vm.feel.fire(Feel.PRESS); openDevices() },
-                                    watch = watching,
+                                    onTwoFinger = onTwo,
                                 )
                             }
                         }
@@ -205,21 +189,20 @@ fun HomeScreen(
             }
         }
 
-        // Two rows of round keys, as on the Apple TV Remote.
+        // Four round keys under the surface.
         val k = Modifier.size(62.dp)
-        Row(horizontalArrangement = Arrangement.spacedBy(30.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             KeyButton(accent, "Back", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.BACK) }) { c, _ -> LineIcon(Ico.CHEVRON_L, c, 24.dp, stroke = 2.2f) }
             KeyButton(accent, "Home", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.HOME) }) { c, _ -> LineIcon(Ico.TV, c, 22.dp) }
             KeyButton(accent, "Play or pause", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { c, _ -> LineIcon(Ico.PLAY, c, 21.dp) }
+            KeyButton(accent, "Search", k, actionLabel = "search or type on TV", pressedScale = 1f, onPress = openKeys) { c, _ -> LineIcon(Ico.SEARCH, c, 21.dp) }
         }
-        Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(30.dp)) {
-            KeyButton(accent, "Mute", k, state = if (vm.muted) "Muted" else null, pressedScale = 1f, onPress = { vm.press(RemoteKey.MUTE) }) { c, _ ->
-                LineIcon(if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, if (vm.muted) accent else c, 21.dp)
-            }
-            KeyButton(accent, "Search and type", k, actionLabel = "search or type on TV", pressedScale = 1f, onPress = openKeys) { c, _ -> LineIcon(Ico.SEARCH, c, 21.dp) }
-            KeyButton(accent, "Voice", k, pressedScale = 1f, onPress = { vm.feel.fire(Feel.HEAVY); vm.press(RemoteKey.VOICE) }) { c, _ -> LineIcon(Ico.MIC, c, 21.dp) }
-        }
+        // Handle: tap or swipe up for volume, channels and numbers.
+        Box(
+            Modifier.padding(top = 14.dp).size(64.dp, 22.dp).clip(CircleShape)
+                .clickable(onClickLabel = "show volume and channels", role = Role.Button) { tray(true) },
+            contentAlignment = Alignment.Center,
+        ) { Box(Modifier.size(32.dp, 4.dp).clip(CircleShape).background(Color(0xFF4A4A50))) }
     }
 }
 
@@ -255,28 +238,6 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
             LineIcon(Ico.DOWN, T.Dim, 15.dp, stroke = 2.2f)
         }
         Text(sub, color = subCol, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
-
-/** Navigate | Watch: what the dial does. Follows the TV on Roku and LG; tap to choose yourself. */
-@Composable
-private fun ModeSwitch(watching: Boolean, accent: Color, onPick: (Boolean) -> Unit) {
-    Row(
-        Modifier.height(34.dp).clip(CircleShape).background(M.Container).padding(3.dp).selectableGroup(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        listOf(false to "Navigate", true to "Watch").forEach { (v, label) ->
-            val sel = v == watching
-            Box(
-                Modifier.fillMaxHeight().clip(CircleShape)
-                    .background(if (sel) M.Highest else Color.Transparent)
-                    .selectable(sel, role = Role.Tab) { if (!sel) onPick(v) }
-                    .padding(horizontal = 16.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(label, color = if (sel) T.Ink else T.Dim, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            }
-        }
     }
 }
 

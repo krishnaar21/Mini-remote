@@ -71,7 +71,11 @@ fun Clickpad(
     onOffline: () -> Unit = {},
     /** Watch mode: up / down are volume, so they show + and −. */
     watch: Boolean = false,
+    /** Two-finger slides: volume (up / down) and channel (sideways). */
+    onTwoFinger: ((RemoteKey) -> Unit)? = null,
 ) {
+    val twoStepPx = with(LocalDensity.current) { 30.dp.toPx() }
+    val twoCb = androidx.compose.runtime.rememberUpdatedState(onTwoFinger)
     val isOffline = androidx.compose.runtime.rememberUpdatedState(offline)
     val density = LocalDensity.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -135,8 +139,14 @@ fun Clickpad(
                     }
 
                     var last = down.position
+                    val two = twoCb.value?.let { cb -> TwoFinger(twoStepPx) { k -> cb(k) } }
                     while (true) {
                         val ev = awaitPointerEvent()
+                        if (two != null && two.feed(ev)) {
+                            if (!moved) { moved = true; hold.cancel(); litDir = null; wellDown = false }
+                            if (ev.changes.none { it.pressed }) break
+                            continue
+                        }
                         val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
                         if (!ch.pressed) { ch.consume(); break }
                         val delta = ch.position - last

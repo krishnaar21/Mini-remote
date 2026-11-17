@@ -61,7 +61,11 @@ fun Trackpad(
     /** Taller than wide, like Apple's touch surface. */
     height: Dp = size,
     watch: Boolean = false,
+    /** Two-finger slides: volume (up / down) and channel (sideways). */
+    onTwoFinger: ((RemoteKey) -> Unit)? = null,
 ) {
+    val twoStepPx = with(LocalDensity.current) { 30.dp.toPx() }
+    val twoCb = androidx.compose.runtime.rememberUpdatedState(onTwoFinger)
     val density = LocalDensity.current
     val stepPx = with(density) { stepDp.dp.toPx() }
     val slop = with(density) { 8.dp.toPx() }
@@ -95,8 +99,14 @@ fun Trackpad(
                     var moved = false
                     var held = false
                     val hold = scope.launch { delay(450); if (!moved) { held = true; onVoice() } }
+                    val two = twoCb.value?.let { cb -> TwoFinger(twoStepPx) { k -> cb(k) } }
                     while (true) {
                         val ev = awaitPointerEvent()
+                        if (two != null && two.feed(ev)) {
+                            if (!moved) { moved = true; hold.cancel() }
+                            if (ev.changes.none { it.pressed }) break
+                            continue
+                        }
                         val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
                         if (!ch.pressed) { ch.consume(); break }
                         acc += ch.position - ch.previousPosition
@@ -137,7 +147,7 @@ fun Trackpad(
         LineIcon(if (watch) Ico.MINUS else Ico.DOWN, col(RemoteKey.DOWN), cs, Modifier.align(Alignment.BottomCenter).padding(bottom = e), stroke = 2.2f)
         LineIcon(Ico.LEFT, col(RemoteKey.LEFT), cs, Modifier.align(Alignment.CenterStart).padding(start = e), stroke = 2.2f)
         LineIcon(Ico.RIGHT, col(RemoteKey.RIGHT), cs, Modifier.align(Alignment.CenterEnd).padding(end = e), stroke = 2.2f)
-        if (touch == null) Text(if (watch) "Slide up or down for volume · sideways for channels" else "Tap for OK · slide to move",
+        if (touch == null) Text(if (onTwoFinger != null) "Two fingers: volume ↕ · channels ↔" else "Tap for OK · slide to move",
             color = Color(0xFF5A5A60), fontSize = 11.sp,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 44.dp))
 

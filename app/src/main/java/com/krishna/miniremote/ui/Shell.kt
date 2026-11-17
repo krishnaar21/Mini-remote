@@ -5,6 +5,12 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.rememberCoroutineScope
+import com.krishna.miniremote.Link
+import kotlinx.coroutines.launch
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -68,11 +74,11 @@ import kotlin.random.Random
 
 /** The four places in the floating pill at the bottom. */
 enum class Tab(val label: String, val ico: Ico) {
-    HOME("Home", Ico.HOME), CHANNELS("Channels", Ico.GRID), PROFILE("Profile and settings", Ico.USER)
+    HOME("Remote", Ico.HOME), CHANNELS("Apps and channels", Ico.GRID), PROFILE("Settings", Ico.USER)
 }
 
 /** Height of the floating tab pill; screens leave this much room (plus a gap) at the bottom. */
-val NAV_H = 58.dp
+val NAV_H = 22.dp
 
 /** Raised capsule the tab pill and the control switcher sit on. */
 val NAV_FACE = Face(listOf(Color(0xFF303033), Color(0xFF1E1E21)), listOf(
@@ -100,11 +106,12 @@ fun keyIcon(k: RemoteKey, muted: Boolean): Ico? = when (k) {
     else -> null
 }
 
-/** Home, Channels, Settings and Profile under one floating pill, plus the shared sheets. */
+/** Remote, Apps and Settings as pages you swipe between, plus the shared sheets. */
 @Composable
 fun AppShell(vm: RemoteVM) {
     val accent = accentColor(vm.settings.accentHex)
-    var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
+    val pager = rememberPagerState { Tab.entries.size }
+    val scope = rememberCoroutineScope()
     var sheet by remember { mutableStateOf<Page?>(null) }
     var keys by remember { mutableStateOf(false) }
     val style = vm.settings.controlStyle
@@ -112,32 +119,43 @@ fun AppShell(vm: RemoteVM) {
     var numpad by remember { mutableStateOf(false) }
     val deck = if (numpad) Deck.NUMPAD else if (style == "trackpad") Deck.TRACKPAD else Deck.DIAL
     var tray by remember { mutableStateOf(false) }
-    // The tray tucks itself away a few seconds after the last command.
+    val onRemote = pager.currentPage == Tab.HOME.ordinal
+    // The tray tucks itself away a few seconds after the last command, and when you leave the page.
     LaunchedEffect(tray, vm.txCount) { if (tray) { kotlinx.coroutines.delay(7000); tray = false } }
-    fun openTray() { if (tab != Tab.HOME) tab = Tab.HOME; tray = true; vm.feel.fire(com.krishna.miniremote.Feel.TICK) }
+    LaunchedEffect(onRemote) { if (!onRemote) tray = false }
+    fun go(t: Tab) { scope.launch { pager.animateScrollToPage(t.ordinal) } }
+    // Once a TV finishes connecting, the TV sheet has done its job: close it.
+    var connecting by remember { mutableStateOf(false) }
+    LaunchedEffect(vm.link) {
+        when (vm.link) {
+            Link.CONNECTING -> connecting = true
+            Link.READY -> if (connecting) { connecting = false; if (sheet != null) { kotlinx.coroutines.delay(900); sheet = null } }
+            else -> connecting = false
+        }
+    }
     val tilt = rememberTilt(false) // the flat Material faces have no sheen to tilt
-    BackHandler(enabled = tab != Tab.HOME) { tab = Tab.HOME }
+    BackHandler(enabled = !onRemote) { go(Tab.HOME) }
 
     CompositionLocalProvider(LocalTilt provides tilt) {
         BoxWithConstraints(Modifier.fillMaxSize().background(T.Bg)) {
             val k = (maxWidth.value - 32f).coerceAtMost(420f) / 920f
             CompositionLocalProvider(LocalK provides k) {
                 Box(Modifier.fillMaxSize().systemBarsPadding()) {
-                    Crossfade(tab, label = "tab") { t ->
-                        when (t) {
+                    HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { p ->
+                        when (Tab.entries[p]) {
                             Tab.HOME -> HomeScreen(
                                 vm, accent, deck,
                                 openDevices = { sheet = Page.Devices },
                                 openKeys = { keys = true },
-                                onTray = { open -> if (open) openTray() else tray = false },
+                                onTray = { open -> tray = open; if (open) vm.feel.fire(com.krishna.miniremote.Feel.TICK) },
                             )
                             Tab.CHANNELS -> ChannelsScreen(vm, accent, openDevices = { sheet = Page.Devices })
                             Tab.PROFILE -> ProfileScreen(vm, accent, open = { sheet = it })
                         }
                     }
-                    // The dial shows messages in its well; everywhere else they float above the pill.
-                    val inWell = tab == Tab.HOME && deck == Deck.DIAL
-                    ToastChip(if (inWell && !tray) null else vm.toast, Modifier.align(Alignment.BottomCenter).padding(bottom = NAV_H + if (tray) 200.dp else 34.dp))
+                    // The dial shows messages in its well; everywhere else they float near the bottom.
+                    val inWell = onRemote && deck == Deck.DIAL && !tray
+                    ToastChip(if (inWell) null else vm.toast, Modifier.align(Alignment.BottomCenter).padding(bottom = if (tray) 200.dp else 56.dp))
                     when (val u = vm.update) {
                         is RemoteVM.Update.Downloading, is RemoteVM.Update.Ready ->
                             Box(Modifier.align(Alignment.TopCenter).padding(top = 4.dp).height(32.dp)) {
@@ -145,35 +163,40 @@ fun AppShell(vm: RemoteVM) {
                             }
                         else -> {}
                     }
-                    // The tab bar: swipe up on it for volume and channels (it grows the tray), down to hide.
-                    Column(
-                        Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp).pointerInput(Unit) {
+                    // Volume and channels: grows up from the bottom of the Remote page.
+                    AnimatedVisibility(
+                        onRemote && tray, Modifier.align(Alignment.BottomCenter).padding(bottom = 34.dp).pointerInput(Unit) {
                             var total = 0f
-                            detectVerticalDragGestures(
-                                onDragStart = { total = 0f },
-                                onDragEnd = { if (total < -24.dp.toPx()) openTray() else if (total > 24.dp.toPx()) tray = false },
-                            ) { change, dy -> change.consume(); total += dy }
+                            detectVerticalDragGestures(onDragStart = { total = 0f }, onDragEnd = { if (total > 24.dp.toPx()) tray = false }) { c, dy -> c.consume(); total += dy }
                         },
-                        horizontalAlignment = Alignment.CenterHorizontally,
+                        enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut(),
                     ) {
-                        AnimatedVisibility(tab == Tab.HOME && tray, enter = expandVertically(expandFrom = Alignment.Bottom) + fadeIn(), exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut()) {
-                            Box(Modifier.padding(bottom = 10.dp)) {
-                                ControlTray(vm, accent, numpad, onNumpad = { numpad = !numpad }, onClose = { tray = false })
-                            }
-                        }
-                        // A small handle hints that the bar opens upwards.
-                        if (tab == Tab.HOME && !tray) Box(Modifier.padding(bottom = 6.dp).size(28.dp, 4.dp).clip(CircleShape).background(Color(0xFF4A4A50)))
-                        NavPill(tab, accent, initials(vm.settings.profileName), homeOpen = tray) {
-                            if (it == tab && it == Tab.HOME) { if (tray) tray = false else openTray() }
-                            else { vm.feel.fire(com.krishna.miniremote.Feel.TICK); tab = it; tray = false }
-                        }
+                        ControlTray(vm, accent, numpad, onNumpad = { numpad = !numpad }, onClose = { tray = false })
                     }
+                    PageDots(pager.currentPage, accent, Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp)) { go(it) }
                 }
             }
         }
         sheet?.let { start -> RemoteSheet(vm, accent, start) { sheet = null } }
         if (keys) KeyboardSheet(vm, accent) { keys = false }
         if (sheet == null) vm.pairPrompt?.let { PairCodeDialog(vm, it, accent) }
+    }
+}
+
+/** Remote · Apps · Settings: three small labels under the pages; the current one is lit. */
+@Composable
+fun PageDots(page: Int, accent: Color, modifier: Modifier = Modifier, onPick: (Tab) -> Unit) {
+    Row(modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Tab.entries.forEach { t ->
+            val sel = t.ordinal == page
+            Box(
+                Modifier.height(24.dp).clip(CircleShape).selectable(sel, role = Role.Tab) { onPick(t) }
+                    .semantics { contentDescription = t.label }.padding(horizontal = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(Modifier.size(if (sel) 18.dp else 6.dp, 6.dp).clip(CircleShape).background(if (sel) accent else Color(0xFF4A4A50)))
+            }
+        }
     }
 }
 

@@ -572,7 +572,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
     SectionTitle("Remote")
     SegRow("Control", listOf("dial" to "Dial", "trackpad" to "Trackpad"), s.controlStyle) { vm.update(s.copy(controlStyle = it)) }
     ToggleRow("Phone volume buttons", "Change the TV's volume while the app is open", s.volumeKeys) { vm.update(s.copy(volumeKeys = it)) }
-    Hint("Volume and channels: swipe up on Home or on the tab bar, or tap Home again. Double tap OK to mute.", top = 6)
+    Hint("On the Remote page, one finger navigates and two fingers slide for volume (up or down) and channels (sideways). Swipe up there for the volume and channel buttons. Double tap OK to mute; hold it for voice.", top = 6)
 
     SectionTitle("Accent colour")
     Row(Modifier.selectableGroup().padding(top = 8.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -729,6 +729,20 @@ fun linkWord(l: Link) = when (l) { Link.READY -> "Connected"; Link.CONNECTING ->
 fun KeyboardSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
     var text by remember { mutableStateOf("") }
     var search by remember { mutableStateOf(true) }
+    // Voice search: the phone's own speech recogniser fills in the words, then we search the TV.
+    val speech = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+    ) { res ->
+        val said = res.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (!said.isNullOrBlank()) { text = said; vm.search(said); onClose() }
+    }
+    fun listen() {
+        val i = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Search on TV")
+        // No speech service on the phone: fall back to the TV's own voice search.
+        try { speech.launch(i) } catch (e: android.content.ActivityNotFoundException) { vm.press(com.krishna.miniremote.RemoteKey.VOICE); onClose() }
+    }
     val shown = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
     val shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
@@ -756,7 +770,15 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
                         Lead("Find movies, shows and apps. The TV opens its own search with your words.")
                         Field("Search for", text, { text = it }, modifier = Modifier.focusRequester(focus), placeholder = "Movies, shows, apps",
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions = KeyboardActions(onSearch = { if (text.isNotBlank()) { vm.search(text); onClose() } }))
+                            keyboardActions = KeyboardActions(onSearch = { if (text.isNotBlank()) { vm.search(text); onClose() } }),
+                            trailing = {
+                                Box(
+                                    Modifier.size(40.dp).clip(CircleShape).background(accent.copy(alpha = 0.18f))
+                                        .clickable(onClickLabel = "search by voice", role = Role.Button) { listen() }
+                                        .semantics { contentDescription = "Voice search" },
+                                    contentAlignment = Alignment.Center,
+                                ) { LineIcon(Ico.MIC, accent, 20.dp) }
+                            })
                         Btn("Search", enabled = text.isNotBlank()) { vm.search(text); onClose() }
                         return@Body
                     }
