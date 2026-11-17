@@ -382,10 +382,10 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         val a = adapter
         val id = activeId
         if (a == null || id == null || link != Link.READY) {
-            if (force) say(if (active == null) "Choose a TV first" else "Connect to ${active?.name} first")
+            if (force) say("Connect a TV first")
             return
         }
-        if (appsLoading) { if (force) say("Already loading apps…"); return }
+        if (appsLoading) { if (force) say("Loading…"); return }
         if (!force && appsFor == id) return
         appsLoading = true
         val before = tvApps
@@ -393,12 +393,12 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
             try {
                 tvApps = a.listApps().sortedBy { it.name.lowercase() }
                 appsFor = id
-                if (force) say(if (tvApps == before) "Already showing the latest apps" else "Apps updated · ${tvApps.size} on the TV")
+                if (force) say(if (tvApps == before) "Up to date" else "${tvApps.size} apps")
             } catch (e: TimeoutCancellationException) {
-                if (force) say("The TV didn't send its apps")
+                if (force) say("TV didn't answer")
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 appsFor = id
-                if (force) say(if (e is Unsupported) "This TV can't list its apps. Popular apps are up to date." else if (e is UserFacing) e.message ?: "Couldn't load apps" else "Couldn't load apps")
+                if (force) say(if (e is Unsupported) "Up to date" else "Couldn't load apps")
             } finally { appsLoading = false }
         }
     }
@@ -411,9 +411,24 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     /** A popular app: this TV's id from the catalog, or the TV's own app with the same name. */
     fun launchCatalog(c: CatalogApp) {
         val brand = active?.brand ?: run { feel.fire(Feel.ERROR); say("Choose a TV first"); return }
-        val id = c.ids[brand] ?: tvApps.firstOrNull { it.name.equals(c.name, true) || it.name.contains(c.name, true) }?.id
+        val id = (if (brand == Brand.ANDROID_TV) c.link else null) ?: c.ids[brand]
+            ?: tvApps.firstOrNull { it.name.equals(c.name, true) || it.name.contains(c.name, true) }?.id
         if (id == null) { feel.fire(Feel.ERROR); say("${c.name} isn't set up for this TV. Add it with its app ID."); return }
         launchApp(c.name, id)
+    }
+
+    /** The app's page in the TV's store (Roku, Android / Google TV): install or remove it there. */
+    fun openStore(name: String, id: String) {
+        feel.fire(Feel.PRESS); say("Opening $name in the TV's store")
+        act("Couldn't open the store") { it.openStore(id) }
+    }
+
+    /** Whether the TV has this app: true / false when the TV lists its apps, null when it can't tell. */
+    fun installed(c: CatalogApp): Boolean? {
+        val brand = active?.brand ?: return null
+        if (tvApps.isEmpty()) return null
+        val id = c.ids[brand]
+        return tvApps.any { it.id == id || it.name.equals(c.name, true) }
     }
 
     fun tune(name: String, number: String) {

@@ -306,6 +306,9 @@ class AndroidTvAdapter(
     override suspend fun send(key: RemoteKey) = key(keys[key] ?: missing(key, "this TV"))
 
     /** Opens an app: a package name (launched through the Play Store link) or a full app link. */
+    /** The app's Play Store page on the TV (install, open or uninstall there). */
+    override suspend fun openStore(id: String) = launchApp("market://details?id=${id.substringAfter("id=")}")
+
     override suspend fun launchApp(id: String) = withContext(Dispatchers.IO) {
         val f = io ?: error("Not connected")
         val link = if ("://" in id) id else "market://launch?id=$id"

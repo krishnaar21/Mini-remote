@@ -895,3 +895,23 @@ fun PairCodeDialog(vm: RemoteVM, prompt: PairPrompt, accent: Color) {
         dismissButton = { TextButton(onClick = { vm.answerCode(null) }) { Text("Cancel", color = Muted) } },
     )
 }
+
+/** "Are you sure?" as a small sheet: title, one line, the action, and Cancel. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ConfirmSheet(title: String, text: String, action: String, danger: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val st = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss, sheetState = st, containerColor = SheetBg, contentColor = T.Ink,
+        shape = SheetShape, scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
+    ) {
+        Column(Modifier.navigationBarsPadding().padding(horizontal = 24.dp).padding(top = 8.dp, bottom = 24.dp)) {
+            Text(title, color = T.Ink, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().semantics { heading() })
+            Text(text, color = Muted, fontSize = 14.sp, lineHeight = 20.sp, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp))
+            Btn(action, kind = if (danger) 2 else 0) { onConfirm(); onDismiss() }
+            Btn("Cancel", kind = 1, onClick = onDismiss)
+        }
+    }
+}

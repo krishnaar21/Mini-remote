@@ -30,7 +30,7 @@ class Unsupported(msg: String) : UserFacing(msg)
 data class NowOn(val name: String, val live: Boolean)
 
 /** An app installed on the TV, as the TV lists it. [icon] is a URL on the TV, if it has one. */
-data class TvApp(val id: String, val name: String, val icon: String? = null)
+data class TvApp(val id: String, val name: String, val icon: String? = null, val version: String? = null)
 
 interface RemoteAdapter {
     suspend fun connect()
@@ -43,6 +43,9 @@ interface RemoteAdapter {
 
     /** What's on screen now, for Watch / Navigate. Brands that can't tell throw [Unsupported]. */
     suspend fun nowOn(): NowOn { throw Unsupported("This TV can't say what's on screen") }
+
+    /** Opens the app's page in the TV's own app store, where it can be installed or removed. */
+    suspend fun openStore(id: String) { throw Unsupported("Install and remove apps from the TV's app store") }
 
     /** Opens an app by this TV's own id for it. */
     suspend fun launchApp(id: String) { throw Unsupported("Opening apps isn't supported on this TV yet") }
@@ -130,10 +133,14 @@ class RokuAdapter(private val host: String) : RemoteAdapter {
 
     /** Channels (type appl) and, on Roku TVs, inputs like HDMI 1 (type tvin). Icons come from the Roku. */
     override suspend fun listApps(): List<TvApp> =
-        Regex("<app id=\"([^\"]+)\"[^>]*>([^<]*)</app>").findAll(get("query/apps")).map { m ->
+        Regex("<app id=\"([^\"]+)\"([^>]*)>([^<]*)</app>").findAll(get("query/apps")).map { m ->
             val id = m.groupValues[1]
-            TvApp(id, xmlText(m.groupValues[2]).ifEmpty { id }, "http://$host:8060/query/icon/${enc(id)}")
+            val version = Regex("version=\"([^\"]*)\"").find(m.groupValues[2])?.groupValues?.get(1)?.ifEmpty { null }
+            TvApp(id, xmlText(m.groupValues[3]).ifEmpty { id }, "http://$host:8060/query/icon/${enc(id)}", version)
         }.toList()
+
+    /** ECP install: opens the channel's store page on the Roku (add or remove it there). */
+    override suspend fun openStore(id: String) { post("install/${enc(id)}") }
 
     override suspend fun launchApp(id: String) { post("launch/${enc(id)}") }
 
