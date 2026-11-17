@@ -184,7 +184,7 @@ internal val SheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
 
 /** .grab: 38 x 4 handle, 12 above and 4 below. */
 @Composable
-internal fun Grab() = Box(Modifier.padding(top = 12.dp, bottom = 4.dp).size(38.dp, 4.dp).background(Color(0xFF8A8A8E), RoundedCornerShape(4.dp)))
+internal fun Grab() = Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(28.dp, 3.dp).background(Color(0xFF8A8A8E), RoundedCornerShape(2.dp)))
 
 /** .field: label above (13, muted), 52 tall, radius 12, #141415, 1px line, 16 text. */
 @Composable
@@ -399,7 +399,8 @@ internal fun DevicesPage(vm: RemoteVM, open: (String) -> Unit, add: () -> Unit) 
         TvIllustration(com.krishna.miniremote.ui.accentColor(vm.settings.accentHex))
         Text("No TVs yet", color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp))
-        Lead("Add your TV to start. Your phone and TV need to be on the same Wi-Fi.", center = true)
+        Text("Add your TV to start. Your phone and TV need to be on the same Wi-Fi.", color = Muted, fontSize = 13.sp,
+            lineHeight = 19.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 22.dp))
     }
     vm.devices.forEach { d ->
         val on = vm.activeId == d.id && vm.link == Link.READY

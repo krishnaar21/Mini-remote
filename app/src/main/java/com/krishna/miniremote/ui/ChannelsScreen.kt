@@ -316,7 +316,7 @@ private fun AddShortcutSheet(vm: RemoteVM, accent: Color, start: ShortcutKind, o
     val brand = vm.active?.brand
     ModalBottomSheet(
         onDismissRequest = onClose, sheetState = state, containerColor = T.Bg, contentColor = T.Ink,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp), scrimColor = Color.Black.copy(0.55f),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp), scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
     ) {
         Column(Modifier.navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 28.dp)) {
             Text("Add to Channels", color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 4.dp))
