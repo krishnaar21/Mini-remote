@@ -175,12 +175,13 @@ fun HomeScreen(
                         CompositionLocalProvider(LocalK provides s.value / 780f) { Numpad(vm, accent, Modifier.size(s)) }
                     }
                     Deck.DIAL -> dialAt(minOf(w - 8.dp, h, 340.dp), false)
-                    Deck.TRACKPAD -> {
-                        // Apple-style: the full width, a little taller than wide where there's room.
-                        val th = minOf(h, w * 1.25f)
-                        CompositionLocalProvider(LocalK provides w.value / 780f) {
+                    Deck.TRACKPAD -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                        // A bit narrower than the screen, about square, near the top.
+                        val tw = minOf(w * 0.86f, 330.dp)
+                        val th = minOf(h, tw * 1.08f)
+                        CompositionLocalProvider(LocalK provides tw.value / 780f) {
                             Trackpad(
-                                size = w, height = th, accent = accent, stepDp = vm.settings.scrubStepDp, offline = offline,
+                                size = tw, height = th, accent = accent, stepDp = vm.settings.scrubStepDp, offline = offline,
                                 onKey = onKey, onTick = onTick, onVoice = voice, onOffline = offlineTap,
                                 onTwoFinger = onTwo, onTwoFingerTap = onTwoTap,
                             )
@@ -188,6 +189,14 @@ fun HomeScreen(
                     }
                 }
             }
+        }
+    }
+    // The dial inside the volume ring (the trackpad and number pad have no ring).
+    val ringArea: @Composable (Modifier) -> Unit = { m ->
+        if (deck != Deck.DIAL) padArea(deck, m)
+        else BoxWithConstraints(m, contentAlignment = Alignment.Center) {
+            val s = minOf(maxWidth - 8.dp - RING_BAND * 2, maxHeight - RING_BAND * 2, 300.dp)
+            RingDial(s, accent, onStep = { up -> vm.scrubTick(if (up) RemoteKey.VOL_UP else RemoteKey.VOL_DOWN) }) { dialAt(s, true) }
         }
     }
     val a11y = Modifier.semantics {
@@ -218,15 +227,7 @@ fun HomeScreen(
             HomeLayout.CLASSIC -> padArea(deck, Modifier.weight(1f).fillMaxWidth().padding(vertical = 14.dp).then(a11y))
 
             HomeLayout.RING -> {
-                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp).then(a11y), contentAlignment = Alignment.Center) {
-                    if (deck == Deck.NUMPAD) {
-                        val s = minOf(maxWidth, maxHeight, 340.dp)
-                        CompositionLocalProvider(LocalK provides s.value / 780f) { Numpad(vm, accent, Modifier.size(s)) }
-                    } else {
-                        val s = minOf(maxWidth - 8.dp - RING_BAND * 2, maxHeight - RING_BAND * 2, 300.dp)
-                        RingDial(s, accent, onStep = { up -> vm.scrubTick(if (up) RemoteKey.VOL_UP else RemoteKey.VOL_DOWN) }) { dialAt(s, true) }
-                    }
-                }
+                ringArea(Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp).then(a11y))
                 FourKeys(vm, accent, openKeys, 58.dp, 18.dp)
                 Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                     KeyButton(accent, "Channel down", Modifier.size(58.dp), repeat = true, pressedScale = 1f, onPress = { vm.press(RemoteKey.CH_DOWN) }) { c, _ ->
@@ -265,7 +266,8 @@ fun HomeScreen(
             }
 
             HomeLayout.STRIP -> {
-                padArea(deck, Modifier.weight(1f).fillMaxWidth().padding(vertical = 14.dp).then(a11y))
+                ringArea(Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp).then(a11y))
+                Box(Modifier.padding(top = 10.dp)) { KeyRows(vm, accent, numpad, onNumpad, openKeys) }
             }
 
             HomeLayout.SLIDERS -> {
@@ -280,7 +282,6 @@ fun HomeScreen(
       }
         when (layout) {
             HomeLayout.CLASSIC -> BottomPanel(vm, accent, tray, numpad, onNumpad, openKeys, setTray)
-            HomeLayout.STRIP -> Box(Modifier.padding(bottom = NAV_H + 30.dp)) { KeyStrip(vm, accent, numpad, onNumpad, openKeys) }
             else -> Spacer(Modifier.height(NAV_H + 28.dp))
         }
     }

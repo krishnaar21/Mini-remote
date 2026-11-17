@@ -12,7 +12,6 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,7 +20,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -65,7 +63,7 @@ enum class HomeLayout(val key: String, val label: String, val about: String) {
     CLASSIC("classic", "Swipe", "Swipe up under the keys for volume and channels."),
     RING("ring", "Ring", "Turn your finger around the ring for volume."),
     CARDS("cards", "Cards", "Swipe the dots for the volume, channel and number cards."),
-    STRIP("strip", "Strip", "Black screen. Scroll the key strip for volume, channels and more."),
+    STRIP("strip", "Black", "Black screen, volume ring, two rows of keys."),
     SLIDERS("sliders", "Sliders", "Drag along the volume and channel bars.");
     companion object { fun of(k: String) = entries.firstOrNull { it.key == k } ?: RING }
 }
@@ -151,27 +149,23 @@ fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ic
     }
 }
 
-/** Every key in one row you scroll sideways: the four, then volume, channels, numbers and input. */
+/** Two rows of round keys: Back, Home, Play, Search; then channel down / up, numbers and input. Volume is the ring; mute is at the top. */
 @Composable
-fun KeyStrip(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, openKeys: () -> Unit) {
+fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, openKeys: () -> Unit) {
     val k = 60.dp
-    Box(Modifier.fillMaxWidth()) {
-        LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            item { StripKey(accent, "Back", k, ico = Ico.CHEVRON_L) { vm.press(RemoteKey.BACK) } }
-            item { StripKey(accent, "Home", k, ico = Ico.TV) { vm.press(RemoteKey.HOME) } }
-            item { StripKey(accent, if (vm.playing) "Pause" else "Play", k, ico = if (vm.playing) Ico.PAUSE else Ico.PLAY_ONLY) { vm.press(RemoteKey.PLAY_PAUSE) } }
-            item { StripKey(accent, "Search", k, ico = Ico.SEARCH, onClick = openKeys) }
-            item { StripKey(accent, "Volume down", k, ico = Ico.MINUS, caption = "VOL") { vm.press(RemoteKey.VOL_DOWN, quiet = true) } }
-            item { StripKey(accent, "Volume up", k, ico = Ico.PLUS, caption = "VOL") { vm.press(RemoteKey.VOL_UP, quiet = true) } }
-            item { StripKey(accent, "Mute", k, active = vm.muted, ico = if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER) { vm.press(RemoteKey.MUTE) } }
-            item { StripKey(accent, "Channel down", k, ico = Ico.MINUS, caption = "CH") { vm.press(RemoteKey.CH_DOWN) } }
-            item { StripKey(accent, "Channel up", k, ico = Ico.PLUS, caption = "CH") { vm.press(RemoteKey.CH_UP) } }
-            item { StripKey(accent, "Number pad", k, active = numpad, word = "123", onClick = onNumpad) }
-            item { StripKey(accent, "Input", k, ico = Ico.INPUT) { vm.press(RemoteKey.INPUT) } }
-            item { StripKey(accent, "Guide", k, ico = Ico.GUIDE) { vm.press(RemoteKey.GUIDE) } }
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            StripKey(accent, "Back", k, ico = Ico.CHEVRON_L) { vm.press(RemoteKey.BACK) }
+            StripKey(accent, "Home", k, ico = Ico.TV) { vm.press(RemoteKey.HOME) }
+            StripKey(accent, if (vm.playing) "Pause" else "Play", k, ico = if (vm.playing) Ico.PAUSE else Ico.PLAY_ONLY) { vm.press(RemoteKey.PLAY_PAUSE) }
+            StripKey(accent, "Search", k, ico = Ico.SEARCH, onClick = openKeys)
         }
-        // A soft fade on the right says there's more.
-        Box(Modifier.align(Alignment.CenterEnd).width(36.dp).height(k).background(Brush.horizontalGradient(listOf(Color.Transparent, Color.Black))))
+        Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            StripKey(accent, "Channel down", k, ico = Ico.MINUS, caption = "CH") { vm.press(RemoteKey.CH_DOWN) }
+            StripKey(accent, "Channel up", k, ico = Ico.PLUS, caption = "CH") { vm.press(RemoteKey.CH_UP) }
+            StripKey(accent, "Number pad", k, active = numpad, word = "123", onClick = onNumpad)
+            StripKey(accent, "Input", k, ico = Ico.INPUT) { vm.press(RemoteKey.INPUT) }
+        }
     }
 }
 
