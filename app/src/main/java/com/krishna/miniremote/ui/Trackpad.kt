@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -95,7 +96,11 @@ fun Trackpad(
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     down.consume()
-                    if (isOffline) { waitForUpOrCancellation(); onOffline(); return@awaitEachGesture }
+                    if (isOffline) {
+                        // Only a real tap opens the TV list; a swipe (e.g. to the next page) doesn't.
+                        if (tappedOnly(down.id, slop)) onOffline()
+                        return@awaitEachGesture
+                    }
                     touch = down.position
                     var acc = Offset.Zero
                     var moved = false
@@ -150,14 +155,25 @@ fun Trackpad(
         }
         val e = size * 0.05f
         val cs = size * 0.09f
-        fun col(k: RemoteKey) = if (lit == k) accent else Color(0xFF9C9CA2)
-        LineIcon(if (watch) Ico.PLUS else Ico.UP, col(RemoteKey.UP), cs, Modifier.align(Alignment.TopCenter).padding(top = e), stroke = 2.2f)
-        LineIcon(if (watch) Ico.MINUS else Ico.DOWN, col(RemoteKey.DOWN), cs, Modifier.align(Alignment.BottomCenter).padding(bottom = e), stroke = 2.2f)
-        LineIcon(Ico.LEFT, col(RemoteKey.LEFT), cs, Modifier.align(Alignment.CenterStart).padding(start = e), stroke = 2.2f)
-        LineIcon(Ico.RIGHT, col(RemoteKey.RIGHT), cs, Modifier.align(Alignment.CenterEnd).padding(end = e), stroke = 2.2f)
-        if (touch == null) Text(if (onTwoFinger != null) "Two fingers: volume ↕ · channels ↔" else "Tap for OK · slide to move",
-            color = Color(0xFF9C9CA2), fontSize = 11.sp,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 44.dp))
+        // A clean surface at rest. While a finger is down, each arrow fades in as the finger
+        // nears its edge, and lights up in the accent colour when a step goes out that way.
+        val wPx = with(density) { size.toPx() }
+        val hPx = with(density) { height.toPx() }
+        fun near(k: RemoteKey): Float {
+            if (lit == k) return 1f
+            val t = touch ?: return 0f
+            val dist = when (k) { RemoteKey.UP -> t.y; RemoteKey.DOWN -> hPx - t.y; RemoteKey.LEFT -> t.x; else -> wPx - t.x }
+            return (1f - dist / (minOf(wPx, hPx) * 0.5f)).coerceIn(0f, 1f) * 0.85f
+        }
+        fun col(k: RemoteKey) = if (lit == k) accent else Color(0xFFBDBDC2)
+        @Composable fun arrow(k: RemoteKey, ico: Ico, m: Modifier) {
+            val a = near(k)
+            if (a > 0.02f) LineIcon(ico, col(k), cs, m.graphicsLayer { alpha = a }, stroke = 2.2f)
+        }
+        arrow(RemoteKey.UP, if (watch) Ico.PLUS else Ico.UP, Modifier.align(Alignment.TopCenter).padding(top = e))
+        arrow(RemoteKey.DOWN, if (watch) Ico.MINUS else Ico.DOWN, Modifier.align(Alignment.BottomCenter).padding(bottom = e))
+        arrow(RemoteKey.LEFT, Ico.LEFT, Modifier.align(Alignment.CenterStart).padding(start = e))
+        arrow(RemoteKey.RIGHT, Ico.RIGHT, Modifier.align(Alignment.CenterEnd).padding(end = e))
 
         val zone = size * 0.28f
         PadZone("Up", Modifier.align(Alignment.TopCenter).size(zone)) { onKey(RemoteKey.UP) }

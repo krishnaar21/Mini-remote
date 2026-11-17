@@ -66,3 +66,22 @@ internal fun TwoFingerHint(key: RemoteKey?, accent: androidx.compose.ui.graphics
         }
     }
 }
+
+/**
+ * Waits for the finger to lift, consuming its events so nothing behind (like the page pager)
+ * takes the gesture. True if it was a tap: it lifted without moving more than [slop].
+ */
+internal suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.tappedOnly(
+    id: androidx.compose.ui.input.pointer.PointerId, slop: Float,
+): Boolean {
+    var start: Offset? = null
+    var moved = false
+    while (true) {
+        val ev = awaitPointerEvent()
+        val ch = ev.changes.firstOrNull { it.id == id } ?: return false
+        if (start == null) start = ch.previousPosition
+        if ((ch.position - start).getDistance() > slop) moved = true
+        ev.changes.forEach { it.consume() }
+        if (!ch.pressed) return !moved && ev.changes.count { it.pressed } == 0
+    }
+}

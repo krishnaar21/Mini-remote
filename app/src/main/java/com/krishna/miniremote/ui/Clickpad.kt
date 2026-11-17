@@ -103,8 +103,8 @@ fun Clickpad(
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     if (isOffline.value) {
-                        do { val e = awaitPointerEvent() } while (e.changes.any { it.pressed })
-                        onOffline()
+                        // Only a real tap opens the TV list; a swipe doesn't.
+                        if (tappedOnly(down.id, deadPx)) onOffline()
                         return@awaitEachGesture
                     }
                     val c = Offset(this.size.width / 2f, this.size.height / 2f)
