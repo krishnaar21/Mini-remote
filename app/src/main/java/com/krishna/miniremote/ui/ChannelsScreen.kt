@@ -215,7 +215,7 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
             if (drag != null) {
                 DropSlot(over, accent, Modifier.padding(top = 12.dp).onGloballyPositioned { zone = it.boundsInRoot() })
             } else if (pinned.isEmpty()) {
-                Hint("Long-press an app or channel and drag it to the top to keep it here.", top = 6)
+                Hint("Long-press an app and drag it here.", top = 6)
             } else {
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 12.dp, bottom = 4.dp),
@@ -241,12 +241,12 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
             }
 
             SectionTitle("TV channels")
-            if (channels.isEmpty()) Hint("Add the channels you watch, like 101 · Star Sports. Tapping one tunes the TV to it.", top = 6)
+            if (channels.isEmpty()) Hint("Add channels by number, like 101.", top = 6)
             // Channels: tap tunes straight away; long-press drags like apps.
             else TileGrid(channels) { e -> Tile(e, dragger) { if (!needTv()) e.open() } }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(Modifier.weight(1f)) { Btn("Add a channel", kind = 1) { adding = ShortcutKind.CHANNEL } }
-                Box(Modifier.weight(1f)) { Btn("Add an app", kind = 1) { adding = ShortcutKind.APP } }
+                Box(Modifier.weight(1f)) { Btn("Add channel", kind = 1) { adding = ShortcutKind.CHANNEL } }
+                Box(Modifier.weight(1f)) { Btn("Add app", kind = 1) { adding = ShortcutKind.APP } }
             }
         }
 
@@ -303,7 +303,7 @@ private fun DropSlot(over: Boolean, accent: Color, modifier: Modifier) {
             },
         contentAlignment = Alignment.Center,
     ) {
-        Text(if (over) "Release to add" else "Drop app here", color = if (over) accent else T.Dim, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        Text(if (over) "Release" else "Drop app here", color = if (over) accent else T.Dim, fontSize = 15.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -402,15 +402,15 @@ private fun AppSheet(e: AppEntry, accent: Color, logosOn: Boolean, onOpen: () ->
                 InfoRow("On this TV", when (installed) { true -> "Installed"; false -> "Not installed"; null -> "Can't tell" })
             }
             Spacer(Modifier.height(8.dp))
-            if (installed != false) Btn("Open on TV") { onOpen(); onClose() }
-            Btn(if (e.pinned) "Remove from Quick access" else "Add to Quick access", kind = 1) { if (e.pinned) e.unpin() else e.pin(); onClose() }
+            if (installed != false) Btn("Open") { onOpen(); onClose() }
+            Btn(if (e.pinned) "Unpin" else "Pin", kind = 1) { if (e.pinned) e.unpin() else e.pin(); onClose() }
             if (e.storeId != null) {
-                if (installed == false) Btn("Install…") { confirm = true }
-                else Btn("Uninstall…", kind = 2) { confirm = true }
+                if (installed == false) Btn("Install") { confirm = true }
+                else Btn("Uninstall", kind = 2) { confirm = true }
             } else if (e.delete == null) {
-                Hint("To install or remove it, use the app store on the TV.", top = 12)
+                Hint("Install or remove it from the TV's store.", top = 12)
             }
-            e.delete?.let { del -> Btn("Delete from this list", kind = 2) { del(); onClose() } }
+            e.delete?.let { del -> Btn("Delete", kind = 2) { del(); onClose() } }
         }
     }
     if (confirm) {
@@ -419,7 +419,7 @@ private fun AppSheet(e: AppEntry, accent: Color, logosOn: Boolean, onOpen: () ->
             title = if (install) "Install ${e.name}?" else "Uninstall ${e.name}?",
             text = if (install) "Its page opens in the TV's app store. Choose Install there with the TV's remote."
             else "Its page opens in the TV's app store. Choose Uninstall (or Remove) there to confirm.",
-            action = if (install) "Open store page" else "Open store page to uninstall",
+            action = if (install) "Open store" else "Open store",
             danger = !install,
             onConfirm = { onStore(); onClose() },
             onDismiss = { confirm = false },
@@ -487,13 +487,13 @@ private fun QuickActionsSheet(
             QuickTile(s, T.Ink, icon, logoOn, onClick = { onOpen(); onClose() }, onLongPress = {})
             Text(when (s.kind) { ShortcutKind.CHANNEL -> "Channel ${s.value}"; else -> cat?.vendor?.ifEmpty { null } ?: s.brand?.label ?: "App" },
                 color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp, bottom = 6.dp))
-            Btn(if (s.kind == ShortcutKind.CHANNEL) "Tune to this channel" else "Open on TV") { onOpen(); onClose() }
+            Btn(if (s.kind == ShortcutKind.CHANNEL) "Tune" else "Open") { onOpen(); onClose() }
             if (count > 1) Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(Modifier.weight(1f)) { Btn("Move left", kind = 1, enabled = index > 0) { onMove(-1) } }
                 Box(Modifier.weight(1f)) { Btn("Move right", kind = 1, enabled = index < count - 1) { onMove(1) } }
             }
-            Btn("Remove from Quick access", kind = 2) { onRemove(); onClose() }
-            onDelete?.let { del -> Btn("Delete from Apps", kind = 2) { del(); onClose() } }
+            Btn("Unpin", kind = 2) { onRemove(); onClose() }
+            onDelete?.let { del -> Btn("Delete", kind = 2) { del(); onClose() } }
         }
     }
 }
@@ -575,7 +575,7 @@ private fun AddShortcutSheet(vm: RemoteVM, accent: Color, start: ShortcutKind, o
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp), scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
     ) {
         Column(Modifier.navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 28.dp)) {
-            Text("Add to Channels", color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 4.dp))
+            Text("Add", color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 4.dp))
             SegRow("Type", listOf(ShortcutKind.CHANNEL to "TV channel", ShortcutKind.APP to "App"), kind) { kind = it; value = "" }
             Spacer(Modifier.height(16.dp))
             if (kind == ShortcutKind.CHANNEL) {
@@ -594,7 +594,7 @@ private fun AddShortcutSheet(vm: RemoteVM, accent: Color, start: ShortcutKind, o
                     null -> "Choose a TV first: app ids are different on every kind of TV."
                 }, top = 0)
             }
-            ToggleRow("Add to quick access", "Show it in the row at the top", pin) { pin = it }
+            ToggleRow("Pin it", null, pin) { pin = it }
             Btn("Save", enabled = name.isNotBlank() && value.isNotBlank() && (kind == ShortcutKind.CHANNEL || brand != null)) {
                 vm.addShortcut(kind, name, value, pin); onClose()
             }

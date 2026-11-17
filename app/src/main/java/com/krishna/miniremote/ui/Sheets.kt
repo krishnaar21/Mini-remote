@@ -155,7 +155,7 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
                     Body { DevicePage(vm, d, accent) }
                 }
                 Page.Local -> {
-                    Header("Allow local network access", onClose, back = if (canBack) ::back else null)
+                    Header("Local network", onClose, back = if (canBack) ::back else null)
                     Body { LocalPage { vm.markLocalSeen(); replace(Page.Scan) } }
                 }
                 Page.Scan -> {
@@ -163,7 +163,7 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
                     Body { ScanPage(vm, accent, pick = { d -> vm.addAndSelect(d); go(Page.Pairing(d.id)) }, manual = { go(Page.Manual) }) }
                 }
                 Page.Manual -> {
-                    Header("Enter an address", onClose, back = ::back)
+                    Header("Enter IP", onClose, back = ::back)
                     Body { ManualPage(vm, accent) { d -> go(Page.Pairing(d.id)) } }
                 }
                 is Page.Pairing -> {
@@ -176,7 +176,7 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
                     Body { PrivacyPage(vm) }
                 }
                 Page.Licenses -> {
-                    Header("Open-source licences", onClose, back = ::back)
+                    Header("Licences", onClose, back = ::back)
                     Body { LicensesPage() }
                 }
                 Page.Settings -> {
@@ -461,8 +461,8 @@ internal fun DevicePage(vm: RemoteVM, d: Device, accent: Color) {
     Spacer(Modifier.height(8.dp))
     Field("Name", name, { name = it.take(30) })
     if (on) Btn("Disconnect") { vm.disconnect() } else Btn("Connect") { vm.select(d) }
-    Btn("Save name", kind = 1, enabled = name.isNotBlank() && name.trim() != d.name) { vm.rename(d.id, name); vm.say("Saved") }
-    Btn(if (arm) "Tap again to forget this TV" else "Forget this TV", kind = 2) {
+    Btn("Save", kind = 1, enabled = name.isNotBlank() && name.trim() != d.name) { vm.rename(d.id, name); vm.say("Saved") }
+    Btn(if (arm) "Tap to confirm" else "Forget TV", kind = 2) {
         // Removing it makes this page's TV disappear, and the sheet steps back on its own.
         if (!arm) { arm = true; vm.feel.fire(com.krishna.miniremote.Feel.HEAVY) } else vm.remove(d)
     }
@@ -471,7 +471,7 @@ internal fun DevicePage(vm: RemoteVM, d: Device, accent: Color) {
 @Composable
 internal fun LocalPage(onContinue: () -> Unit) {
     TvIllustration(Color(0xFF6FB1FF))
-    Lead("Remote will look for TVs on your Wi-Fi. It only talks to devices on your own network, and it needs no account.", center = true)
+    Lead("Finds TVs on your Wi-Fi. No account needed.", center = true)
     Btn("Continue", onClick = onContinue)
 }
 
@@ -480,7 +480,7 @@ internal fun ScanPage(vm: RemoteVM, accent: Color, pick: (Device) -> Unit, manua
     LaunchedEffect(Unit) { vm.scan() }
     if (vm.scanning) {
         Spinner(accent)
-        Lead("Looking for TVs on your Wi-Fi…", center = true)
+        Lead("Looking for TVs…", center = true)
         return
     }
     val n = vm.found.size
@@ -491,7 +491,7 @@ internal fun ScanPage(vm: RemoteVM, accent: Color, pick: (Device) -> Unit, manua
         modifier = Modifier.padding(bottom = 20.dp).semantics { liveRegion = LiveRegionMode.Polite },
     )
     vm.found.forEach { d -> CardRow(d.name, d.host, onClick = { pick(d) }, clickLabel = "add and connect") { Badge(d.brand.label) } }
-    Btn("Enter an IP address", kind = 1, onClick = manual)
+    Btn("Enter IP", kind = 1, onClick = manual)
     if (n == 0) Btn("Scan again", kind = 1) { vm.scan() }
 }
 
@@ -517,7 +517,7 @@ internal fun ManualPage(vm: RemoteVM, accent: Color, onAdded: (Device) -> Unit) 
         val (e, d) = vm.addManual(ip, brand)
         if (e != null) { err = e; vm.feel.fire(com.krishna.miniremote.Feel.ERROR) } else if (d != null) onAdded(d)
     }
-    Hint("Find it on your TV under Settings › Network. Only home-network addresses (like 192.168…) are accepted.")
+    Hint("On the TV: Settings › Network.")
 }
 
 /* ----------------------------------------------------------------- pairing */
@@ -528,14 +528,14 @@ internal fun PairPage(vm: RemoteVM, d: Device, accent: Color, onClose: () -> Uni
     val prompt = vm.pairPrompt
     when {
         prompt != null -> {
-            Header("Enter the code", onClose, back = { vm.answerCode(null); back() })
+            Header("Enter code", onClose, back = { vm.answerCode(null); back() })
             Body { CodeEntry(vm, prompt) }
         }
         active && vm.link == Link.READY -> {
             Header("Connected", onClose)
             Body {
                 Hero(Ico.CHECK, Color(0xFF1D3A29), OkGreen)
-                Lead("${d.name} is ready. Try the clickpad.", center = true)
+                Lead("${d.name} is ready.", center = true)
                 Btn("Done", onClick = onClose)
             }
         }
@@ -575,7 +575,7 @@ internal fun PairPage(vm: RemoteVM, d: Device, accent: Color, onClose: () -> Uni
             }
         }
         else -> {
-            Header("Connect ${d.name}", onClose, back = back)
+            Header("Connect", onClose, back = back)
             Body {
                 Hero(Ico.TV, Color(0xFF2A2140), Color(0xFFB69CFF))
                 brandHelp(d.brand)?.let { Lead(it) }
@@ -597,7 +597,7 @@ internal fun brandHelp(b: Brand): String? = when (b) {
 internal fun CodeEntry(vm: RemoteVM, prompt: PairPrompt) {
     var code by remember(prompt) { mutableStateOf("") }
     val ok = code.length == 6
-    Lead("${prompt.tvName} is showing a 6-character code. Type it here.")
+    Lead("Type the code on the TV.")
     BasicTextField(
         code,
         // Codes are hex: keep 0-9 and A-F only, uppercase, max 6.
@@ -641,9 +641,9 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
     SectionTitle("Remote")
     Group {
     SegRow("Control", listOf("dial" to "Dial", "trackpad" to "Trackpad"), s.controlStyle) { vm.update(s.copy(controlStyle = it)) }
-    ToggleRow("Phone volume buttons", "Change the TV's volume while the app is open", s.volumeKeys, last = true) { vm.update(s.copy(volumeKeys = it)) }
+    ToggleRow("Volume keys", "Phone keys change TV volume", s.volumeKeys, last = true) { vm.update(s.copy(volumeKeys = it)) }
     }
-    Hint("One finger navigates; two fingers slide for volume (up or down) and channels (sideways). Swipe up, or tap the chevron, for the volume and channel buttons. Double tap OK to mute; hold it for voice.", top = 8)
+    Hint("Two fingers: volume ↕, channels ↔. Double-tap OK: mute. Hold OK: voice.", top = 8)
 
     SectionTitle("Accent colour")
     Group {
@@ -663,25 +663,25 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
         }
     }
     }
-    Hint("Pressed keys, switches and highlights use this colour.", top = 8)
+    Hint("Used for keys and highlights.", top = 8)
 
     SectionTitle("Haptics")
     Group {
-    ToggleRow("Haptics", "Physical feedback on every press and scrub", s.haptics) { vm.update(s.copy(haptics = it)) }
+    ToggleRow("Haptics", "On every press", s.haptics) { vm.update(s.copy(haptics = it)) }
     SegRow("Strength", HAPTIC_STRENGTHS, s.hapticStrength, last = true) { vm.update(s.copy(hapticStrength = it)) }
     }
     SectionTitle("Sound")
     Group {
-    ToggleRow("Sound", "Soft click with every press and scrub", s.sound) { vm.update(s.copy(sound = it)) }
-    SegRow("Sound level", SOUND_LEVELS, s.soundLevel, last = true) { vm.update(s.copy(soundLevel = it)); vm.feel.fire(com.krishna.miniremote.Feel.PRESS) }
+    ToggleRow("Sound", "Click on press", s.sound) { vm.update(s.copy(sound = it)) }
+    SegRow("Level", SOUND_LEVELS, s.soundLevel, last = true) { vm.update(s.copy(soundLevel = it)); vm.feel.fire(com.krishna.miniremote.Feel.PRESS) }
     }
     SectionTitle("Scrolling")
     Group {
     Column(Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 2.dp)) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
-                Text("Scrub distance", color = T.Ink, fontSize = 15.sp)
-                Text("Shorter = faster scrolling", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
+                Text("Scrub step", color = T.Ink, fontSize = 15.sp)
+                Text("Shorter is faster", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
             }
             Text("${s.scrubStepDp.roundToInt()} dp", color = accent, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         }
@@ -696,11 +696,11 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
     }
     SectionTitle("Apps")
     Group {
-    ToggleRow("App logos", "Download logos for Quick access (Simple Icons, or the app's website icon)", s.logos, last = true) { vm.update(s.copy(logos = it)) }
+    ToggleRow("App logos", "Download logos", s.logos, last = true) { vm.update(s.copy(logos = it)) }
     }
     SectionTitle("Screen")
     Group {
-    ToggleRow("Keep screen on", "While the remote is open", s.keepAwake, last = true) { vm.update(s.copy(keepAwake = it)) }
+    ToggleRow("Stay awake", "While open", s.keepAwake, last = true) { vm.update(s.copy(keepAwake = it)) }
     }
 
     if (manage != null) {
@@ -711,7 +711,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text("Manage TVs", color = T.Ink, fontSize = 15.sp)
+            Text("TVs", color = T.Ink, fontSize = 15.sp)
             Text("${vm.devices.size} saved", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
         }
         Chevron()
@@ -720,7 +720,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
     }
     SectionTitle("Updates")
     Group {
-    ToggleRow("Automatic updates", "Check for new builds, download them, and notify you to install", s.autoUpdate) {
+    ToggleRow("Auto updates", "Notify when ready", s.autoUpdate) {
         vm.update(s.copy(autoUpdate = it)); if (it) vm.checkForUpdate()
     }
     val u = vm.update
@@ -737,10 +737,10 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
-            Text(when (u) { is RemoteVM.Update.Ready -> "Install update"; is RemoteVM.Update.Manual -> "Download update"; else -> "Check for updates" }, color = T.Ink, fontSize = 15.sp)
+            Text(when (u) { is RemoteVM.Update.Ready -> "Install update"; is RemoteVM.Update.Manual -> "Get update"; else -> "Check now" }, color = T.Ink, fontSize = 15.sp)
             Text(
                 when (u) {
-                    RemoteVM.Update.Idle -> "Looks at the latest build on GitHub"
+                    RemoteVM.Update.Idle -> "Latest build on GitHub"
                     RemoteVM.Update.Checking -> "Checking…"
                     RemoteVM.Update.UpToDate -> "You're on the latest build"
                     is RemoteVM.Update.Downloading -> "Downloading ${u.info.name}… ${(u.progress * 100).toInt()}%"
@@ -763,7 +763,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
             ) {
                 Column(Modifier.weight(1f)) {
                     Text("Privacy & data", color = T.Ink, fontSize = 15.sp)
-                    Text("What's stored, what goes online, erase data", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
+                    Text("Storage, network, erase", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
                 }
                 Chevron()
             }
@@ -789,7 +789,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
             Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(role = Role.Button, onClick = openLicenses).padding(vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Open-source licences", color = T.Ink, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Text("Licences", color = T.Ink, fontSize = 15.sp, modifier = Modifier.weight(1f))
             Chevron()
         }
     } else Spacer(Modifier.height(10.dp))
@@ -897,10 +897,10 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
                     .pointerInput(Unit) { detectTapGestures { } }
                     .statusBarsPadding().padding(top = 8.dp),
             ) {
-                Header("Search on TV", onClose)
+                Header("Search", onClose)
                 Body {
-                    Lead("The TV's search is open. Type or tap the mic and speak, then send.")
-                    Field("Search or type", text, { text = it }, modifier = Modifier.focusRequester(focus), placeholder = "Movies, shows, apps",
+                    Lead("Type or speak, then send.")
+                    Field("Search", text, { text = it }, modifier = Modifier.focusRequester(focus), placeholder = "Movies, shows, apps",
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = { if (text.isNotBlank()) { vm.sendText(text); text = "" } }),
                         trailing = {
@@ -985,7 +985,7 @@ internal fun LicensesPage() {
             if (i < THIRD_PARTY.lastIndex) Divider()
         }
     }
-    Hint("Tap a licence to read it in full.", top = 10)
+    Hint("Tap to read in full.", top = 10)
     listOf("Apache License 2.0" to com.krishna.miniremote.R.raw.apache_2_0, "CC0 1.0 Universal" to com.krishna.miniremote.R.raw.cc0_1_0)
         .forEach { (title, res) ->
             Btn(if (shown == res) "Hide $title" else title, kind = 1) { shown = if (shown == res) null else res }
@@ -1000,22 +1000,22 @@ internal fun LicensesPage() {
 @Composable
 internal fun PrivacyPage(vm: RemoteVM) {
     Group {
-        InfoBlock("Stored on this phone", "Your TVs' names and addresses, their pairing keys (encrypted with a key held in the phone's secure hardware), quick access, channels and settings. Nothing is backed up or synced.")
+        InfoBlock("Storage", "TVs, pairing keys (encrypted), quick access and settings. On this phone only; never backed up.")
         Divider()
-        InfoBlock("Network", "Controls only TVs on your home Wi-Fi; public addresses are refused. Update checks go to GitHub. App logos come from Simple Icons, or the app's own website icon through Google's favicon service (only the website's name is sent); both can be turned off.")
+        InfoBlock("Network", "Only TVs on your Wi-Fi. Updates from GitHub; logos from Simple Icons or Google's favicon service. Both optional.")
         Divider()
-        InfoBlock("Voice search", "Uses your phone's speech service to turn speech into words, then sends the words to your TV. The app itself never records audio.")
+        InfoBlock("Voice", "Your phone's speech service turns speech into text. The app never records audio.")
         Divider()
-        InfoBlock("Permissions", "Network and Wi-Fi (find and control TVs), vibration, notifications and installing updates. No location, contacts, microphone or files.")
+        InfoBlock("Permissions", "Network, vibration, notifications, installing updates. No location, contacts, mic or files.")
     }
     var ask by remember { mutableStateOf<String?>(null) }
     Btn("Forget all TVs", kind = 1) { ask = "tvs" }
-    Btn("Erase all data", kind = 2) { ask = "all" }
+    Btn("Erase data", kind = 2) { ask = "all" }
     when (ask) {
         "tvs" -> ConfirmSheet("Forget all TVs?", "Removes every TV and its pairing keys. You'll pair each TV again to use it.",
-            "Forget all TVs", danger = true, onConfirm = { vm.forgetAllTvs() }, onDismiss = { ask = null })
+            "Forget all", danger = true, onConfirm = { vm.forgetAllTvs() }, onDismiss = { ask = null })
         "all" -> ConfirmSheet("Erase all data?", "Removes TVs, pairing keys, quick access, channels and settings. The app starts fresh.",
-            "Erase everything", danger = true, onConfirm = { vm.eraseAll() }, onDismiss = { ask = null })
+            "Erase", danger = true, onConfirm = { vm.eraseAll() }, onDismiss = { ask = null })
     }
 
 }
