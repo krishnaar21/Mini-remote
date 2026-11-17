@@ -2,16 +2,19 @@ import SwiftUI
 
 enum Deck { case dial, trackpad, numpad }
 
+/** Width of the volume ring around the dial. */
+let RING_BAND: CGFloat = 26
+
 /**
- * The Remote page, after the Apple TV Remote: mute · TV · power on top, the dial or trackpad
- * in the middle, and a bottom panel with Back, Home, Play / Pause and Search that grows into
- * a volume / channel sheet. OK: tap = OK, double tap = mute, hold = voice; two fingers slide
- * for volume and channels; a two-finger double tap swaps dial and trackpad.
+ * The Remote page, after the Apple TV Remote, in Liquid Glass: mute · TV · power on top, the
+ * dial (with its volume ring) or trackpad in the middle, keys below. Two layouts, picked in
+ * Settings: Black (ring, two rows of keys) and Cards (swipe between the pad, volume / channel
+ * and numbers). OK: tap = OK, double tap = mute, hold = voice. Two fingers slide for volume and
+ * channels; a two-finger double tap swaps dial and trackpad.
  */
 struct HomeView: View {
     @ObservedObject var vm: RemoteModel
     let accent: Color
-    @Binding var tray: Bool
     @Binding var numpad: Bool
     let openDevices: () -> Void
     let openKeys: () -> Void
@@ -20,9 +23,13 @@ struct HomeView: View {
     @State private var askPower = false
     @State private var pendingOk: Task<Void, Never>?
     @State private var lastTwoTap: TimeInterval = 0
+    @State private var card = 0
 
-    private var deck: Deck { numpad ? .numpad : (vm.settings.controlStyle == "trackpad" ? .trackpad : .dial) }
+    private var cards: Bool { vm.settings.layout == "cards" }
+    private var style: Deck { vm.settings.controlStyle == "trackpad" ? .trackpad : .dial }
+    private var deck: Deck { numpad ? .numpad : style }
     private var offline: Bool { vm.active == nil || vm.link == .error }
+    private var volText: String? { vm.tvVolume.map { $0.muted ? "Muted" : "\($0.level)" } }
 
     private func okTap() {
         if let p = pendingOk {
@@ -54,14 +61,11 @@ struct HomeView: View {
     var body: some View {
         VStack(spacing: 0) {
             topBar.padding(.horizontal, 26).padding(.top, 20)
-            GeometryReader { g in
-                surface(width: g.size.width - 32, height: g.size.height).frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .padding(.vertical, 16)
-            BottomPanel(vm: vm, accent: accent, open: $tray, numpad: $numpad, openKeys: openKeys)
+            if cards { cardsBody } else { blackBody }
+            Spacer().frame(height: 62)
         }
         .onAppear { vm.followNowOn(vm.link == .ready) }
-        .onChange(of: vm.link) { l in vm.followNowOn(l == .ready) }
+        .onChange(of: vm.link) { _, l in vm.followNowOn(l == .ready) }
         .onDisappear { vm.followNowOn(false) }
         .sheet(isPresented: $askPower) {
             ConfirmSheet(title: "Turn off \(vm.active.map { shortName($0.name, $0.brand.label) } ?? "the TV")?",
@@ -69,91 +73,259 @@ struct HomeView: View {
         }
     }
 
+    /* ---------------------------------------------------------------- top */
+
     private var topBar: some View {
-        HStack {
-            RoundKey(symbol: vm.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", label: "Mute", size: 52, iconSize: 19,
-                     tint: vm.muted ? accent : T.ink, accent: accent) { vm.press(.mute) }
-            Spacer(minLength: 12)
-            Button(action: openDevices) {
-                HStack(spacing: 8) {
-                    if let d = vm.active {
-                        Circle().fill(vm.link == .ready ? T.ok : (vm.link == .connecting ? T.warn : T.danger)).frame(width: 7, height: 7)
-                        Text(shortName(d.name, d.brand.label)).lineLimit(1)
-                    } else { Text("Choose a TV") }
-                    Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).foregroundStyle(T.dim)
+        GlassEffectContainer(spacing: 12) {
+            HStack {
+                GlassKey(symbol: vm.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", label: "Mute", size: 52, icon: 19) { vm.press(.mute) }
+                Spacer(minLength: 12)
+                Button(action: openDevices) {
+                    HStack(spacing: 8) {
+                        if let d = vm.active {
+                            Circle().fill(vm.link == .ready ? T.ok : (vm.link == .connecting ? T.warn : T.danger)).frame(width: 7, height: 7)
+                            Text(shortName(d.name, d.brand.label)).lineLimit(1)
+                        } else { Text("Choose a TV") }
+                        Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).foregroundStyle(T.dim)
+                    }
+                    .font(.system(size: 15, weight: .medium)).foregroundStyle(.white)
+                    .padding(.leading, 16).padding(.trailing, 12).frame(height: 44)
+                    .glassEffect(.regular.interactive(), in: .capsule)
                 }
-                .font(.system(size: 15, weight: .medium)).foregroundStyle(T.ink)
-                .padding(.leading, 16).padding(.trailing, 12).frame(height: 44)
-                .background(Capsule().fill(T.high))
-            }
-            .accessibilityLabel(vm.active.map { "TV: \($0.name), \(linkWord(vm.link))" } ?? "Choose a TV")
-            Spacer(minLength: 12)
-            RoundKey(symbol: "power", label: "Power", size: 52, iconSize: 19, tint: accent, accent: accent) {
-                if vm.active == nil { openDevices() } else { askPower = true }
+                .buttonStyle(.plain)
+                .accessibilityLabel(vm.active.map { "TV: \($0.name), \(linkWord(vm.link))" } ?? "Choose a TV")
+                Spacer(minLength: 12)
+                GlassKey(symbol: "power", label: "Power", size: 52, icon: 19) {
+                    if vm.active == nil { openDevices() } else { askPower = true }
+                }
             }
         }
     }
 
-    @ViewBuilder
-    private func surface(width: CGFloat, height: CGFloat) -> some View {
-        let common = TouchPad(mode: deck == .trackpad ? .trackpad : .dial, stepPx: CGFloat(vm.settings.scrubStep), offline: offline,
-                              onKey: key, onTick: { vm.scrubTick($0) },
-                              onVoice: { vm.feel.fire(.heavy); vm.press(.voice) },
-                              onTwo: { vm.scrubTick($0) }, onTwoTap: twoTap,
-                              onOffline: { vm.feel.fire(.press); openDevices() }, state: $pad)
-        switch deck {
-        case .numpad:
-            Numpad(vm: vm, accent: accent).frame(width: min(width, 320), height: min(height, 340))
-        case .dial:
-            let s = min(width, height, 340)
-            ZStack {
-                DialFace(size: s, accent: accent, pad: pad, toast: vm.toast,
-                         toastSymbol: vm.toastKey.flatMap { keySymbol($0, muted: vm.muted, playing: vm.playing) }, offline: offline)
-                common.frame(width: s, height: s).clipShape(Circle())
+    /* -------------------------------------------------------------- black */
+
+    private var blackBody: some View {
+        VStack(spacing: 0) {
+            GeometryReader { g in
+                let s = min(g.size.width - 40 - RING_BAND * 2, g.size.height - RING_BAND * 2, 300)
+                Group {
+                    switch deck {
+                    case .numpad: Numpad(vm: vm).frame(width: min(g.size.width - 40, 320), height: min(g.size.height, 340))
+                    case .trackpad: trackpad(size: s + RING_BAND * 2)
+                    case .dial: dial(size: s, ring: true)
+                    }
+                }
+                .frame(width: g.size.width, height: g.size.height)
             }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Direction pad")
-            .accessibilityActions {
-                Button("OK") { vm.press(.ok) }; Button("Up") { vm.press(.up) }; Button("Down") { vm.press(.down) }
-                Button("Left") { vm.press(.left) }; Button("Right") { vm.press(.right) }; Button("Mute") { vm.press(.mute) }
-                Button("Voice search") { vm.press(.voice) }
+            .padding(.vertical, 8)
+            KeyRows(vm: vm, numpad: $numpad, openKeys: openKeys).padding(.top, 10)
+        }
+    }
+
+    /* -------------------------------------------------------------- cards */
+
+    private var cardsBody: some View {
+        VStack(spacing: 0) {
+            TabView(selection: $card) {
+                GeometryReader { g in
+                    let s = min(g.size.width - 40, g.size.height, 340)
+                    Group { if style == .trackpad { trackpad(size: s) } else { dial(size: s, ring: false) } }
+                        .frame(width: g.size.width, height: g.size.height)
+                }.tag(0)
+                GlassCard { VolChCard(vm: vm) }.tag(1)
+                GlassCard { Numpad(vm: vm).padding(22) }.tag(2)
             }
-        case .trackpad:
-            let h = min(height, width * 1.25)
-            ZStack {
-                TrackpadFace(width: width, height: h, accent: accent, pad: pad, offline: offline)
-                common.frame(width: width, height: h)
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .padding(.top, 8)
+            CardDots(page: $card, count: 3)
+            FourKeys(vm: vm, openKeys: openKeys).padding(.top, 6)
+        }
+    }
+
+    /* -------------------------------------------------------- dial / pad */
+
+    private func touch(_ mode: TouchPadView.Mode, ring: Bool) -> TouchPad {
+        TouchPad(mode: mode, stepPx: CGFloat(vm.settings.scrubStep), offline: offline,
+                 onKey: key, onTick: { vm.scrubTick($0) },
+                 onVoice: { vm.feel.fire(.heavy); vm.press(.voice) },
+                 onTwo: { vm.scrubTick($0) }, onTwoTap: twoTap,
+                 onOffline: { vm.feel.fire(.press); openDevices() },
+                 ring: ring ? RING_BAND : 0, onRing: { up in vm.scrubTick(up ? .volUp : .volDown) }, state: $pad)
+    }
+
+    private func dial(size s: CGFloat, ring: Bool) -> some View {
+        let outer = ring ? s + RING_BAND * 2 : s
+        let center: String? = pad.turning ? (volText ?? "Volume") : nil
+        return ZStack {
+            if ring {
+                VolumeRing(size: outer, accent: accent, level: vm.tvVolume.map { $0.muted ? 0 : Double($0.level) / Double(max(1, $0.max)) },
+                           value: volText, pad: pad)
             }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Trackpad")
-            .accessibilityActions {
-                Button("OK") { vm.press(.ok) }; Button("Up") { vm.press(.up) }; Button("Down") { vm.press(.down) }
-                Button("Left") { vm.press(.left) }; Button("Right") { vm.press(.right) }; Button("Mute") { vm.press(.mute) }
+            DialFace(size: s, pad: pad, toast: center ?? vm.toast,
+                     toastSymbol: center != nil ? (vm.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                        : vm.toastKey.flatMap { keySymbol($0, muted: vm.muted, playing: vm.playing) },
+                     offline: offline)
+            touch(.dial, ring: ring).frame(width: outer, height: outer)
+        }
+        .frame(width: outer, height: outer)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Direction pad")
+        .accessibilityActions {
+            Button("OK") { vm.press(.ok) }; Button("Up") { vm.press(.up) }; Button("Down") { vm.press(.down) }
+            Button("Left") { vm.press(.left) }; Button("Right") { vm.press(.right) }; Button("Mute") { vm.press(.mute) }
+            Button("Volume up") { vm.press(.volUp) }; Button("Volume down") { vm.press(.volDown) }
+            Button("Voice search") { vm.press(.voice) }
+        }
+    }
+
+    /** The trackpad takes the dial's place and size. */
+    private func trackpad(size s: CGFloat) -> some View {
+        ZStack {
+            TrackpadFace(width: s, height: s, pad: pad, offline: offline)
+            touch(.trackpad, ring: false).frame(width: s, height: s)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Trackpad")
+        .accessibilityActions {
+            Button("OK") { vm.press(.ok) }; Button("Up") { vm.press(.up) }; Button("Down") { vm.press(.down) }
+            Button("Left") { vm.press(.left) }; Button("Right") { vm.press(.right) }; Button("Mute") { vm.press(.mute) }
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ pieces */
+
+/** A round Liquid Glass key with an SF Symbol (or a short word) in white, and an optional caption. */
+struct GlassKey: View {
+    var symbol: String? = nil
+    var word: String? = nil
+    var caption: String? = nil
+    let label: String
+    var size: CGFloat = 62
+    var icon: CGFloat = 21
+    var active = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 1) {
+                if let symbol { Image(systemName: symbol).font(.system(size: icon, weight: .medium)) }
+                if let word { Text(word).font(.system(size: 16, weight: .medium)) }
+                if let caption { Text(caption).font(.system(size: 9, weight: .semibold)).tracking(0.8).foregroundStyle(T.dim) }
+            }
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(active ? Circle().fill(.white.opacity(0.18)) : nil)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .circle)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(active ? .isSelected : [])
+    }
+}
+
+/** Back, Home, Play / pause, Search. */
+struct FourKeys: View {
+    @ObservedObject var vm: RemoteModel
+    let openKeys: () -> Void
+    var size: CGFloat = 62
+    var body: some View {
+        GlassEffectContainer(spacing: 18) {
+            HStack(spacing: 18) {
+                GlassKey(symbol: "chevron.left", label: "Back", size: size, icon: 22) { vm.press(.back) }
+                GlassKey(symbol: "house", label: "Home", size: size) { vm.press(.home) }
+                GlassKey(symbol: vm.playing ? "pause.fill" : "play.fill", label: vm.playing ? "Pause" : "Play", size: size, icon: 20) { vm.press(.playPause) }
+                GlassKey(symbol: "magnifyingglass", label: "Search", size: size, action: openKeys)
             }
         }
     }
 }
 
-/** What the two-finger slide is doing, in place of the arrows. */
+/** Black layout: two rows. Volume is the ring; mute is at the top. */
+struct KeyRows: View {
+    @ObservedObject var vm: RemoteModel
+    @Binding var numpad: Bool
+    let openKeys: () -> Void
+    private let k: CGFloat = 68
+    var body: some View {
+        GlassEffectContainer(spacing: 14) {
+            VStack(spacing: 14) {
+                HStack(spacing: 14) {
+                    GlassKey(symbol: "chevron.left", label: "Back", size: k, icon: 23) { vm.press(.back) }
+                    GlassKey(symbol: "house", label: "Home", size: k, icon: 22) { vm.press(.home) }
+                    GlassKey(symbol: vm.playing ? "pause.fill" : "play.fill", label: vm.playing ? "Pause" : "Play", size: k, icon: 21) { vm.press(.playPause) }
+                    GlassKey(symbol: "magnifyingglass", label: "Search", size: k, icon: 22, action: openKeys)
+                }
+                HStack(spacing: 14) {
+                    GlassKey(symbol: "minus", caption: "CH", label: "Channel down", size: k, icon: 18) { vm.press(.chDown) }
+                    GlassKey(symbol: "plus", caption: "CH", label: "Channel up", size: k, icon: 18) { vm.press(.chUp) }
+                    GlassKey(word: "123", label: "Number pad", size: k, active: numpad) { numpad.toggle() }
+                    GlassKey(symbol: "rectangle.portrait.and.arrow.right", label: "Input", size: k, icon: 20) { vm.press(.input) }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The volume ring around the dial. With the TV's volume known, it fills from the bottom,
+ * clockwise, with the number at its foot; otherwise an arc follows the finger while turning.
+ */
+struct VolumeRing: View {
+    let size: CGFloat
+    let accent: Color
+    let level: Double?
+    let value: String?
+    let pad: PadState
+
+    var body: some View {
+        let r = size / 2 - RING_BAND / 2
+        ZStack {
+            Circle().stroke(.white.opacity(0.14), lineWidth: 3).frame(width: r * 2, height: r * 2)
+            if let level {
+                Circle().trim(from: 0, to: max(0.001, level))
+                    .stroke(accent, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .rotationEffect(.degrees(90)) // start at the bottom
+                    .frame(width: r * 2, height: r * 2)
+                    .animation(.easeOut(duration: 0.16), value: level)
+            } else if pad.turning && pad.ringSweep != 0 {
+                let from = pad.ringSweep > 0 ? pad.ringStart : pad.ringStart + pad.ringSweep
+                Circle().trim(from: 0, to: abs(pad.ringSweep) / 360)
+                    .stroke(accent, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .rotationEffect(.degrees(from))
+                    .frame(width: r * 2, height: r * 2)
+            }
+            if let value, !pad.turning {
+                Text(value).font(.system(size: 12, weight: .medium)).foregroundStyle(T.dim)
+                    .padding(.horizontal, 8).background(Capsule().fill(.black))
+                    .offset(y: r)
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
+/** What the two-finger slide is doing: louder / quieter speaker, or + / − channel, in white. */
 struct TwoHint: View {
     let key: RemoteKey?
-    let accent: Color
     var big: CGFloat = 34
     var body: some View {
         VStack(spacing: 6) {
             if let k = key {
                 let (sym, word): (String, String) = {
                     switch k {
-                    case .volUp: return ("chevron.up", "Volume +")
-                    case .volDown: return ("chevron.down", "Volume −")
-                    case .chUp: return ("chevron.right", "Channel +")
-                    default: return ("chevron.left", "Channel −")
+                    case .volUp: return ("speaker.wave.3.fill", "Vol")
+                    case .volDown: return ("speaker.wave.1.fill", "Vol")
+                    case .chUp: return ("plus", "Channel")
+                    default: return ("minus", "Channel")
                     }
                 }()
-                Image(systemName: sym).font(.system(size: big, weight: .semibold)).foregroundStyle(accent)
-                Text(word).font(.system(size: 14, weight: .medium)).foregroundStyle(T.ink)
+                Image(systemName: sym).font(.system(size: big, weight: .medium)).foregroundStyle(.white)
+                Text(word).font(.system(size: 14, weight: .medium)).foregroundStyle(.white)
             } else {
-                Text("↕ Volume   ↔ Channel").font(.system(size: 13)).foregroundStyle(T.ink)
+                Text("↕ Volume   ↔ Channel").font(.system(size: 13)).foregroundStyle(.white)
             }
         }
     }
@@ -161,7 +333,6 @@ struct TwoHint: View {
 
 struct DialFace: View {
     let size: CGFloat
-    let accent: Color
     let pad: PadState
     let toast: String?
     let toastSymbol: String?
@@ -171,12 +342,12 @@ struct DialFace: View {
         let well = size * 0.385
         let cs = size * 0.075
         ZStack {
-            Circle().fill(T.container)
+            Circle().fill(.clear).glassEffect(.regular, in: .circle)
             if offline {
                 VStack(spacing: 8) {
-                    Image(systemName: "tv").font(.system(size: size * 0.13)).foregroundStyle(Color(hex: 0xB0B0B5))
-                    Text("No TV connected").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color(hex: 0xB0B0B5))
-                    Text("Tap to choose a TV").font(.system(size: 13)).foregroundStyle(Color(hex: 0xA1A1A6))
+                    Image(systemName: "tv").font(.system(size: size * 0.13)).foregroundStyle(T.dim)
+                    Text("No TV connected").font(.system(size: 15, weight: .semibold)).foregroundStyle(T.dim)
+                    Text("Tap to choose a TV").font(.system(size: 13)).foregroundStyle(T.muted)
                 }
             } else {
                 if !pad.two {
@@ -187,22 +358,22 @@ struct DialFace: View {
                         (.right, "chevron.right", CGSize(width: size * 0.39, height: 0))]
                     ForEach(0..<4, id: \.self) { i in
                         Image(systemName: arrows[i].1).font(.system(size: cs, weight: .semibold))
-                            .foregroundStyle(pad.lit == arrows[i].0 ? accent : T.dim).offset(arrows[i].2)
+                            .foregroundStyle(pad.lit == arrows[i].0 ? .white : T.dim).offset(arrows[i].2)
                     }
                 }
-                Circle().fill(pad.wellDown ? T.pressed : T.highest).frame(width: well, height: well)
+                Circle().fill(.white.opacity(pad.wellDown ? 0.2 : 0.1)).frame(width: well, height: well)
                     .scaleEffect(pad.wellDown ? 0.97 : 1)
                 Group {
-                    if pad.two { TwoHint(key: pad.twoKey, accent: accent, big: 26) }
+                    if pad.two { TwoHint(key: pad.twoKey, big: 26) }
                     else if let toast {
                         VStack(spacing: 4) {
-                            if let s = toastSymbol { Image(systemName: s).font(.system(size: 22, weight: .medium)).foregroundStyle(accent) }
-                            Text(toast).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Color(hex: 0xD4D4D9))
+                            if let s = toastSymbol { Image(systemName: s).font(.system(size: 22, weight: .medium)).foregroundStyle(.white) }
+                            Text(toast).font(.system(size: pad.turning ? 22 : 12.5, weight: .medium)).foregroundStyle(.white)
                                 .multilineTextAlignment(.center).padding(.horizontal, 10)
                         }
                         .frame(width: well)
                     } else {
-                        Text("OK").font(.system(size: 17, weight: .semibold)).tracking(1).foregroundStyle(pad.wellDown ? accent : Color(hex: 0xA1A1A6))
+                        Text("OK").font(.system(size: 17, weight: .semibold)).tracking(1).foregroundStyle(pad.wellDown ? .white : T.dim)
                     }
                 }
             }
@@ -215,7 +386,6 @@ struct DialFace: View {
 struct TrackpadFace: View {
     let width: CGFloat
     let height: CGFloat
-    let accent: Color
     let pad: PadState
     let offline: Bool
 
@@ -229,147 +399,134 @@ struct TrackpadFace: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 28).fill(T.container)
-            Canvas { ctx, size in
-                let gap = size.width / 11
-                var y = gap
-                while y < size.height {
-                    for i in 1...10 {
-                        ctx.fill(Path(ellipseIn: CGRect(x: CGFloat(i) * gap - 1.3, y: y - 1.3, width: 2.6, height: 2.6)), with: .color(.white.opacity(0.16)))
-                    }
-                    y += gap
-                }
-            }
+            RoundedRectangle(cornerRadius: 32).fill(.clear).glassEffect(.regular, in: .rect(cornerRadius: 32))
             if offline {
                 VStack(spacing: 6) {
-                    Image(systemName: "tv").font(.system(size: 34)).foregroundStyle(Color(hex: 0xB0B0B5))
-                    Text("No TV connected").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color(hex: 0xB0B0B5))
-                    Text("Tap to choose a TV").font(.system(size: 12)).foregroundStyle(Color(hex: 0xA1A1A6))
+                    Image(systemName: "tv").font(.system(size: 34)).foregroundStyle(T.dim)
+                    Text("No TV connected").font(.system(size: 14, weight: .semibold)).foregroundStyle(T.dim)
+                    Text("Tap to choose a TV").font(.system(size: 12)).foregroundStyle(T.muted)
                 }
             } else if pad.two {
-                TwoHint(key: pad.twoKey, accent: accent)
+                TwoHint(key: pad.twoKey)
             } else {
                 let arrows: [(RemoteKey, String, Alignment)] = [
                     (.up, "chevron.up", .top), (.down, "chevron.down", .bottom), (.left, "chevron.left", .leading), (.right, "chevron.right", .trailing)]
                 ForEach(0..<4, id: \.self) { i in
                     Image(systemName: arrows[i].1).font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(pad.lit == arrows[i].0 ? accent : Color(hex: 0xBDBDC2)).opacity(near(arrows[i].0))
+                        .foregroundStyle(.white).opacity(near(arrows[i].0))
                         .padding(18).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: arrows[i].2)
                 }
             }
         }
         .frame(width: width, height: height)
-        .clipShape(RoundedRectangle(cornerRadius: 28))
     }
 }
 
-/** 1–9, then channel list · 0 · OK. */
-struct Numpad: View {
-    @ObservedObject var vm: RemoteModel
-    let accent: Color
+/** A Liquid Glass card for the Cards layout. */
+struct GlassCard<Content: View>: View {
+    @ViewBuilder let content: () -> Content
     var body: some View {
-        let rows: [[String]] = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["L", "0", "K"]]
-        VStack(spacing: 12) {
-            ForEach(rows, id: \.self) { r in
-                HStack(spacing: 14) {
-                    ForEach(r, id: \.self) { c in
-                        Button {
-                            switch c {
-                            case "L": vm.press(.chList)
-                            case "K": vm.press(.ok)
-                            default: if let k = RemoteKey.forDigit(Character(c)) { vm.press(k) }
-                            }
-                        } label: {
-                            Group {
-                                if c == "L" { Image(systemName: "list.bullet") } else { Text(c == "K" ? "OK" : c) }
-                            }
-                            .font(.system(size: c == "K" || c == "L" ? 17 : 22, weight: .medium, design: .rounded))
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        }
-                        .buttonStyle(PillKeyStyle(accent: accent))
-                        .accessibilityLabel(c == "L" ? "Channel list" : (c == "K" ? "OK" : c))
-                    }
+        GeometryReader { g in
+            content()
+                .frame(width: g.size.width * 0.84, height: g.size.height * 0.86)
+                .glassEffect(.regular, in: .rect(cornerRadius: 28))
+                .frame(width: g.size.width, height: g.size.height)
+        }
+    }
+}
+
+/** Two tall rockers (volume, channel), with mute, input and guide under them. */
+struct VolChCard: View {
+    @ObservedObject var vm: RemoteModel
+    var body: some View {
+        VStack(spacing: 22) {
+            HStack(spacing: 28) {
+                Rocker(word: "VOL", up: { vm.press(.volUp, quiet: true) }, down: { vm.press(.volDown, quiet: true) })
+                Rocker(word: "CH", up: { vm.press(.chUp) }, down: { vm.press(.chDown) })
+            }
+            GlassEffectContainer(spacing: 16) {
+                HStack(spacing: 16) {
+                    GlassKey(symbol: vm.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", label: "Mute", size: 54, icon: 19) { vm.press(.mute) }
+                    GlassKey(symbol: "rectangle.portrait.and.arrow.right", label: "Input", size: 54, icon: 19) { vm.press(.input) }
+                    GlassKey(symbol: "list.bullet.rectangle", label: "Guide", size: 54, icon: 19) { vm.press(.guide) }
                 }
             }
         }
     }
 }
 
-struct PillKeyStyle: ButtonStyle {
-    let accent: Color
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label.foregroundStyle(configuration.isPressed ? accent : T.ink)
-            .background(Capsule().fill(configuration.isPressed ? T.pressed : T.high))
-    }
-}
-
-/**
- * Bottom of the Remote page. Collapsed: a chevron over four keys. Swipe up (or tap the
- * chevron) and it becomes a sheet with volume, mute, channels and the number pad key.
- */
-struct BottomPanel: View {
-    @ObservedObject var vm: RemoteModel
-    let accent: Color
-    @Binding var open: Bool
-    @Binding var numpad: Bool
-    let openKeys: () -> Void
-
+/** + on top, the word in the middle, − below; both ends repeat while held. */
+struct Rocker: View {
+    let word: String
+    let up: () -> Void
+    let down: () -> Void
     var body: some View {
         VStack(spacing: 0) {
-            Button { withAnimation(.spring(response: 0.3)) { open.toggle() } } label: {
-                Image(systemName: open ? "chevron.down" : "chevron.up").font(.system(size: 20, weight: .semibold)).foregroundStyle(T.dim)
-                    .frame(width: 72, height: 30)
-            }
-            .accessibilityLabel(open ? "Hide volume and channels" : "Show volume and channels")
-            .padding(.bottom, 12)
-            HStack(spacing: 20) {
-                RoundKey(symbol: "chevron.left", label: "Back", iconSize: 22, accent: accent) { vm.press(.back) }
-                RoundKey(symbol: "tv", label: "Home", iconSize: 21, accent: accent) { vm.press(.home) }
-                RoundKey(symbol: vm.playing ? "pause.fill" : "play.fill", label: vm.playing ? "Pause" : "Play", iconSize: 20, accent: accent) { vm.press(.playPause) }
-                RoundKey(symbol: "magnifyingglass", label: "Search", iconSize: 21, accent: accent, action: openKeys)
-            }
-            if open {
-                VStack(spacing: 16) {
-                    HStack(spacing: 16) {
-                        StepperPill(word: "VOL", downLabel: "Volume down", upLabel: "Volume up", accent: accent,
-                                    onDown: { vm.press(.volDown, quiet: true) }, onUp: { vm.press(.volUp, quiet: true) })
-                        RoundKey(symbol: vm.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", label: "Mute", size: 56, iconSize: 19,
-                                 tint: vm.muted ? accent : T.ink, accent: accent) { vm.press(.mute) }
-                    }
-                    .frame(height: 56)
-                    HStack(spacing: 16) {
-                        StepperPill(word: "CH", downLabel: "Channel down", upLabel: "Channel up", accent: accent,
-                                    onDown: { vm.press(.chDown) }, onUp: { vm.press(.chUp) })
-                        Button { numpad.toggle() } label: {
-                            Text("123").font(.system(size: 14, weight: .medium)).frame(width: 56, height: 56)
-                        }
-                        .buttonStyle(KeyStyle(tint: numpad ? accent : T.ink, accent: accent))
-                        .accessibilityLabel("Number pad")
-                    }
-                    .frame(height: 56)
-                }
-                .frame(width: 308)
-                .padding(.top, 26).padding(.bottom, 6)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+            RepeatKey(action: up) { Image(systemName: "plus").font(.system(size: 20, weight: .medium)).frame(maxWidth: .infinity, maxHeight: .infinity) }
+                .accessibilityLabel(word == "VOL" ? "Volume up" : "Channel up")
+            Text(word).font(.system(size: 12, weight: .semibold)).tracking(1).foregroundStyle(T.dim).accessibilityHidden(true)
+            RepeatKey(action: down) { Image(systemName: "minus").font(.system(size: 20, weight: .medium)).frame(maxWidth: .infinity, maxHeight: .infinity) }
+                .accessibilityLabel(word == "VOL" ? "Volume down" : "Channel down")
         }
-        .padding(.top, open ? 6 : 0)
-        .padding(.bottom, open ? 50 : 62)
-        .frame(maxWidth: .infinity)
-        .background(open ? TopRounded(radius: 28).fill(T.container).ignoresSafeArea() : nil)
-        .gesture(DragGesture(minimumDistance: 16).onEnded { v in
-            withAnimation(.spring(response: 0.3)) {
-                if v.translation.height < -24 { open = true } else if v.translation.height > 24 { open = false }
-            }
-        })
-        .onChange(of: open) { o in if !o { numpad = false } }
+        .foregroundStyle(.white)
+        .frame(width: 80, height: 210)
+        .clipShape(Capsule())
+        .glassEffect(.regular.interactive(), in: .capsule)
     }
 }
 
-/** A shape with rounded top corners; its bottom runs past the frame (off-screen). */
-struct TopRounded: Shape {
-    var radius: CGFloat
-    func path(in rect: CGRect) -> Path {
-        Path(roundedRect: CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height + radius * 2), cornerRadius: radius)
+/** Small dots for the cards: tap one, or swipe across them. */
+struct CardDots: View {
+    @Binding var page: Int
+    let count: Int
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<count, id: \.self) { i in
+                Capsule().fill(i == page ? T.dim : Color(hex: 0x5A5A60)).frame(width: i == page ? 14 : 5, height: 5)
+                    .frame(width: 20, height: 30).contentShape(Rectangle())
+                    .onTapGesture { withAnimation { page = i } }
+                    .accessibilityLabel(["Remote", "Volume and channels", "Numbers"][i])
+                    .accessibilityAddTraits(i == page ? [.isSelected, .isButton] : .isButton)
+            }
+        }
+        .gesture(DragGesture(minimumDistance: 12).onEnded { v in
+            withAnimation { page = max(0, min(count - 1, page + (v.translation.width < 0 ? 1 : -1))) }
+        })
+    }
+}
+
+/** 1–9, then channel list · 0 · OK, as glass capsules. */
+struct Numpad: View {
+    @ObservedObject var vm: RemoteModel
+    var body: some View {
+        let rows: [[String]] = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["L", "0", "K"]]
+        GlassEffectContainer(spacing: 12) {
+            VStack(spacing: 12) {
+                ForEach(rows, id: \.self) { r in
+                    HStack(spacing: 14) {
+                        ForEach(r, id: \.self) { c in
+                            Button {
+                                switch c {
+                                case "L": vm.press(.chList)
+                                case "K": vm.press(.ok)
+                                default: if let k = RemoteKey.forDigit(Character(c)) { vm.press(k) }
+                                }
+                            } label: {
+                                Group {
+                                    if c == "L" { Image(systemName: "list.bullet") } else { Text(c == "K" ? "OK" : c) }
+                                }
+                                .font(.system(size: c == "K" || c == "L" ? 17 : 22, weight: .medium, design: .rounded))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .contentShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .glassEffect(.regular.interactive(), in: .capsule)
+                            .accessibilityLabel(c == "L" ? "Channel list" : (c == "K" ? "OK" : c))
+                        }
+                    }
+                }
+            }
+        }
     }
 }

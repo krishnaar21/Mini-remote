@@ -8,6 +8,10 @@ struct PadState: Equatable {
     var wellDown = false
     var two = false
     var twoKey: RemoteKey?
+    /** Turning the volume ring: where the turn began (degrees, 0 = 3 o'clock, clockwise) and how far. */
+    var turning = false
+    var ringStart: Double = 0
+    var ringSweep: Double = 0
 }
 
 /**
@@ -28,6 +32,13 @@ final class TouchPadView: UIView {
     var onTwoTap: () -> Void = {}
     var onOffline: () -> Void = {}
     var onState: (PadState) -> Void = { _ in }
+    /** Width of the volume ring around the dial (0 = no ring). The view is the dial plus the ring. */
+    var ring: CGFloat = 0
+    var onRing: (Bool) -> Void = { _ in }
+    private var ringTouch: UITouch?
+    private var ringLast: Double = 0
+    private var ringAcc: Double = 0
+    private var inner: CGFloat { bounds.width - ring * 2 }
 
     private var state = PadState() { didSet { if state != oldValue { onState(state) } } }
     private var primary: UITouch?
@@ -56,7 +67,23 @@ final class TouchPadView: UIView {
         } else { locked.forEach { $0.isScrollEnabled = true }; locked = [] }
     }
 
+    /** In a ring, only the round dial and the ring itself take touches. */
+    override func point(inside p: CGPoint, with event: UIEvent?) -> Bool {
+        guard mode == .dial else { return super.point(inside: p, with: event) }
+        return hypot(p.x - bounds.midX, p.y - bounds.midY) <= bounds.width / 2 + (ring > 0 ? 6 : 0)
+    }
+
+    private func angle(_ p: CGPoint) -> Double { atan2(Double(p.y - bounds.midY), Double(p.x - bounds.midX)) * 180 / .pi }
+
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if ring > 0, ringTouch == nil, primary == nil, !twoActive, !offline, let t = touches.first,
+           hypot(t.location(in: self).x - bounds.midX, t.location(in: self).y - bounds.midY) > inner / 2 {
+            lockScroll(true)
+            ringTouch = t; ringLast = angle(t.location(in: self)); ringAcc = 0
+            state = PadState(turning: true, ringStart: ringLast, ringSweep: 0)
+            return
+        }
+        if ringTouch != nil { return }
         if primary == nil && !twoActive { lockScroll(true) }
         let all = live(event)
         if offline { if primary == nil { primary = touches.first; startPt = primary!.location(in: self); moved = false }; return }
@@ -65,6 +92,17 @@ final class TouchPadView: UIView {
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if let r = ringTouch {
+            guard touches.contains(r) else { return }
+            let a = angle(r.location(in: self))
+            var d = a - ringLast
+            if d > 180 { d -= 360 }; if d < -180 { d += 360 }
+            ringLast = a; ringAcc += d
+            state.ringSweep = max(-350, min(350, state.ringSweep + d))
+            while ringAcc >= 18 { ringAcc -= 18; onRing(true) }
+            while ringAcc <= -18 { ringAcc += 18; onRing(false) }
+            return
+        }
         if offline { if let p = primary, hypot(p.location(in: self).x - startPt.x, p.location(in: self).y - startPt.y) > 10 { moved = true }; return }
         let all = live(event)
         if twoActive || all.count >= 2 { if !twoActive { beginTwo(all) }; moveTwo(all); return }
@@ -75,6 +113,10 @@ final class TouchPadView: UIView {
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { lifted(event, cancelled: true) }
 
     private func lifted(_ event: UIEvent?, cancelled: Bool) {
+        if ringTouch != nil {
+            if live(event).isEmpty { ringTouch = nil; state = PadState(); lockScroll(false) }
+            return
+        }
         let rest = live(event)
         if !rest.isEmpty { if twoActive { twoLast = nil; twoCount = rest.count }; return }
         finish(cancelled: cancelled)
@@ -87,7 +129,7 @@ final class TouchPadView: UIView {
         let rel = CGPoint(x: p.x - c.x, y: p.y - c.y)
         acc = .zero; last = p; moved = false; held = false; horizontal = nil
         if mode == .dial {
-            inWell = hypot(rel.x, rel.y) < bounds.width * 0.385 / 2
+            inWell = hypot(rel.x, rel.y) < inner * 0.385 / 2
             let h = abs(rel.x) > abs(rel.y)
             zoneKey = h ? (rel.x > 0 ? .right : .left) : (rel.y > 0 ? .down : .up)
             if !inWell { horizontal = h }
@@ -206,11 +248,13 @@ struct TouchPad: UIViewRepresentable {
     var onTwo: (RemoteKey) -> Void
     var onTwoTap: () -> Void
     var onOffline: () -> Void
+    var ring: CGFloat = 0
+    var onRing: (Bool) -> Void = { _ in }
     @Binding var state: PadState
 
     func makeUIView(context: Context) -> TouchPadView { TouchPadView() }
     func updateUIView(_ v: TouchPadView, context: Context) {
-        v.mode = mode; v.stepPx = stepPx; v.offline = offline
+        v.mode = mode; v.stepPx = stepPx; v.offline = offline; v.ring = ring; v.onRing = onRing
         v.onKey = onKey; v.onTick = onTick; v.onVoice = onVoice; v.onTwo = onTwo; v.onTwoTap = onTwoTap; v.onOffline = onOffline
         let b = $state
         v.onState = { s in DispatchQueue.main.async { b.wrappedValue = s } }

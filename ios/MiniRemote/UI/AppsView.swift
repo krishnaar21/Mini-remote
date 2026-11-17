@@ -306,7 +306,6 @@ private struct AppSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(T.sheet)
         .sheet(isPresented: $confirm) {
             let install = entry.installed == false
             ConfirmSheet(title: install ? "Install \(entry.name)?" : "Uninstall \(entry.name)?",
@@ -362,7 +361,6 @@ private struct AddSheet: View {
         .onAppear { kind = start }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(T.sheet)
     }
 
     private func field(_ label: String, _ text: Binding<String>, _ placeholder: String) -> some View {

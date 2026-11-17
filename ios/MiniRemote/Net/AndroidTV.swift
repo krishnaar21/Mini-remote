@@ -287,6 +287,9 @@ final class AndroidTvAdapter: RemoteAdapter {
     private let askCode: (String?) async -> String?
     private var link: TlsLink?
     private var reader: Task<Void, Never>?
+    var onVolume: ((TvVolume) -> Void)?
+    var onDropped: (() -> Void)?
+    private var up = false
 
     init(host: String, pin: String?, onPin: @escaping (String) -> Void, askCode: @escaping (String?) async -> String?) {
         self.host = host; self.pin = pin; self.onPin = onPin; self.askCode = askCode
@@ -386,16 +389,23 @@ final class AndroidTvAdapter: RemoteAdapter {
                     } else if let ping = sub(m, 8) {
                         let v = long(ping, 1) ?? 0
                         try await l.send(Pb.make { p in p.msg(9) { r in r.int(1, v) } })
-                    } else if m[3] != nil {
-                        throw UserFacing("The TV reported an error")
+                    } else if let v = sub(m, 50) {
+                        // RemoteSetVolumeLevel: max (6), level (7), muted (8), sent whenever it changes.
+                        let mx = Int(long(v, 6) ?? 0)
+                        if mx > 0 { self?.onVolume?(TvVolume(level: Int(long(v, 7) ?? 0), max: mx, muted: (long(v, 8) ?? 0) != 0)) }
                     }
+                    // RemoteError (3) is about one message (e.g. a key the TV lacks): not fatal.
                 }
             } catch {
                 ready.fail(error)
-                if self?.link === l { self?.link = nil }
+                if let self, self.link === l {
+                    self.link = nil
+                    if self.up { self.up = false; self.onDropped?() }
+                }
             }
         }
         do { try await ready.wait(10) } catch { close(); throw error }
+        up = true
         if pin == nil, let leaf = l.peer.leaf { onPin(fingerprint(leaf)) }
     }
 
@@ -437,6 +447,7 @@ final class AndroidTvAdapter: RemoteAdapter {
     func backspace() async throws { try await key(67) }
 
     func close() {
+        up = false
         reader?.cancel(); reader = nil
         link?.close(); link = nil
     }

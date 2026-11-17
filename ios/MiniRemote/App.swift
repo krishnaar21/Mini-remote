@@ -14,7 +14,6 @@ struct MiniRemoteApp: App {
 struct ContentView: View {
     @ObservedObject var vm: RemoteModel
     @State private var page = 0
-    @State private var tray = false
     @State private var numpad = false
     @State private var showDevices = false
     @State private var showKeys = false
@@ -25,9 +24,9 @@ struct ContentView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            T.bg.ignoresSafeArea()
+            (vm.settings.layout == "strip" ? Color.black : T.bg).ignoresSafeArea()
             TabView(selection: $page) {
-                HomeView(vm: vm, accent: accent, tray: $tray, numpad: $numpad,
+                HomeView(vm: vm, accent: accent, numpad: $numpad,
                          openDevices: { showDevices = true }, openKeys: { showKeys = true }).tag(0)
                 AppsView(vm: vm, accent: accent, openDevices: { showDevices = true }).tag(1)
             }
@@ -35,8 +34,8 @@ struct ContentView: View {
             .ignoresSafeArea(edges: .bottom)
 
             // The dial shows messages in its well; everywhere else they float near the bottom.
-            let inWell = page == 0 && !numpad && vm.settings.controlStyle == "dial" && !tray
-            ToastChip(text: inWell ? nil : vm.toast).padding(.bottom, page == 0 ? (tray ? 300 : 190) : 60)
+            let inWell = page == 0 && !numpad && vm.settings.controlStyle == "dial"
+            ToastChip(text: inWell ? nil : vm.toast).padding(.bottom, page == 0 ? 250 : 60)
                 .animation(.easeOut(duration: 0.2), value: vm.toast)
             PageDots(page: $page, count: 2, accent: accent).padding(.bottom, 4)
         }
@@ -56,13 +55,10 @@ struct ContentView: View {
             default: connecting = false
             }
         }
-        .onChange(of: page) { p in if p != 0 { tray = false } }
+        .onChange(of: vm.settings.layout) { _, _ in numpad = false }
         #if DEBUG
         .onAppear { screenshot() }
         #endif
-        .onChange(of: tray) { t in
-            if t { Task { try? await Task.sleep(nanoseconds: 7_000_000_000); tray = false } }
-        }
     }
 }
 
@@ -71,11 +67,11 @@ extension ContentView {
     /** SHOT=<screen> opens one screen with a pretend TV, for the CI screenshot run. */
     func screenshot() {
         guard let s = ProcessInfo.processInfo.environment["SHOT"] else { return }
-        vm.demo(trackpad: s == "trackpad")
+        vm.demo(trackpad: s == "trackpad", cards: s == "cards")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             switch s {
-            case "tray": tray = true
-            case "numpad": tray = true; numpad = true
+            case "numpad": numpad = true
+            case "gestures": startRoute = [.settings, .gestures]; showDevices = true
             case "apps": page = 1
             case "devices": showDevices = true
             case "scan": startRoute = [.scan]; showDevices = true
@@ -111,6 +107,5 @@ private struct CodeSheet: View {
         }
         .padding(24)
         .presentationDetents([.height(340)])
-        .presentationBackground(T.sheet)
     }
 }

@@ -25,6 +25,8 @@ final class RemoteModel: ObservableObject {
     @Published private(set) var tvApps: [TvApp] = []
     @Published private(set) var appsLoading = false
     @Published private(set) var nowOn: NowOn?
+    /** The TV's own volume, when it tells us (Android TV, LG, most Samsung). */
+    @Published private(set) var tvVolume: TvVolume?
 
     let maxPinned = 8
     var active: Device? { devices.first { $0.id == activeId } }
@@ -37,6 +39,9 @@ final class RemoteModel: ObservableObject {
     private var codeAnswer: CheckedContinuation<String?, Never>?
     private var appsFor: String?
     private var keys: AsyncStream<RemoteKey>.Continuation?
+    private var textOps: AsyncStream<String>.Continuation?
+    private var volTask: Task<Void, Never>?
+    private var redials = 0
 
     init() {
         settings = store.loadSettings()
@@ -50,9 +55,25 @@ final class RemoteModel: ObservableObject {
                 guard let self else { return }
                 guard self.link == .ready, let a = self.adapter else { continue }
                 do { try await a.send(k); self.txCount += 1 } catch {
-                    self.feel.fire(.error)
-                    if let u = error as? UserFacing, u.unsupported { self.say(u.message) }
-                    else { self.say("Lost connection"); self.link = .error }
+                    if let u = error as? UserFacing, u.unsupported { self.feel.fire(.error); self.say(u.message); continue }
+                    // The socket died under us: reconnect quietly, then send this key again.
+                    guard let d = self.active else { continue }
+                    self.adapter = nil; self.redials = 0
+                    self.connect(d, quiet: true)
+                    var waited = 0
+                    while self.link != .ready && waited < 120 { try? await Task.sleep(nanoseconds: 100_000_000); waited += 1 }
+                    if self.link == .ready, let b = self.adapter, (try? await b.send(k)) != nil { self.txCount += 1 }
+                    else { self.feel.fire(.error); self.say("Lost connection") }
+                }
+            }
+        }
+        let ops = AsyncStream<String>(bufferingPolicy: .unbounded) { self.textOps = $0 }
+        Task { [weak self] in
+            var warned = false
+            for await op in ops {
+                guard let self, self.link == .ready, let a = self.adapter else { continue }
+                do { if op == "\u{8}" { try await a.backspace() } else { try await a.typeText(op) }; self.txCount += 1 } catch {
+                    if !warned { warned = true; self.say((error as? UserFacing)?.message ?? "Couldn't type") }
                 }
             }
         }
@@ -69,11 +90,45 @@ final class RemoteModel: ObservableObject {
         if key == .mute { muted.toggle() }
         if key == .volUp { muted = false }
         if key == .playPause { playing.toggle() }
+        nudgeVolume(key)
         if !quiet { say(key == .playPause ? (playing ? "Play" : "Pause") : key.word, key) }
         keys?.yield(key)
     }
 
-    func scrubTick(_ key: RemoteKey) { feel.fire(.tick); keys?.yield(key) }
+    func scrubTick(_ key: RemoteKey) { feel.fire(.tick); nudgeVolume(key); keys?.yield(key) }
+
+    /** Moves the shown volume at once, then asks the TV for the real value a moment later. */
+    private func nudgeVolume(_ key: RemoteKey) {
+        guard key == .volUp || key == .volDown || key == .mute else { return }
+        if var v = tvVolume {
+            switch key {
+            case .volUp: v.level = min(v.max, v.level + 1); v.muted = false
+            case .volDown: v.level = max(0, v.level - 1)
+            default: v.muted.toggle()
+            }
+            tvVolume = v
+        }
+        refreshVolume(after: 0.7)
+    }
+
+    private func refreshVolume(after: Double) {
+        volTask?.cancel()
+        volTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(after * 1e9))
+            guard !Task.isCancelled, let self, let a = self.adapter, let v = await a.readVolume() else { return }
+            self.tvVolume = v; self.muted = v.muted
+        }
+    }
+
+    /** Mirrors an edit of the search box on the TV: deletes what changed, types what's new. */
+    func liveType(_ old: String, _ new: String) {
+        guard active != nil else { say("Choose a TV first"); return }
+        let o = Array(old), n = Array(new)
+        var common = 0
+        while common < o.count && common < n.count && o[common] == n[common] { common += 1 }
+        for _ in 0..<(o.count - common) { textOps?.yield("\u{8}") }
+        if n.count > common { textOps?.yield(String(n[common...])) }
+    }
 
     func say(_ t: String, _ key: RemoteKey? = nil) {
         toast = t; toastKey = key
@@ -87,7 +142,23 @@ final class RemoteModel: ObservableObject {
 
     /* ------------------------------------------------------- connection */
 
-    func connect(_ d: Device) {
+    /** The link broke by itself: reconnect quietly, a few tries, waiting longer each time. */
+    private func dropped(_ d: Device, _ a: RemoteAdapter) {
+        guard adapter === a, activeId == d.id else { return }
+        adapter = nil
+        guard redials < 4 else { link = .error; say("Lost connection to \(d.name)"); return }
+        let wait = [0.3, 1.5, 4, 8][redials]
+        redials += 1
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1e9))
+            guard let self, self.activeId == d.id, self.adapter == nil else { return }
+            self.connect(d, quiet: true)
+        }
+    }
+
+    func connect(_ d: Device) { connect(d, quiet: false) }
+
+    private func connect(_ d: Device, quiet: Bool) {
         if d.id != appsFor { tvApps = []; appsFor = nil }
         nowOn = nil
         connectTask?.cancel()
@@ -101,13 +172,25 @@ final class RemoteModel: ObservableObject {
                     onToken: { tok in Task { @MainActor in self.updateDevice(d.id) { $0.token = tok } } },
                     onPin: { pin in Task { @MainActor in self.updateDevice(d.id) { $0.pin = pin } } },
                     askCode: { err in await self.askCode(d.name, err) })
+                self.tvVolume = nil
+                a.onVolume = { v in Task { @MainActor in self.tvVolume = v; self.muted = v.muted } }
+                a.onDropped = { [weak a] in Task { @MainActor in if let a { self.dropped(d, a) } } }
                 try await a.connect()
                 if Task.isCancelled { a.close(); return }
                 self.adapter = a
                 self.link = .ready
-                self.feel.fire(.success)
+                self.redials = 0
+                self.refreshVolume(after: 0)
+                if !quiet { self.feel.fire(.success) }
             } catch {
                 if Task.isCancelled { return }
+                if quiet && self.redials < 4 && !(error is CertChanged) && !(error is UserFacing) {
+                    let wait = [0.3, 1.5, 4, 8][self.redials]
+                    self.redials += 1
+                    try? await Task.sleep(nanoseconds: UInt64(wait * 1e9))
+                    if self.activeId == d.id { self.connect(d, quiet: true) }
+                    return
+                }
                 self.link = .error
                 let msg: String
                 if let u = error as? UserFacing { msg = u.message }
@@ -205,6 +288,12 @@ final class RemoteModel: ObservableObject {
                 self?.say((error as? UserFacing)?.message ?? fail)
             }
         }
+    }
+
+    /** Opens the TV's own search screen where the TV has a key for it (Roku, Android TV). */
+    func openTvSearch() {
+        guard let a = adapter, link == .ready, let b = active?.brand, b == .ROKU || b == .ANDROID_TV else { return }
+        Task { try? await a.send(.voice) }
     }
 
     func typeText(_ t: String) { act("Couldn't type") { try await $0.typeText(t) }; feel.fire(.success) }
@@ -376,7 +465,7 @@ final class RemoteModel: ObservableObject {
 #if DEBUG
 // Screenshot mode (Debug builds only): a pretend TV that's connected, a few apps, nothing saved.
 extension RemoteModel {
-    func demo(trackpad: Bool) {
+    func demo(trackpad: Bool, cards: Bool) {
         devices = [
             Device(id: "demo", name: "Living Room TV", host: "192.168.1.20", brand: .ANDROID_TV),
             Device(id: "demo2", name: "Bedroom Roku", host: "192.168.1.31", brand: .ROKU),
@@ -384,6 +473,8 @@ extension RemoteModel {
         activeId = "demo"
         link = .ready
         settings.controlStyle = trackpad ? "trackpad" : "dial"
+        settings.layout = cards ? "cards" : "strip"
+        tvVolume = TvVolume(level: 24, max: 100, muted: false)
         shortcuts = [("netflix", "Netflix"), ("youtube", "YouTube"), ("prime", "Prime Video"), ("hotstar", "JioHotstar")].map {
             Shortcut(id: "s-\($0.0)", kind: .app, name: $0.1, value: $0.0, pinned: true)
         }

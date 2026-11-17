@@ -167,7 +167,6 @@ struct ConfirmSheet: View {
         .padding(24)
         .presentationDetents([.height(300)])
         .presentationDragIndicator(.visible)
-        .presentationBackground(T.sheet)
     }
 }
 

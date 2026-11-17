@@ -1,6 +1,15 @@
 import Foundation
 
+/** The TV's own volume: level of max, and whether it's muted. */
+struct TvVolume: Equatable { var level: Int; var max: Int; var muted: Bool }
+
 protocol RemoteAdapter: AnyObject {
+    /** The TV reported its volume by itself (Android TV, LG). */
+    var onVolume: ((TvVolume) -> Void)? { get set }
+    /** An open connection broke by itself (not after close()). */
+    var onDropped: (() -> Void)? { get set }
+    /** Asks the TV for its volume; nil when it can't tell. */
+    func readVolume() async -> TvVolume?
     func connect() async throws
     func send(_ key: RemoteKey) async throws
     func typeText(_ text: String) async throws
@@ -15,6 +24,7 @@ protocol RemoteAdapter: AnyObject {
 }
 
 extension RemoteAdapter {
+    func readVolume() async -> TvVolume? { nil }
     func typeText(_ text: String) async throws { throw UserFacing("Typing isn't supported on this TV yet", unsupported: true) }
     func backspace() async throws { throw UserFacing("Typing isn't supported on this TV yet", unsupported: true) }
     func listApps() async throws -> [TvApp] { throw UserFacing("This TV can't list its apps", unsupported: true) }
@@ -51,6 +61,8 @@ func adapterFor(_ d: Device, onToken: @escaping (String) -> Void, onPin: @escapi
 /* ---------------------------------------------------------------- Roku (ECP) */
 
 final class RokuAdapter: RemoteAdapter {
+    var onVolume: ((TvVolume) -> Void)?
+    var onDropped: (() -> Void)?
     private let host: String
     init(host: String) { self.host = host }
 
@@ -106,6 +118,9 @@ final class SamsungAdapter: RemoteAdapter {
     private let onPin: (String) -> Void
     private var ws: WS?
     private var appsReply: Once<[[String: Any]]>?
+    var onVolume: ((TvVolume) -> Void)?
+    var onDropped: (() -> Void)?
+    private var alive = false
 
     init(host: String, token: String?, pin: String?, onToken: @escaping (String) -> Void, onPin: @escaping (String) -> Void) {
         self.host = host; self.token = token; self.pin = pin; self.onToken = onToken; self.onPin = onPin
@@ -145,10 +160,15 @@ final class SamsungAdapter: RemoteAdapter {
             default: break
             }
         }
-        s.onFail = { e in ready.fail(e) }
+        s.onFail = { [weak self, weak s] e in
+            ready.fail(e)
+            guard let self, let s, self.ws === s, self.alive else { return }
+            self.alive = false; self.ws = nil; self.onDropped?()
+        }
         ws = s
         s.start()
         do { try await ready.wait(25) } catch { close(); throw error }
+        alive = true
         if pin == nil, let seen = s.delegate.seen { onPin(seen) }
     }
 
@@ -186,7 +206,24 @@ final class SamsungAdapter: RemoteAdapter {
 
     func search(_ query: String) async throws { throw UserFacing("Search isn't supported on Samsung TVs yet", unsupported: true) }
 
-    func close() { ws?.close(); ws = nil }
+    func close() { alive = false; ws?.close(); ws = nil }
+
+    /** Volume through UPnP RenderingControl (port 9197), which most Samsung TVs answer. */
+    func readVolume() async -> TvVolume? {
+        func ask(_ action: String, _ tag: String) async -> String? {
+            guard let u = URL(string: "http://\(host):9197/upnp/control/RenderingControl1") else { return nil }
+            var r = URLRequest(url: u)
+            r.httpMethod = "POST"
+            r.setValue("text/xml; charset=\"utf-8\"", forHTTPHeaderField: "Content-Type")
+            r.setValue("\"urn:schemas-upnp-org:service:RenderingControl:1#\(action)\"", forHTTPHeaderField: "SOAPACTION")
+            r.httpBody = Data("<?xml version=\"1.0\" encoding=\"utf-8\"?><s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\"><s:Body><u:\(action) xmlns:u=\"urn:schemas-upnp-org:service:RenderingControl:1\"><InstanceID>0</InstanceID><Channel>Master</Channel></u:\(action)></s:Body></s:Envelope>".utf8)
+            guard let (data, resp) = try? await Http.plain.data(for: r), (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+            return firstMatch("<\(tag)>([^<]*)</\(tag)>", in: String(decoding: data, as: UTF8.self))?.first
+        }
+        guard let v = await ask("GetVolume", "CurrentVolume").flatMap({ Int($0.trimmingCharacters(in: .whitespaces)) }) else { return nil }
+        let m = await ask("GetMute", "CurrentMute")
+        return TvVolume(level: v, max: 100, muted: m == "1" || m?.lowercased() == "true")
+    }
 }
 
 /* --------------------------------------------------------------- LG (webOS) */
@@ -204,10 +241,24 @@ final class LgAdapter: RemoteAdapter {
     private let lock = NSLock()
     private var muted = false
     private var playing = false
+    var onVolume: ((TvVolume) -> Void)?
+    var onDropped: (() -> Void)?
+    private var alive = false
 
     init(host: String, token: String?, pin: String?, onToken: @escaping (String) -> Void, onPin: @escaping (String) -> Void) {
         self.host = host; self.token = token; self.pin = pin; self.onToken = onToken; self.onPin = onPin
     }
+
+    private func parseVolume(_ p: [String: Any]?) -> TvVolume? {
+        guard let p else { return nil }
+        if let st = p["volumeStatus"] as? [String: Any], let v = st["volume"] as? Int {
+            return TvVolume(level: v, max: (st["maxVolume"] as? Int).flatMap { $0 > 0 ? $0 : nil } ?? 100, muted: st["muteStatus"] as? Bool ?? false)
+        }
+        guard let v = p["volume"] as? Int else { return nil }
+        return TvVolume(level: v, max: 100, muted: (p["muted"] as? Bool) ?? (p["mute"] as? Bool) ?? false)
+    }
+
+    func readVolume() async -> TvVolume? { parseVolume((try? await request("ssap://audio/getVolume"))?["payload"] as? [String: Any]) }
 
     private let manifest: [String: Any] = ["manifestVersion": 1, "appVersion": "1.1", "permissions": [
         "LAUNCH", "CONTROL_AUDIO", "CONTROL_POWER", "CONTROL_INPUT_TEXT", "CONTROL_MOUSE_AND_KEYBOARD",
@@ -222,6 +273,7 @@ final class LgAdapter: RemoteAdapter {
             guard let self, let j = json(text) else { return }
             let type = j["type"] as? String
             let id = j["id"] as? String ?? ""
+            if id == "vol" { if let v = self.parseVolume(j["payload"] as? [String: Any]) { self.onVolume?(v) }; return }
             if type == "registered" {
                 if let k = (j["payload"] as? [String: Any])?["client-key"] as? String, !k.isEmpty { self.token = k; self.onToken(k) }
                 registered.succeed(())
@@ -231,7 +283,11 @@ final class LgAdapter: RemoteAdapter {
             self.lock.lock(); let p = self.pending.removeValue(forKey: id); self.lock.unlock()
             p?.succeed(j)
         }
-        s.onFail = { e in registered.fail(e) }
+        s.onFail = { [weak self, weak s] e in
+            registered.fail(e)
+            guard let self, let s, self.ws === s, self.alive else { return }
+            self.alive = false; self.ws = nil; self.pointer = nil; self.onDropped?()
+        }
         s.start()
         var payload: [String: Any] = ["forcePairing": false, "pairingType": "PROMPT", "manifest": manifest]
         if let t = token { payload["client-key"] = t }
@@ -242,17 +298,13 @@ final class LgAdapter: RemoteAdapter {
 
     func connect() async throws {
         close()
-        if pin != nil { ws = try await tryConnect("wss://\(host):3001"); return }
-        // Encrypted port first; older webOS only has the plain one.
-        do {
-            let s = try await tryConnect("wss://\(host):3001")
-            ws = s
-            if let seen = s.delegate.seen { onPin(seen) }
-        } catch let e as CertChanged {
-            throw e
-        } catch {
-            ws = try await tryConnect("ws://\(host):3000")
-        }
+        // Encrypted only (port 3001): Mini Remote supports TVs from 2017 on, which have it.
+        let s = try await tryConnect("wss://\(host):3001")
+        ws = s
+        alive = true
+        if pin == nil, let seen = s.delegate.seen { onPin(seen) }
+        // Keep the volume in step: the TV sends it again whenever it changes.
+        try? await s.send(jsonString(["type": "subscribe", "id": "vol", "uri": "ssap://audio/getVolume"]))
     }
 
     @discardableResult
@@ -346,6 +398,7 @@ final class LgAdapter: RemoteAdapter {
     }
 
     func close() {
+        alive = false
         pointer?.close(); pointer = nil
         ws?.close(); ws = nil
         lock.lock(); let p = pending; pending = [:]; lock.unlock()

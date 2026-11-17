@@ -63,6 +63,26 @@ struct Settings: Codable, Equatable {
     var keepAwake = true
     /** "dial" or "trackpad". */
     var controlStyle = "dial"
+    /** Home layout: "strip" (Black) or "cards". */
+    var layout = "strip"
+}
+
+extension Settings {
+    /** Reads older saved settings too: any missing field keeps its default. */
+    init(from decoder: Decoder) throws {
+        self.init()
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        haptics = try c.decodeIfPresent(Bool.self, forKey: .haptics) ?? haptics
+        hapticStrength = try c.decodeIfPresent(Double.self, forKey: .hapticStrength) ?? hapticStrength
+        sound = try c.decodeIfPresent(Bool.self, forKey: .sound) ?? sound
+        soundLevel = try c.decodeIfPresent(Double.self, forKey: .soundLevel) ?? soundLevel
+        accentHex = try c.decodeIfPresent(String.self, forKey: .accentHex) ?? accentHex
+        scrubStep = try c.decodeIfPresent(Double.self, forKey: .scrubStep) ?? scrubStep
+        keepAwake = try c.decodeIfPresent(Bool.self, forKey: .keepAwake) ?? keepAwake
+        controlStyle = try c.decodeIfPresent(String.self, forKey: .controlStyle) ?? controlStyle
+        let l = try c.decodeIfPresent(String.self, forKey: .layout) ?? layout
+        layout = ["strip", "cards"].contains(l) ? l : "strip"
+    }
 }
 
 let HAPTIC_STRENGTHS: [(Double, String)] = [(0.6, "Light"), (1, "Medium"), (1.5, "Strong")]

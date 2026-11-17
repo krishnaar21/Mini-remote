@@ -28,7 +28,7 @@ enum T {
 func keySymbol(_ k: RemoteKey, muted: Bool, playing: Bool) -> String? {
     switch k {
     case .up: return "chevron.up"; case .down: return "chevron.down"; case .left: return "chevron.left"; case .right: return "chevron.right"
-    case .back: return "chevron.left"; case .home: return "tv"; case .playPause: return playing ? "play.fill" : "pause.fill"
+    case .back: return "chevron.left"; case .home: return "house"; case .playPause: return playing ? "play.fill" : "pause.fill"
     case .power: return "power"; case .volUp, .chUp: return "plus"; case .volDown, .chDown: return "minus"
     case .mute: return muted ? "speaker.slash.fill" : "speaker.wave.2.fill"; case .voice: return "mic.fill"
     default: return nil

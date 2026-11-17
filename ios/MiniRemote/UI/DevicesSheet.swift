@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum Route: Hashable { case device(String), local, scan, manual, pair(String), settings, privacy, licenses }
+enum Route: Hashable { case device(String), local, scan, manual, pair(String), settings, privacy, licenses, gestures }
 
 /** The TV sheet: your TVs, adding and pairing a TV, and (behind the gear) Settings. */
 struct DevicesSheet: View {
@@ -31,6 +31,7 @@ struct DevicesSheet: View {
                         case .settings: SettingsPage(vm: vm, accent: accent, path: $path)
                         case .privacy: PrivacyPage(vm: vm)
                         case .licenses: LicensesPage()
+                        case .gestures: GesturesPage(accent: accent)
                         }
                     }
                     .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Close") } }
@@ -39,7 +40,6 @@ struct DevicesSheet: View {
         .tint(T.ink)
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(T.sheet)
     }
 }
 
@@ -47,7 +47,6 @@ private struct Page<Content: View>: View {
     @ViewBuilder let content: () -> Content
     var body: some View {
         ScrollView { VStack(alignment: .leading, spacing: 0) { content() }.padding(.horizontal, 24).padding(.bottom, 32) }
-            .background(T.sheet)
     }
 }
 
@@ -58,7 +57,7 @@ private struct Illustration: View {
             Circle().fill(accent.opacity(0.07)).frame(width: 150, height: 150)
             Circle().fill(accent.opacity(0.12)).frame(width: 112, height: 112)
             VStack(spacing: 2) {
-                Image(systemName: "wifi").font(.system(size: 22, weight: .semibold)).foregroundStyle(accent)
+                Image(systemName: "wifi").font(.system(size: 22, weight: .semibold)).foregroundStyle(T.ink)
                 Image(systemName: "tv").font(.system(size: 40)).foregroundStyle(T.ink)
             }
         }
@@ -283,6 +282,15 @@ private struct SettingsPage: View {
             SectionTitle(text: "Remote")
             Card {
                 HStack {
+                    Text("Layout").foregroundStyle(T.ink)
+                    Spacer()
+                    Picker("Layout", selection: Binding(get: { vm.settings.layout }, set: { v in set { $0.layout = v } })) {
+                        Text("Black").tag("strip"); Text("Cards").tag("cards")
+                    }.pickerStyle(.segmented).frame(width: 190)
+                }
+                .padding(.vertical, 14)
+                RowDivider()
+                HStack {
                     Text("Control").foregroundStyle(T.ink)
                     Spacer()
                     Picker("Control", selection: Binding(get: { vm.settings.controlStyle }, set: { v in set { $0.controlStyle = v } })) {
@@ -291,8 +299,21 @@ private struct SettingsPage: View {
                 }
                 .padding(.vertical, 14)
             }
-            Text("One finger navigates; two fingers slide for volume (up or down) and channels (sideways). Double tap OK to mute; hold it for voice. Two-finger double tap switches dial and trackpad.")
+            Text(vm.settings.layout == "cards" ? "Swipe the dots for the volume, channel and number cards." : "Black screen, volume ring, two rows of keys.")
                 .font(.system(size: 12.5)).foregroundStyle(T.muted).padding(.top, 8)
+            Card {
+                Button { path.append(.gestures) } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Gestures").foregroundStyle(T.ink)
+                            Text("Swipes and taps, with demos").font(.system(size: 12.5)).foregroundStyle(T.muted)
+                        }
+                        Spacer(); Image(systemName: "chevron.right").foregroundStyle(Color(hex: 0xA8A8AD))
+                    }
+                    .padding(.vertical, 14)
+                }
+            }
+            .padding(.top, 12)
 
             SectionTitle(text: "Accent colour")
             Card {
@@ -384,8 +405,8 @@ private struct PrivacyPage: View {
             Card {
                 InfoBlock("Stored on this phone", "Your TVs' names and addresses and their pairing keys, in the Keychain (this device only, never synced or backed up), plus quick access, channels and settings."); RowDivider()
                 InfoBlock("Network", "Controls only TVs on your home Wi-Fi; public addresses are refused. Nothing else goes online."); RowDivider()
-                InfoBlock("Voice", "Use the microphone on your keyboard to dictate searches; that's handled by iOS, and the app never records audio itself."); RowDivider()
-                InfoBlock("Permissions", "Local network (find and control TVs). No location, contacts, microphone or photos.")
+                InfoBlock("Voice", "The mic listens only while Voice mode is on in Search. Speech becomes text on this iPhone where possible (otherwise through Apple's speech service); only the text goes to your TV. No audio is saved."); RowDivider()
+                InfoBlock("Permissions", "Local network (find and control TVs), microphone and speech recognition (Voice mode, while listening). No location, contacts or photos.")
             }
             .padding(.top, 8)
             WideButton(title: "Forget all TVs", kind: .secondary) { ask = "tvs" }
