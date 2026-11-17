@@ -207,20 +207,21 @@ fun CardDots(n: Int, page: Int, onPick: (Int) -> Unit) {
     }
 }
 
-/** The volume / channel card: two tall rockers and mute. */
+/** Width of the Cards layout's cards: the same as the row of four keys under them (4 × 62 + 3 × 20). */
+val CARD_W = 308.dp
+
+/** The volume / channel card: two tall rockers, then input and guide. */
 @Composable
 fun VolChCard(vm: RemoteVM, accent: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(22.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(36.dp)) {
             VerticalRocker(accent, "VOL", "Volume up", "Volume down", Ico.PLUS, Ico.MINUS, Modifier.width(80.dp).height(210.dp),
                 onUp = { vm.press(RemoteKey.VOL_UP, quiet = true) }, onDown = { vm.press(RemoteKey.VOL_DOWN, quiet = true) })
             VerticalRocker(accent, "CH", "Channel up", "Channel down", Ico.PLUS, Ico.MINUS, Modifier.width(80.dp).height(210.dp),
                 onUp = { vm.press(RemoteKey.CH_UP) }, onDown = { vm.press(RemoteKey.CH_DOWN) })
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            KeyButton(accent, "Mute", Modifier.size(56.dp), state = if (vm.muted) "Muted" else null, pressedScale = 1f, onPress = { vm.press(RemoteKey.MUTE) }) { c, _ ->
-                LineIcon(if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, c, 20.dp)
-            }
+        // Under the rockers' centres.
+        Row(horizontalArrangement = Arrangement.spacedBy(60.dp)) {
             KeyButton(accent, "Input", Modifier.size(56.dp), pressedScale = 1f, onPress = { vm.press(RemoteKey.INPUT) }) { c, _ -> LineIcon(Ico.INPUT, c, 20.dp) }
             KeyButton(accent, "Guide", Modifier.size(56.dp), pressedScale = 1f, onPress = { vm.press(RemoteKey.GUIDE) }) { c, _ -> LineIcon(Ico.GUIDE, c, 20.dp) }
         }

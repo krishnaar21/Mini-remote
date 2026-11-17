@@ -235,19 +235,22 @@ fun HomeScreen(
                     cards, Modifier.weight(1f).fillMaxWidth().padding(top = 8.dp).then(a11y),
                     pageSpacing = 12.dp, beyondViewportPageCount = 1,
                 ) { p ->
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    // Every card lines up with the row of keys below (same width), same height, 24dp inside.
+                    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        val cw = CARD_W
+                        val ch = minOf(maxHeight - 16.dp, 360.dp)
+                        val card = Modifier.size(cw, ch).clip(RoundedCornerShape(28.dp)).background(M.Container).padding(24.dp)
                         when (p) {
-                            0 -> padArea(padOnly, Modifier.fillMaxSize())
-                            1 -> Box(Modifier.fillMaxWidth(0.84f).fillMaxHeight(0.86f).clip(RoundedCornerShape(28.dp)).background(M.Container), contentAlignment = Alignment.Center) { VolChCard(vm, accent) }
-                            else -> BoxWithConstraints(Modifier.fillMaxWidth(0.84f).fillMaxHeight(0.86f).clip(RoundedCornerShape(28.dp)).background(M.Container).padding(18.dp), contentAlignment = Alignment.Center) {
-                                val s = minOf(maxWidth, maxHeight, 340.dp)
-                                CompositionLocalProvider(LocalK provides s.value / 780f) { Numpad(vm, accent, Modifier.size(s)) }
+                            0 -> padArea(padOnly, Modifier.width(cw).height(ch))
+                            1 -> Box(card, contentAlignment = Alignment.Center) { VolChCard(vm, accent) }
+                            else -> Box(card, contentAlignment = Alignment.Center) {
+                                CompositionLocalProvider(LocalK provides (cw - 48.dp).value / 780f) { Numpad(vm, accent, Modifier.fillMaxSize()) }
                             }
                         }
                     }
                 }
                 CardDots(3, cards.currentPage) { scope.launch { cards.animateScrollToPage(it) } }
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(8.dp))
                 FourKeys(vm, accent, openKeys)
             }
 
