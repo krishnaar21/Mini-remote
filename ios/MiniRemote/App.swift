@@ -19,6 +19,7 @@ struct ContentView: View {
     @State private var showDevices = false
     @State private var showKeys = false
     @State private var connecting = false
+    @State private var startRoute: [Route] = []
 
     private var accent: Color { Color(hexString: vm.settings.accentHex) }
 
@@ -40,7 +41,7 @@ struct ContentView: View {
             PageDots(page: $page, count: 2, accent: accent).padding(.bottom, 4)
         }
         .tint(accent)
-        .sheet(isPresented: $showDevices) { DevicesSheet(vm: vm, accent: accent) }
+        .sheet(isPresented: $showDevices) { DevicesSheet(vm: vm, accent: accent, start: startRoute) }
         .sheet(isPresented: $showKeys) { KeyboardSheet(vm: vm, accent: accent) }
         .sheet(item: Binding(get: { showDevices ? nil : vm.pairPrompt.map { PromptBox(p: $0) } }, set: { if $0 == nil { vm.answerCode(nil) } })) { b in
             CodeSheet(vm: vm, accent: accent, prompt: b.p)
@@ -56,11 +57,38 @@ struct ContentView: View {
             }
         }
         .onChange(of: page) { p in if p != 0 { tray = false } }
+        #if DEBUG
+        .onAppear { screenshot() }
+        #endif
         .onChange(of: tray) { t in
             if t { Task { try? await Task.sleep(nanoseconds: 7_000_000_000); tray = false } }
         }
     }
 }
+
+#if DEBUG
+extension ContentView {
+    /** SHOT=<screen> opens one screen with a pretend TV, for the CI screenshot run. */
+    func screenshot() {
+        guard let s = ProcessInfo.processInfo.environment["SHOT"] else { return }
+        vm.demo(trackpad: s == "trackpad")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            switch s {
+            case "tray": tray = true
+            case "numpad": tray = true; numpad = true
+            case "apps": page = 1
+            case "devices": showDevices = true
+            case "scan": startRoute = [.scan]; showDevices = true
+            case "settings": startRoute = [.settings]; showDevices = true
+            case "privacy": startRoute = [.settings, .privacy]; showDevices = true
+            case "licenses": startRoute = [.settings, .licenses]; showDevices = true
+            case "keys": showKeys = true
+            default: break
+            }
+        }
+    }
+}
+#endif
 
 private struct PromptBox: Identifiable { let p: PairPrompt; var id: String { p.tvName + (p.error ?? "") } }
 

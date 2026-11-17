@@ -372,3 +372,26 @@ final class RemoteModel: ObservableObject {
         say("All data erased")
     }
 }
+
+#if DEBUG
+// Screenshot mode (Debug builds only): a pretend TV that's connected, a few apps, nothing saved.
+extension RemoteModel {
+    func demo(trackpad: Bool) {
+        devices = [
+            Device(id: "demo", name: "Living Room TV", host: "192.168.1.20", brand: .ANDROID_TV),
+            Device(id: "demo2", name: "Bedroom Roku", host: "192.168.1.31", brand: .ROKU),
+        ]
+        activeId = "demo"
+        link = .ready
+        settings.controlStyle = trackpad ? "trackpad" : "dial"
+        shortcuts = [("netflix", "Netflix"), ("youtube", "YouTube"), ("prime", "Prime Video"), ("hotstar", "JioHotstar")].map {
+            Shortcut(id: "s-\($0.0)", kind: .app, name: $0.1, value: $0.0, pinned: true)
+        }
+        tvApps = [
+            TvApp(id: "com.netflix.ninja", name: "Netflix"), TvApp(id: "com.google.android.youtube.tv", name: "YouTube"),
+            TvApp(id: "com.amazon.amazonvideo.livingroom", name: "Prime Video"), TvApp(id: "com.disney.disneyplus", name: "Disney+"),
+            TvApp(id: "com.spotify.tv.android", name: "Spotify"), TvApp(id: "com.plexapp.android", name: "Plex"),
+        ]
+    }
+}
+#endif

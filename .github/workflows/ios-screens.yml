@@ -1,0 +1,49 @@
+name: iOS screenshots
+on:
+  push:
+    branches: [claude/ios-native]
+    paths: ["ios/**", ".github/workflows/ios-screens.yml"]
+  workflow_dispatch:
+
+jobs:
+  shots:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+      - name: Pick and boot an iPhone simulator
+        run: |
+          UDID=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith("iPhone 16"))][0].udid // empty')
+          [ -z "$UDID" ] && UDID=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')
+          echo "UDID=$UDID" >> $GITHUB_ENV
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4
+      - name: Build for the simulator (Debug)
+        run: |
+          set -o pipefail
+          cd ios
+          xcodebuild -project MiniRemote.xcodeproj -scheme MiniRemote -configuration Debug \
+            -destination "id=$UDID" CODE_SIGNING_ALLOWED=NO -derivedDataPath build build | xcbeautify
+      - name: Take screenshots
+        run: |
+          cd ios
+          APP=build/Build/Products/Debug-iphonesimulator/MiniRemote.app
+          BID=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")
+          xcrun simctl install "$UDID" "$APP"
+          mkdir -p shots
+          i=1
+          for s in home trackpad tray numpad keys apps devices scan settings privacy licenses; do
+            xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
+            SIMCTL_CHILD_SHOT=$s xcrun simctl launch "$UDID" "$BID"
+            sleep 5
+            xcrun simctl io "$UDID" screenshot "shots/$(printf %02d $i)-$s.png"
+            i=$((i+1))
+          done
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ios-screenshots
+          path: ios/shots

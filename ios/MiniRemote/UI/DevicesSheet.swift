@@ -7,11 +7,14 @@ struct DevicesSheet: View {
     @ObservedObject var vm: RemoteModel
     let accent: Color
     @Environment(\.dismiss) private var dismiss
+    /** Pages to open straight away (screenshots). */
+    var start: [Route] = []
     @State private var path: [Route] = []
 
     var body: some View {
         NavigationStack(path: $path) {
             DevicesList(vm: vm, accent: accent, path: $path)
+                .onAppear { if path.isEmpty && !start.isEmpty { path = start } }
                 .navigationTitle("Choose a TV").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .navigationBarLeading) { Button { path.append(.settings) } label: { Image(systemName: "gearshape") }.accessibilityLabel("Settings") }
