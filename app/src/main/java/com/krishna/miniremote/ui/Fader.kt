@@ -51,5 +51,7 @@ fun Fader(
             thumbColor = accent, activeTrackColor = accent, inactiveTrackColor = M.High,
             activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent,
         ),
+        // A small round knob instead of the tall default handle.
+        thumb = { Box(Modifier.size(20.dp).background(accent, androidx.compose.foundation.shape.CircleShape)) },
     )
 }

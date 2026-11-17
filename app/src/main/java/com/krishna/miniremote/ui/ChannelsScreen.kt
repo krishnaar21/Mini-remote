@@ -69,6 +69,9 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.pointerInput
@@ -128,8 +131,11 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
     var zone by remember { mutableStateOf(Rect.Zero) }
     var origin by remember { mutableStateOf(Offset.Zero) }
     val over = drag != null && zone.contains(dragPos)
+    val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
     val dragger = Dragger(
-        start = { e, at -> drag = e; dragPos = at; vm.feel.fire(com.krishna.miniremote.Feel.HEAVY) },
+        // Dragging starts: bring Quick access (the drop slot) into view.
+        start = { e, at -> drag = e; dragPos = at; zone = Rect.Zero; vm.feel.fire(com.krishna.miniremote.Feel.HEAVY); scope.launch { scroll.animateScrollTo(0) } },
         move = { by -> dragPos += by },
         end = {
             val e = drag
@@ -177,7 +183,7 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
 
     Box(Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInRoot() }) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState(), enabled = drag == null)
+            Modifier.fillMaxSize().verticalScroll(scroll, enabled = drag == null)
                 .padding(horizontal = 20.dp).padding(bottom = NAV_H + 40.dp),
         ) {
             PageTitle("Apps") {
@@ -196,7 +202,9 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
 
             SectionTitle("Quick access")
             val pinned = vm.shortcuts.filter { it.pinned }
-            if (pinned.isEmpty()) {
+            if (drag != null) {
+                DropSlot(over, accent, Modifier.padding(top = 12.dp).onGloballyPositioned { zone = it.boundsInRoot() })
+            } else if (pinned.isEmpty()) {
                 Hint("Long-press an app or channel and drag it to the top to keep it here.", top = 6)
             } else {
                 Row(
@@ -236,21 +244,8 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
             }
         }
 
-        // While dragging: the drop zone at the top and the tile under the finger.
+        // While dragging: the tile follows the finger.
         drag?.let { e ->
-            Box(
-                Modifier.align(Alignment.TopCenter).padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth().height(96.dp)
-                    .onGloballyPositioned { zone = it.boundsInRoot() }
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(if (over) accent.copy(alpha = 0.32f) else M.High)
-                    .border(2.dp, if (over) accent else accent.copy(alpha = 0.5f), RoundedCornerShape(22.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    LineIcon(Ico.STAR, accent, 22.dp)
-                    Text(if (over) "Release to add" else "Drop here for Quick access", color = T.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                }
-            }
             val density = LocalDensity.current
             Box(
                 Modifier.offset {
@@ -271,6 +266,27 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
         AppSheet(e, accent, onOpen = { if (!needTv()) e.open() }, onStore = { if (!needTv()) e.storeId?.let { id -> vm.openStore(e.name, id) } }) { details = null }
     }
     adding?.let { k -> AddShortcutSheet(vm, accent, k) { adding = null } }
+}
+
+/** Where a dragged app lands: a grey dashed box in the Quick access row. Lights up when the tile is over it. */
+@Composable
+private fun DropSlot(over: Boolean, accent: Color, modifier: Modifier) {
+    val line = if (over) accent else Color(0xFF8A8A8E)
+    Box(
+        modifier.fillMaxWidth().height(96.dp)
+            .background(if (over) accent.copy(alpha = 0.12f) else Color.Transparent, RoundedCornerShape(20.dp))
+            .drawBehind {
+                val w = 2.dp.toPx()
+                drawRoundRect(
+                    line, topLeft = Offset(w / 2, w / 2), size = androidx.compose.ui.geometry.Size(size.width - w, size.height - w),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(20.dp.toPx()),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(w, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10.dp.toPx(), 7.dp.toPx()))),
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(if (over) "Release to add" else "Drop app here", color = if (over) accent else T.Dim, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+    }
 }
 
 /** Long-press drag callbacks shared by every tile. */

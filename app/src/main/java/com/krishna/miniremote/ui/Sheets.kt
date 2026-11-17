@@ -632,7 +632,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
     SectionTitle("Remote")
     Group {
     SegRow("Control", listOf("dial" to "Dial", "trackpad" to "Trackpad"), s.controlStyle) { vm.update(s.copy(controlStyle = it)) }
-    ToggleRow("Phone volume buttons", "Change the TV's volume while the app is open", s.volumeKeys) { vm.update(s.copy(volumeKeys = it)) }
+    ToggleRow("Phone volume buttons", "Change the TV's volume while the app is open", s.volumeKeys, last = true) { vm.update(s.copy(volumeKeys = it)) }
     }
     Hint("One finger navigates; two fingers slide for volume (up or down) and channels (sideways). Swipe up, or tap the chevron, for the volume and channel buttons. Double tap OK to mute; hold it for voice.", top = 8)
 
@@ -656,12 +656,18 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
     }
     Hint("Pressed keys, switches and highlights use this colour.", top = 8)
 
-    SectionTitle("Feel")
+    SectionTitle("Haptics")
     Group {
     ToggleRow("Haptics", "Physical feedback on every press and scrub", s.haptics) { vm.update(s.copy(haptics = it)) }
-    SegRow("Strength", HAPTIC_STRENGTHS, s.hapticStrength) { vm.update(s.copy(hapticStrength = it)) }
+    SegRow("Strength", HAPTIC_STRENGTHS, s.hapticStrength, last = true) { vm.update(s.copy(hapticStrength = it)) }
+    }
+    SectionTitle("Sound")
+    Group {
     ToggleRow("Sound", "Soft click with every press and scrub", s.sound) { vm.update(s.copy(sound = it)) }
-    SegRow("Sound level", SOUND_LEVELS, s.soundLevel) { vm.update(s.copy(soundLevel = it)); vm.feel.fire(com.krishna.miniremote.Feel.PRESS) }
+    SegRow("Sound level", SOUND_LEVELS, s.soundLevel, last = true) { vm.update(s.copy(soundLevel = it)); vm.feel.fire(com.krishna.miniremote.Feel.PRESS) }
+    }
+    SectionTitle("Scrolling")
+    Group {
     Column(Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 2.dp)) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
@@ -678,7 +684,9 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
             Text("Slow", color = Muted, fontSize = 12.sp)
         }
     }
-    Divider()
+    }
+    SectionTitle("Screen")
+    Group {
     ToggleRow("Keep screen on", "While the remote is open", s.keepAwake, last = true) { vm.update(s.copy(keepAwake = it)) }
     }
 
@@ -797,7 +805,7 @@ internal fun ToggleRow(title: String, sub: String?, checked: Boolean, last: Bool
 }
 
 @Composable
-internal fun <V> SegRow(title: String, opts: List<Pair<V, String>>, value: V, onPick: (V) -> Unit) {
+internal fun <V> SegRow(title: String, opts: List<Pair<V, String>>, value: V, last: Boolean = false, onPick: (V) -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).padding(vertical = 16.dp, horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(title, color = T.Ink, fontSize = 15.sp, modifier = Modifier.weight(1f))
         Row(Modifier.softFace(HOLLOW, sheen = false, corner = 10.dp, dpUnits = true).padding(3.dp).selectableGroup()) {
@@ -814,7 +822,7 @@ internal fun <V> SegRow(title: String, opts: List<Pair<V, String>>, value: V, on
             }
         }
     }
-    Divider()
+    if (!last) Divider()
 }
 
 /* ------------------------------------------------------------- keyboard etc. */
