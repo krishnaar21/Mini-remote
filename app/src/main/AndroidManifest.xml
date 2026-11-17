@@ -11,6 +11,8 @@
 
     <application
         android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@drawable/ic_launcher"
         android:label="Mini Remote"
         android:networkSecurityConfig="@xml/network_security"

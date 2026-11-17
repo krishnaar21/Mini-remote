@@ -497,5 +497,26 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         saveShortcuts(order + shortcuts.filter { !it.pinned })
     }
 
+    /** Forget every TV: their addresses, pairing tokens and pins, and this phone's Android TV key. */
+    fun forgetAllTvs() {
+        disconnect()
+        devices = emptyList(); store.saveDevices(devices)
+        activeId = null; store.saveActive(null)
+        tvApps = emptyList(); appsFor = null; nowOn = null
+        com.krishna.miniremote.net.ClientCert.reset()
+        say("All TVs forgotten")
+    }
+
+    /** Erase all app data: TVs, keys, quick access, channels and settings. */
+    fun eraseAll() {
+        forgetAllTvs()
+        store.clearAll()
+        Vault.destroy()
+        shortcuts = emptyList()
+        settings = Settings(); applyFeel(settings)
+        runCatching { java.io.File(getApplication<Application>().cacheDir, "updates").deleteRecursively() }
+        say("All data erased")
+    }
+
     override fun onCleared() { adapter?.close() }
 }

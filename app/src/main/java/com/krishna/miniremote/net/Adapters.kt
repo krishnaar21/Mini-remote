@@ -332,13 +332,14 @@ class LgAdapter(
             tryConnect("wss://$host:3001", secure)
             return
         }
+        // Encrypted port first, so the pairing key never crosses Wi-Fi in the clear when the TV supports it.
         try {
-            tryConnect("ws://$host:3000", Net.plain)
-        } catch (e: Exception) {
-            if (e.isCertChanged()) throw e
-            // Newer webOS versions only accept the secure port.
             tryConnect("wss://$host:3001", secure)
             tls.seen?.let(onPin)
+        } catch (e: Exception) {
+            if (e.isCertChanged() || e is kotlinx.coroutines.CancellationException && e !is kotlinx.coroutines.TimeoutCancellationException) throw e
+            // Older webOS versions only have the plain port.
+            tryConnect("ws://$host:3000", Net.plain)
         }
     }
 

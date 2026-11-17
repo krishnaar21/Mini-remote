@@ -6,8 +6,24 @@ import android.content.Context
 class Store(ctx: Context) {
     private val p = ctx.getSharedPreferences("mini_remote", Context.MODE_PRIVATE)
 
-    fun loadDevices(): List<Device> = Device.listFromJson(p.getString("devices", null))
-    fun saveDevices(l: List<Device>) = p.edit().putString("devices", Device.listToJson(l)).apply()
+    /** Saved TVs (with their pairing tokens and pins), encrypted with [Vault]. Older plain copies are moved over. */
+    fun loadDevices(): List<Device> {
+        p.getString("devices_v", null)?.let { return Device.listFromJson(Vault.open(it)) }
+        val legacy = p.getString("devices", null) ?: return emptyList()
+        val l = Device.listFromJson(legacy)
+        saveDevices(l)
+        return l
+    }
+    fun saveDevices(l: List<Device>) {
+        val e = p.edit().remove("devices")
+        runCatching { Vault.seal(Device.listToJson(l)) }
+            .onSuccess { e.putString("devices_v", it) }
+            .onFailure { e.putString("devices", Device.listToJson(l)) } // no Keystore: still app-private
+        e.apply()
+    }
+
+    /** Erase everything this app stored. */
+    fun clearAll() = p.edit().clear().commit()
     fun activeId(): String? = p.getString("active", null)
     fun saveActive(id: String?) = p.edit().putString("active", id).apply()
 

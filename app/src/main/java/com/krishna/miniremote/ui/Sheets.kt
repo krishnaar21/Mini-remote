@@ -733,9 +733,29 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
         Chevron()
     }
     }
+    SectionTitle("Privacy & data")
+    Group {
+        InfoBlock("Stored on this phone", "Your TVs' names and addresses, their pairing keys (encrypted with a key held in the phone's secure hardware), quick access, channels and settings. Nothing is backed up or synced.")
+        Divider()
+        InfoBlock("Network", "Talks only to TVs on your home Wi-Fi; public addresses are refused. Update checks go to GitHub; turn off Automatic updates to stop them.")
+        Divider()
+        InfoBlock("Voice search", "Uses your phone's speech service to turn speech into words, then sends the words to your TV. The app itself never records audio.")
+        Divider()
+        InfoBlock("Permissions", "Network and Wi-Fi (find and control TVs), vibration, notifications and installing updates. No location, contacts, microphone or files.")
+    }
+    var ask by remember { mutableStateOf<String?>(null) }
+    Btn("Forget all TVs", kind = 1) { ask = "tvs" }
+    Btn("Erase all data", kind = 2) { ask = "all" }
+    when (ask) {
+        "tvs" -> ConfirmSheet("Forget all TVs?", "Removes every TV and its pairing keys. You'll pair each TV again to use it.",
+            "Forget all TVs", danger = true, onConfirm = { vm.forgetAllTvs() }, onDismiss = { ask = null })
+        "all" -> ConfirmSheet("Erase all data?", "Removes TVs, pairing keys, quick access, channels and settings. The app starts fresh.",
+            "Erase everything", danger = true, onConfirm = { vm.eraseAll() }, onDismiss = { ask = null })
+    }
+
     SectionTitle("About")
     Group {
-    Text("Mini Remote talks only to TVs on your home network. No account, no tracking. Pairing keys stay on this phone.",
+    Text("Mini Remote needs no account and has no ads, analytics or tracking.",
         color = Muted, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 16.dp))
     // Lets you tell builds apart: CI numbers every build (0.2.<run>).
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -913,5 +933,13 @@ fun ConfirmSheet(title: String, text: String, action: String, danger: Boolean, o
             Btn(action, kind = if (danger) 2 else 0) { onConfirm(); onDismiss() }
             Btn("Cancel", kind = 1, onClick = onDismiss)
         }
+    }
+}
+
+@Composable
+internal fun InfoBlock(title: String, body: String) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 14.dp)) {
+        Text(title, color = T.Ink, fontSize = 15.sp)
+        Text(body, color = Muted, fontSize = 12.5.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 4.dp))
     }
 }

@@ -150,6 +150,9 @@ internal object ClientCert {
         return ks
     }
 
+    /** Forgets this phone's Android TV identity (TVs will ask to pair again). */
+    fun reset() { runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(ALIAS) } }
+
     fun publicKey(): RSAPublicKey = ensure().getCertificate(ALIAS).publicKey as RSAPublicKey
 
     /** Opens a mutual-TLS socket: our keystore cert as the client, [pin] checks the TV. */
