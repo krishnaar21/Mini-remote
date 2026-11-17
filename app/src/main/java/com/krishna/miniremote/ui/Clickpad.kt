@@ -229,9 +229,9 @@ fun Clickpad(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(bdp(22f)),
             ) {
-                LineIcon(Ico.TV, Color(0xFF6F6F75), bdp(110f), stroke = 1.5f)
-                Text("No TV connected", color = Color(0xFF6F6F75), fontSize = bsp(36f), fontWeight = FontWeight.SemiBold)
-                Text("Tap to choose a TV", color = Color(0xFF55555B), fontSize = bsp(30f))
+                LineIcon(Ico.TV, Color(0xFFB0B0B5), bdp(110f), stroke = 1.5f)
+                Text("No TV connected", color = Color(0xFFB0B0B5), fontSize = bsp(36f), fontWeight = FontWeight.SemiBold)
+                Text("Tap to choose a TV", color = Color(0xFFA1A1A6), fontSize = bsp(30f))
             }
             return@Box
         }
@@ -247,7 +247,7 @@ fun Clickpad(
             contentAlignment = Alignment.Center,
         ) {
             if (toast == null) {
-                Text("OK", Modifier.clearAndSetSemantics {}, color = if (wellDown) accent else Color(0xFF55555B),
+                Text("OK", Modifier.clearAndSetSemantics {}, color = if (wellDown) accent else Color(0xFFA1A1A6),
                     fontSize = bsp(40f), fontWeight = FontWeight.SemiBold, letterSpacing = bsp(40f * 0.06f))
             } else {
                 // .toast: accent icon (84px) over the key name, 500 28px #d4d4d9; longer messages wrap.

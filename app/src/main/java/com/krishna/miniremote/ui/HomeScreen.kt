@@ -249,7 +249,7 @@ fun ControlTray(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Un
         Box(
             Modifier.fillMaxWidth().height(22.dp).clickable(onClickLabel = "hide volume and channels", role = Role.Button, onClick = onClose),
             contentAlignment = Alignment.Center,
-        ) { Box(Modifier.size(32.dp, 4.dp).clip(CircleShape).background(Color(0xFF4A4A50))) }
+        ) { Box(Modifier.size(32.dp, 4.dp).clip(CircleShape).background(Color(0xFF7C7C82))) }
         VolumePill(
             accent, vm.muted, Modifier.fillMaxWidth().height(54.dp),
             onDown = { vm.press(RemoteKey.VOL_DOWN, quiet = true) },

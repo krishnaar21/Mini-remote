@@ -83,7 +83,7 @@ fun Trackpad(
                 val gap = u / 11f
                 val r = 1.3.dp.toPx()
                 val rows = (this.size.height / gap).toInt()
-                for (i in 1..10) for (j in 1 until rows) drawCircle(Color.White.copy(alpha = 0.07f), r, Offset(i * gap, j * gap))
+                for (i in 1..10) for (j in 1 until rows) drawCircle(Color.White.copy(alpha = 0.16f), r, Offset(i * gap, j * gap))
                 touch?.let { t ->
                     drawCircle(Brush.radialGradient(0f to Color.White.copy(0.13f), 0.7f to Color.Transparent, center = t, radius = u * 0.3f), u * 0.3f, t)
                 }
@@ -134,21 +134,21 @@ fun Trackpad(
     ) {
         if (offline) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                LineIcon(Ico.TV, Color(0xFF6F6F75), 40.dp, stroke = 1.5f)
-                Text("No TV connected", color = Color(0xFF6F6F75), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Text("Tap to choose a TV", color = Color(0xFF55555B), fontSize = 12.sp)
+                LineIcon(Ico.TV, Color(0xFFB0B0B5), 40.dp, stroke = 1.5f)
+                Text("No TV connected", color = Color(0xFFB0B0B5), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text("Tap to choose a TV", color = Color(0xFFA1A1A6), fontSize = 12.sp)
             }
             return@Box
         }
         val e = size * 0.05f
         val cs = size * 0.09f
-        fun col(k: RemoteKey) = if (lit == k) accent else Color(0xFF5A5A60)
+        fun col(k: RemoteKey) = if (lit == k) accent else Color(0xFF9C9CA2)
         LineIcon(if (watch) Ico.PLUS else Ico.UP, col(RemoteKey.UP), cs, Modifier.align(Alignment.TopCenter).padding(top = e), stroke = 2.2f)
         LineIcon(if (watch) Ico.MINUS else Ico.DOWN, col(RemoteKey.DOWN), cs, Modifier.align(Alignment.BottomCenter).padding(bottom = e), stroke = 2.2f)
         LineIcon(Ico.LEFT, col(RemoteKey.LEFT), cs, Modifier.align(Alignment.CenterStart).padding(start = e), stroke = 2.2f)
         LineIcon(Ico.RIGHT, col(RemoteKey.RIGHT), cs, Modifier.align(Alignment.CenterEnd).padding(end = e), stroke = 2.2f)
         if (touch == null) Text(if (onTwoFinger != null) "Two fingers: volume ↕ · channels ↔" else "Tap for OK · slide to move",
-            color = Color(0xFF5A5A60), fontSize = 11.sp,
+            color = Color(0xFF9C9CA2), fontSize = 11.sp,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 44.dp))
 
         val zone = size * 0.28f

@@ -87,10 +87,10 @@ fun stadiumPath(w: Float, h: Float, cr: Float? = null) = Path().apply {
  * tonal fills: no bevels, no inner shadows. Raised = lighter container, pressed = one step lighter.
  */
 object M {
-    val Container = Color(0xFF1F1F21)
-    val High = Color(0xFF29292B)
-    val Highest = Color(0xFF343437)
-    val Pressed = Color(0xFF3E3E42)
+    val Container = Color(0xFF2E2E31)
+    val High = Color(0xFF3D3D41)
+    val Highest = Color(0xFF4C4C51)
+    val Pressed = Color(0xFF5A5A60)
 }
 
 private fun flatColor(f: Face): Color = when (f) {

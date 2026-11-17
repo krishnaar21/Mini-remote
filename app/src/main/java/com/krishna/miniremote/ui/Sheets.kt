@@ -96,11 +96,11 @@ import kotlin.math.roundToInt
 /* ---------------------------------------------------------------- palette */
 
 /** Sheets use the remote's own charcoal so they read as part of the same object. */
-internal val SheetBg = Color(0xFF1C1C1E)
+internal val SheetBg = Color(0xFF262629)
 internal val CardBg = Color(0xFF222223)
 internal val Line = Color(0xFF2E2E30)
-internal val Muted = Color(0xFF8C8C90)
-internal val LeadInk = Color(0xFFC3C3C7)
+internal val Muted = Color(0xFFB4B4B9)
+internal val LeadInk = Color(0xFFE0E0E4)
 internal val Fill2 = Color(0xFF2A2A2B)
 internal val OkGreen = Color(0xFF4DDC88)
 internal val SwitchOn = Color(0xFF34C759)
@@ -180,7 +180,7 @@ internal val SheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
 
 /** .grab: 38 x 4 handle, 12 above and 4 below. */
 @Composable
-internal fun Grab() = Box(Modifier.padding(top = 12.dp, bottom = 4.dp).size(38.dp, 4.dp).background(Color(0xFF444444), RoundedCornerShape(4.dp)))
+internal fun Grab() = Box(Modifier.padding(top = 12.dp, bottom = 4.dp).size(38.dp, 4.dp).background(Color(0xFF8A8A8E), RoundedCornerShape(4.dp)))
 
 /** .field: label above (13, muted), 52 tall, radius 12, #141415, 1px line, 16 text. */
 @Composable
@@ -354,7 +354,7 @@ internal fun CardRow(
     }
 }
 
-@Composable internal fun Chevron() = LineIcon(Ico.CHEVRON_R, Color(0xFF6C6C70), 18.dp)
+@Composable internal fun Chevron() = LineIcon(Ico.CHEVRON_R, Color(0xFFA8A8AD), 18.dp)
 
 @Composable
 internal fun Badge(text: String) =
@@ -609,8 +609,8 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
             vm.update(s.copy(scrubStepDp = it))
         }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-            Text("FAST", color = Color(0xFF6C6C70), fontSize = 11.sp, letterSpacing = 0.88.sp, fontFamily = Mono, modifier = Modifier.weight(1f))
-            Text("SLOW", color = Color(0xFF6C6C70), fontSize = 11.sp, letterSpacing = 0.88.sp, fontFamily = Mono)
+            Text("FAST", color = Color(0xFFA8A8AD), fontSize = 11.sp, letterSpacing = 0.88.sp, fontFamily = Mono, modifier = Modifier.weight(1f))
+            Text("SLOW", color = Color(0xFFA8A8AD), fontSize = 11.sp, letterSpacing = 0.88.sp, fontFamily = Mono)
         }
     }
     Divider()
@@ -717,7 +717,7 @@ fun statusColor(l: Link, accent: Color): Color = when (l) {
     Link.READY -> Color(0xFF30D158)
     Link.CONNECTING -> Color(0xFFFFD60A)
     Link.ERROR -> T.Danger
-    Link.IDLE -> Color(0xFF55555B)
+    Link.IDLE -> Color(0xFFA1A1A6)
 }
 fun linkWord(l: Link) = when (l) { Link.READY -> "Connected"; Link.CONNECTING -> "Connecting..."; Link.ERROR -> "Can't reach"; Link.IDLE -> "" }
 

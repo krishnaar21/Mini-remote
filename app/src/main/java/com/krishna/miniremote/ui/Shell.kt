@@ -239,7 +239,7 @@ fun PageDots(page: Int, accent: Color, modifier: Modifier = Modifier, onSwipe: (
                     .semantics { contentDescription = t.label }.padding(horizontal = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Box(Modifier.size(if (sel) 18.dp else 6.dp, 6.dp).clip(CircleShape).background(if (sel) accent else Color(0xFF4A4A50)))
+                Box(Modifier.size(if (sel) 18.dp else 6.dp, 6.dp).clip(CircleShape).background(if (sel) accent else Color(0xFF7C7C82)))
             }
         }
     }

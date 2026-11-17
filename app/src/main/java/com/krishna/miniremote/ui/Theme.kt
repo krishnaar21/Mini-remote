@@ -8,12 +8,12 @@ import com.krishna.miniremote.R
 
 /** Colours from the design preview (its final "charcoal soft-touch" layer). */
 object T {
-    val Bg = Color(0xFF131314)
-    val FaceTop = Color(0xFF29292B)
-    val FaceBot = Color(0xFF29292B)
-    val Ink = Color(0xFFE3E3E3)
-    val Dim = Color(0xFF9AA0A6)
-    val Well = Color(0xFF1F1F21)
+    val Bg = Color(0xFF1C1C1E)
+    val FaceTop = Color(0xFF3A3A3D)
+    val FaceBot = Color(0xFF3A3A3D)
+    val Ink = Color(0xFFF7F7F8)
+    val Dim = Color(0xFFBDC1C6)
+    val Well = Color(0xFF2C2C2E)
     val Danger = Color(0xFFF2B8B5)
 }
 

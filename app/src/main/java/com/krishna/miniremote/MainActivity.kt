@@ -50,12 +50,12 @@ class MainActivity : ComponentActivity() {
                 // Material 3 dark, neutral surfaces, with the chosen accent as the primary colour.
                 colorScheme = darkColorScheme(
                     primary = accent, onPrimary = onAccent,
-                    primaryContainer = accent.copy(alpha = 0.3f).compositeOver(Color(0xFF131314)), onPrimaryContainer = Color.White,
-                    secondaryContainer = accent.copy(alpha = 0.22f).compositeOver(Color(0xFF131314)), onSecondaryContainer = Color.White,
-                    background = Color(0xFF131314), surface = Color(0xFF131314),
-                    surfaceContainerLowest = Color(0xFF0E0E0F), surfaceContainerLow = Color(0xFF1B1B1C),
-                    surfaceContainer = Color(0xFF1F1F21), surfaceContainerHigh = Color(0xFF29292B), surfaceContainerHighest = Color(0xFF343437),
-                    onSurface = Color(0xFFE3E3E3), onSurfaceVariant = Color(0xFFC4C7C5),
+                    primaryContainer = accent.copy(alpha = 0.3f).compositeOver(Color(0xFF1C1C1E)), onPrimaryContainer = Color.White,
+                    secondaryContainer = accent.copy(alpha = 0.22f).compositeOver(Color(0xFF1C1C1E)), onSecondaryContainer = Color.White,
+                    background = Color(0xFF1C1C1E), surface = Color(0xFF1C1C1E),
+                    surfaceContainerLowest = Color(0xFF161618), surfaceContainerLow = Color(0xFF262629),
+                    surfaceContainer = Color(0xFF2E2E31), surfaceContainerHigh = Color(0xFF3D3D41), surfaceContainerHighest = Color(0xFF4C4C51),
+                    onSurface = Color(0xFFF7F7F8), onSurfaceVariant = Color(0xFFD6D9DC),
                     outline = Color(0xFF8E918F), outlineVariant = Color(0xFF444746),
                 ),
                 typography = Typography().withFont(Inter),
