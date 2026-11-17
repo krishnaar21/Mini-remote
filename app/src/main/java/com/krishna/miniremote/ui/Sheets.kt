@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
@@ -136,7 +138,9 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
     ) {
         BackHandler(enabled = stack.size > 1) { back() }
         val canBack = stack.size > 1 || page !is Page.Devices
-        Column(Modifier.navigationBarsPadding()) {
+        val maxH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp -
+            androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues().calculateTopPadding() - 28.dp
+        Column(Modifier.heightIn(max = maxH).navigationBarsPadding()) {
             when (page) {
                 Page.Devices -> {
                     Header("Choose a TV", onClose, gear = { go(Page.Settings) })
@@ -234,15 +238,19 @@ internal fun Toggle(on: Boolean) {
 
 @Composable
 internal fun Header(title: String, onClose: () -> Unit, back: (() -> Unit)? = null, gear: (() -> Unit)? = null) {
+    // Title centred between one round button on each side: back (or settings) and close.
     Row(
-        Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 10.dp, bottom = 12.dp).padding(bottom = 14.dp),
+        Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 22.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        back?.let { CircleIcon(Ico.CHEVRON_L, "Back", it) }
+        when {
+            back != null -> CircleIcon(Ico.CHEVRON_L, "Back", back)
+            gear != null -> CircleIcon(Ico.GEAR, "Settings", gear)
+            else -> Spacer(Modifier.size(44.dp))
+        }
         Text(title, color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.18).sp, maxLines = 2,
-            modifier = Modifier.weight(1f).semantics { heading() })
-        gear?.let { CircleIcon(Ico.GEAR, "Settings", it) }
+            textAlign = TextAlign.Center, modifier = Modifier.weight(1f).semantics { heading() })
         CircleIcon(Ico.CLOSE, "Close", onClose)
     }
 }
@@ -313,6 +321,21 @@ internal fun Hero(ico: Ico, bg: Color, fg: Color) {
     }
 }
 
+/** A TV with Wi-Fi waves over it, in soft rings: the picture for empty and first-run screens. */
+@Composable
+internal fun TvIllustration(accent: Color) {
+    Box(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 22.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(150.dp).clip(CircleShape).background(accent.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(112.dp).clip(CircleShape).background(accent.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    LineIcon(Ico.WIFI, accent, 26.dp, stroke = 2f)
+                    LineIcon(Ico.TV, T.Ink, 46.dp, stroke = 1.6f)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 internal fun Spinner(accent: Color) {
     Box(Modifier.fillMaxWidth().height(96.dp), contentAlignment = Alignment.Center) {
@@ -372,7 +395,12 @@ internal fun statusLine(vm: RemoteVM, d: Device): String {
 
 @Composable
 internal fun DevicesPage(vm: RemoteVM, open: (String) -> Unit, add: () -> Unit) {
-    if (vm.devices.isEmpty()) Lead("No TVs yet. Add one to start controlling it.")
+    if (vm.devices.isEmpty()) {
+        TvIllustration(com.krishna.miniremote.ui.accentColor(vm.settings.accentHex))
+        Text("No TVs yet", color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp))
+        Lead("Add your TV to start. Your phone and TV need to be on the same Wi-Fi.", center = true)
+    }
     vm.devices.forEach { d ->
         val on = vm.activeId == d.id && vm.link == Link.READY
         CardRow(d.name, statusLine(vm, d), dot = if (on) OkGreen else Color(0xFF555555), onClick = { open(d.id) }, clickLabel = "open") { Chevron() }
@@ -401,8 +429,8 @@ internal fun DevicePage(vm: RemoteVM, d: Device, accent: Color) {
 
 @Composable
 internal fun LocalPage(onContinue: () -> Unit) {
-    Hero(Ico.WIFI, Color(0xFF1D2A3A), Color(0xFF6FB1FF))
-    Lead("Remote will look for TVs on your Wi-Fi. It only talks to devices on your own network, and it needs no account.")
+    TvIllustration(Color(0xFF6FB1FF))
+    Lead("Remote will look for TVs on your Wi-Fi. It only talks to devices on your own network, and it needs no account.", center = true)
     Btn("Continue", onClick = onContinue)
 }
 

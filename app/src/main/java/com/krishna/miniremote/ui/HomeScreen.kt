@@ -92,6 +92,9 @@ fun HomeScreen(
     deck: Deck,
     openDevices: () -> Unit,
     openKeys: () -> Unit,
+    tray: Boolean,
+    numpad: Boolean,
+    onNumpad: () -> Unit,
     onTray: (open: Boolean) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -109,12 +112,12 @@ fun HomeScreen(
     val onTick: (RemoteKey) -> Unit = { k -> vm.scrubTick(k) }
     // One surface does both: one finger navigates, two fingers change volume and channels.
     val onTwo: (RemoteKey) -> Unit = { k -> vm.scrubTick(k); if (k == RemoteKey.CH_UP || k == RemoteKey.CH_DOWN) vm.say(k.word, k) }
-    val tray by rememberUpdatedState(onTray)
+    val setTray by rememberUpdatedState(onTray)
     val swipe = Modifier.pointerInput(Unit) {
         var total = 0f
         detectVerticalDragGestures(
             onDragStart = { total = 0f },
-            onDragEnd = { if (abs(total) > 40.dp.toPx()) tray(total < 0) },
+            onDragEnd = { if (abs(total) > 40.dp.toPx()) setTray(total < 0) },
         ) { change, dy -> change.consume(); total += dy }
     }
     // Ask the TV what's on screen while Home is open (Roku and LG answer).
@@ -124,10 +127,8 @@ fun HomeScreen(
     }
     val offline = vm.active == null || vm.link == Link.ERROR
 
-    Column(
-        Modifier.fillMaxSize().then(swipe).padding(horizontal = 16.dp).padding(top = 6.dp, bottom = NAV_H + 34.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+    Column(Modifier.fillMaxSize().then(swipe), horizontalAlignment = Alignment.CenterHorizontally) {
+      Column(Modifier.weight(1f).padding(horizontal = 16.dp).padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         // Top, as on the Apple TV Remote: mute · TV picker · power, inset from the screen edges.
         Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             KeyButton(accent, "Mute", Modifier.size(44.dp), state = if (vm.muted) "Muted" else null, pressedScale = 1f, onPress = { vm.press(RemoteKey.MUTE) }) { c, _ ->
@@ -146,7 +147,7 @@ fun HomeScreen(
                 Modifier.semantics {
                     customActions = listOf(
                         CustomAccessibilityAction("Mute") { vm.press(RemoteKey.MUTE); true },
-                        CustomAccessibilityAction("Volume and channels") { tray(true); true },
+                        CustomAccessibilityAction("Volume and channels") { setTray(true); true },
                     )
                 },
                 contentAlignment = Alignment.Center,
@@ -189,7 +190,39 @@ fun HomeScreen(
             }
         }
 
-        // Four round keys under the surface.
+      }
+        BottomPanel(vm, accent, tray, numpad, onNumpad, openKeys, setTray)
+    }
+}
+
+/**
+ * The bottom of the remote, full width. Collapsed: a small chevron and the four keys
+ * (Back, Home, Play / pause, Search). Swipe up (or tap the chevron) and it grows into a
+ * sheet with volume, channels and the number pad key under those four. Swipe down to fold.
+ */
+@Composable
+private fun BottomPanel(
+    vm: RemoteVM, accent: Color, open: Boolean, numpad: Boolean,
+    onNumpad: () -> Unit, openKeys: () -> Unit, onTray: (Boolean) -> Unit,
+) {
+    val set by rememberUpdatedState(onTray)
+    Column(
+        Modifier.fillMaxWidth()
+            .background(if (open) M.Container else Color.Transparent, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+            .pointerInput(Unit) {
+                var total = 0f
+                detectVerticalDragGestures(onDragStart = { total = 0f }, onDragEnd = {
+                    if (total < -24.dp.toPx()) set(true) else if (total > 24.dp.toPx()) set(false)
+                }) { c, dy -> c.consume(); total += dy }
+            }
+            .padding(start = 16.dp, end = 16.dp, bottom = NAV_H + 22.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            Modifier.size(72.dp, 32.dp).clip(CircleShape)
+                .clickable(onClickLabel = if (open) "hide volume and channels" else "show volume and channels", role = Role.Button) { set(!open) },
+            contentAlignment = Alignment.Center,
+        ) { LineIcon(if (open) Ico.DOWN else Ico.UP, T.Dim, 22.dp, stroke = 2.4f) }
         val k = Modifier.size(62.dp)
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             KeyButton(accent, "Back", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.BACK) }) { c, _ -> LineIcon(Ico.CHEVRON_L, c, 24.dp, stroke = 2.2f) }
@@ -197,78 +230,56 @@ fun HomeScreen(
             KeyButton(accent, "Play or pause", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { c, _ -> LineIcon(Ico.PLAY, c, 21.dp) }
             KeyButton(accent, "Search", k, actionLabel = "search or type on TV", pressedScale = 1f, onPress = openKeys) { c, _ -> LineIcon(Ico.SEARCH, c, 21.dp) }
         }
+        androidx.compose.animation.AnimatedVisibility(open, enter = androidx.compose.animation.expandVertically() + fadeIn(), exit = androidx.compose.animation.shrinkVertically() + fadeOut()) {
+            Column(Modifier.padding(top = 18.dp).width(308.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                VolumePill(
+                    accent, vm.muted, Modifier.fillMaxWidth().height(54.dp),
+                    onDown = { vm.press(RemoteKey.VOL_DOWN, quiet = true) },
+                    onMute = { vm.press(RemoteKey.MUTE) },
+                    onUp = { vm.press(RemoteKey.VOL_UP, quiet = true) },
+                )
+                Row(Modifier.fillMaxWidth().height(54.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ChannelPill(accent, Modifier.weight(1f).fillMaxHeight(),
+                        onDown = { vm.press(RemoteKey.CH_DOWN) }, onUp = { vm.press(RemoteKey.CH_UP) })
+                    KeyButton(accent, "Number pad", Modifier.size(54.dp), state = if (numpad) "Showing" else null, pressedScale = 1f,
+                        restColor = if (numpad) accent else T.Ink, onPress = onNumpad) { c, _ ->
+                        Text("123", color = c, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+        }
     }
 }
 
-/** "Living room TV ▾" centred, with what's on screen (Roku / LG) or the link state under it. */
+/** The TV picker: one slim line in a pill, as tall as the mute and power keys. Dot = link state. */
 @Composable
 private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) {
     val d = vm.active
-    val on = d != null && vm.link == Link.READY
-    val sub = when {
-        d == null -> "Tap to add a TV"
-        !on -> linkWord(vm.link).ifEmpty { "Not connected" }
-        else -> vm.nowOn?.name ?: "Connected"
-    }
-    val subCol = when {
-        d == null -> T.Dim
-        on -> Color(0xFF6DD58C)
+    val dot = when {
+        d == null -> null
+        vm.link == Link.READY -> Color(0xFF6DD58C)
         vm.link == Link.CONNECTING -> Color(0xFFFDD663)
         else -> Color(0xFFF2B8B5)
     }
-    Box(modifier.padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
-    Column(
-        Modifier.clip(CircleShape).background(M.High)
-            .clickable(onClickLabel = "choose a TV", role = Role.Button, onClick = openDevices)
-            .semantics(mergeDescendants = true) {
-                contentDescription = d?.let { "TV: ${it.name}" } ?: "Choose a TV"
-                stateDescription = sub
-            }
-            .padding(horizontal = 20.dp, vertical = 5.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(d?.let { shortName(it.name, it.brand.label) } ?: "Choose a TV", color = T.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+    Box(modifier.padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+        Row(
+            Modifier.height(44.dp).clip(CircleShape).background(M.High)
+                .clickable(onClickLabel = "choose a TV", role = Role.Button, onClick = openDevices)
+                .semantics(mergeDescendants = true) {
+                    contentDescription = d?.let { "TV: ${it.name}" } ?: "Choose a TV"
+                    if (d != null) stateDescription = linkWord(vm.link)
+                }
+                .padding(start = 16.dp, end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            dot?.let { Box(Modifier.size(7.dp).clip(CircleShape).background(it)) }
+            Text(d?.let { shortName(it.name, it.brand.label) } ?: "Choose a TV", color = T.Ink, fontSize = 15.sp,
+                fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             LineIcon(Ico.DOWN, T.Dim, 15.dp, stroke = 2.2f)
         }
-        Text(sub, color = subCol, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
     }
 }
-
-/**
- * Volume and channels, tucked into the tab bar: it grows out of the pill when you swipe up
- * on Home or on the pill, or tap Home again. Swipe down, or wait, and it tucks away.
- */
-@Composable
-fun ControlTray(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, onClose: () -> Unit) {
-    Column(
-        Modifier.width(320.dp).shadow(6.dp, RoundedCornerShape(28.dp)).background(M.Container, RoundedCornerShape(28.dp))
-            .padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(
-            Modifier.fillMaxWidth().height(22.dp).clickable(onClickLabel = "hide volume and channels", role = Role.Button, onClick = onClose),
-            contentAlignment = Alignment.Center,
-        ) { Box(Modifier.size(32.dp, 4.dp).clip(CircleShape).background(Color(0xFF7C7C82))) }
-        VolumePill(
-            accent, vm.muted, Modifier.fillMaxWidth().height(54.dp),
-            onDown = { vm.press(RemoteKey.VOL_DOWN, quiet = true) },
-            onMute = { vm.press(RemoteKey.MUTE) },
-            onUp = { vm.press(RemoteKey.VOL_UP, quiet = true) },
-        )
-        Row(Modifier.fillMaxWidth().height(54.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ChannelPill(accent, Modifier.weight(1f).fillMaxHeight(),
-                onDown = { vm.press(RemoteKey.CH_DOWN) }, onUp = { vm.press(RemoteKey.CH_UP) })
-            KeyButton(accent, "Number pad", Modifier.size(54.dp), state = if (numpad) "Showing" else null, pressedScale = 1f,
-                restColor = if (numpad) accent else T.Ink, onPress = onNumpad) { c, _ ->
-                Text("123", color = c, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            }
-        }
-    }
-}
-
 
 /** A TV's name for the top bar: without its IP address, and at most 18 characters. */
 fun shortName(name: String, fallback: String): String {

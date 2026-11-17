@@ -151,14 +151,15 @@ fun AppShell(vm: RemoteVM) {
                                 vm, accent, deck,
                                 openDevices = { sheet = Page.Devices },
                                 openKeys = { keys = true },
-                                onTray = { open -> tray = open; if (open) vm.feel.fire(com.krishna.miniremote.Feel.TICK) },
+                                tray = tray, numpad = numpad, onNumpad = { numpad = !numpad },
+                                onTray = { open -> if (open != tray) vm.feel.fire(com.krishna.miniremote.Feel.TICK); tray = open },
                             )
                             Tab.CHANNELS -> ChannelsScreen(vm, accent, openDevices = { sheet = Page.Devices })
                         }
                     }
                     // The dial shows messages in its well; everywhere else they float near the bottom.
                     val inWell = onRemote && deck == Deck.DIAL && !tray
-                    ToastChip(if (inWell) null else vm.toast, Modifier.align(Alignment.BottomCenter).padding(bottom = if (tray) 230.dp else 72.dp))
+                    ToastChip(if (inWell) null else vm.toast, Modifier.align(Alignment.BottomCenter).padding(bottom = if (!onRemote) 56.dp else if (tray) 300.dp else 170.dp))
                     when (val u = vm.update) {
                         is RemoteVM.Update.Downloading, is RemoteVM.Update.Ready, is RemoteVM.Update.Manual ->
                             Box(Modifier.align(Alignment.TopCenter).padding(top = 4.dp).height(32.dp)) {
@@ -166,28 +167,10 @@ fun AppShell(vm: RemoteVM) {
                             }
                         else -> {}
                     }
-                    // Volume and channels: grows up from the bottom of the Remote page.
-                    AnimatedVisibility(
-                        tray, Modifier.align(Alignment.BottomCenter).padding(bottom = 64.dp).pointerInput(Unit) {
-                            var total = 0f
-                            detectVerticalDragGestures(onDragStart = { total = 0f }, onDragEnd = { if (total > 24.dp.toPx()) tray = false }) { c, dy -> c.consume(); total += dy }
-                        },
-                        enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut(),
-                    ) {
-                        ControlTray(vm, accent, numpad, onNumpad = { numpad = !numpad }, onClose = { tray = false })
-                    }
-                    // Bottom row: the Vol · Ch pill on the left, the page dots on the right.
-                    Row(
-                        Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        TrayPill(tray, accent) { open -> tray = open; if (open) vm.feel.fire(com.krishna.miniremote.Feel.TICK) }
-                        Spacer(Modifier.weight(1f))
-                        PageDots(pager.currentPage, accent, onSwipe = { by ->
-                            val to = (pager.currentPage + by).coerceIn(0, Tab.entries.lastIndex)
-                            if (to != pager.currentPage) { vm.feel.fire(com.krishna.miniremote.Feel.TICK); go(Tab.entries[to]) }
-                        }) { go(it) }
-                    }
+                    PageDots(pager.currentPage, accent, Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp), onSwipe = { by ->
+                        val to = (pager.currentPage + by).coerceIn(0, Tab.entries.lastIndex)
+                        if (to != pager.currentPage) { vm.feel.fire(com.krishna.miniremote.Feel.TICK); go(Tab.entries[to]) }
+                    }) { go(it) }
                 }
             }
         }
