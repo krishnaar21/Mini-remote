@@ -1,6 +1,7 @@
 package com.krishna.miniremote
 
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -19,6 +20,25 @@ import androidx.compose.ui.text.font.FontFamily
 
 class MainActivity : ComponentActivity() {
     private val vm: RemoteVM by viewModels()
+
+    /** Phone volume buttons drive the TV while one is connected (and the setting is on). */
+    private fun tvVolumeKey(keyCode: Int): RemoteKey? {
+        if (!vm.settings.volumeKeys || vm.active == null || vm.link != Link.READY) return null
+        return when (keyCode) {
+            KeyEvent.KEYCODE_VOLUME_UP -> RemoteKey.VOL_UP
+            KeyEvent.KEYCODE_VOLUME_DOWN -> RemoteKey.VOL_DOWN
+            else -> null
+        }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        val k = tvVolumeKey(keyCode) ?: return super.onKeyDown(keyCode, event)
+        if (event.repeatCount == 0) vm.press(k) else vm.scrubTick(k)
+        return true
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean =
+        tvVolumeKey(keyCode) != null || super.onKeyUp(keyCode, event)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

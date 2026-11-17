@@ -10,7 +10,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -68,7 +70,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/** What fills the middle of Home. Swipe sideways, or tap the dots, to change. */
+/** What fills the middle of Home. Dial or trackpad comes from Settings; numbers from the tray. */
 enum class Deck(val label: String, val ico: Ico) {
     DIAL("Dial", Ico.DIAL), TRACKPAD("Trackpad", Ico.TRACKPAD), NUMPAD("Number pad", Ico.NUMPAD)
 }
@@ -77,8 +79,8 @@ enum class Deck(val label: String, val ico: Ico) {
 private const val DOUBLE_TAP_MS = 260L
 
 /**
- * Minimal Home ("Edges"): greeting, search and power on top; the dial in the middle with
- * channels on a slider along the left edge and volume along the right; Back · Home · Play below.
+ * Minimal Home: greeting, search and power on top; the dial (or trackpad) in the middle;
+ * Back · Home · Play below. Volume and channels stay out of sight: swipe up for them.
  * OK: tap = OK, double tap = mute, hold = voice search.
  */
 @Composable
@@ -86,11 +88,10 @@ fun HomeScreen(
     vm: RemoteVM,
     accent: Color,
     deck: Deck,
-    onDeck: (Deck) -> Unit,
     openDevices: () -> Unit,
     openKeys: () -> Unit,
+    onTray: (open: Boolean) -> Unit,
 ) {
-    val current by rememberUpdatedState(deck)
     val scope = rememberCoroutineScope()
     val pendingOk = remember { arrayOfNulls<Job>(1) }
     /** A second OK within [DOUBLE_TAP_MS] mutes instead; otherwise OK goes out after that wait. */
@@ -104,21 +105,18 @@ fun HomeScreen(
         }
     }
     val onKey: (RemoteKey) -> Unit = { if (it == RemoteKey.OK) okTap() else vm.press(it) }
-    fun swipe(by: Int) {
-        val all = Deck.entries
-        onDeck(all[(all.indexOf(current) + by + all.size) % all.size])
-        vm.feel.fire(Feel.DETENT)
-    }
-    val swipeable = Modifier.pointerInput(Unit) {
+    val tray by rememberUpdatedState(onTray)
+    // Swipe up anywhere the dial doesn't take the finger: volume and channels. Swipe down hides them.
+    val swipe = Modifier.pointerInput(Unit) {
         var total = 0f
-        detectHorizontalDragGestures(
+        detectVerticalDragGestures(
             onDragStart = { total = 0f },
-            onDragEnd = { if (abs(total) > 48.dp.toPx()) swipe(if (total < 0) 1 else -1) },
-        ) { change, dx -> change.consume(); total += dx }
+            onDragEnd = { if (abs(total) > 40.dp.toPx()) tray(total < 0) },
+        ) { change, dy -> change.consume(); total += dy }
     }
     val offline = vm.active == null || vm.link == Link.ERROR
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 12.dp).padding(top = 12.dp, bottom = NAV_H + 28.dp)) {
+    Column(Modifier.fillMaxSize().then(swipe).padding(horizontal = 12.dp).padding(top = 12.dp, bottom = NAV_H + 34.dp)) {
         Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(Modifier.weight(1f)) {
                 val first = vm.settings.profileName.trim().substringBefore(' ')
@@ -134,57 +132,40 @@ fun HomeScreen(
             }
         }
 
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().then(swipeable), contentAlignment = Alignment.Center) {
-            val strip = 44.dp
-            val pad: Dp = minOf(maxWidth - strip * 2 - 28.dp, maxHeight - 150.dp).coerceIn(160.dp, 320.dp)
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            val pad: Dp = minOf(maxWidth - 40.dp, maxHeight - 110.dp).coerceIn(180.dp, 330.dp)
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    EdgeStrip(
-                        "CH", accent, "Channel up", "Channel down", Modifier.width(strip).height(pad * 0.82f), stepDp = 44f,
-                        onStep = { up, drag -> val k = if (up) RemoteKey.CH_UP else RemoteKey.CH_DOWN; if (drag) vm.scrubTick(k) else vm.press(k) },
-                    )
-                    Box(
-                        Modifier.size(pad).semantics {
-                            customActions = listOf(CustomAccessibilityAction("Mute") { vm.press(RemoteKey.MUTE); true })
-                        },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        AnimatedContent(
-                            deck,
-                            transitionSpec = {
-                                val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
-                                (slideInHorizontally { it * dir / 3 } + fadeIn()) togetherWith (slideOutHorizontally { -it * dir / 3 } + fadeOut())
-                            },
-                            label = "deck",
-                        ) { d ->
-                            CompositionLocalProvider(LocalK provides pad.value / 780f) {
-                                when (d) {
-                                    Deck.NUMPAD -> Numpad(vm, accent, Modifier.size(pad))
-                                    Deck.DIAL -> Clickpad(
-                                        size = pad, accent = accent, stepDp = vm.settings.scrubStepDp, toast = vm.toast,
-                                        toastIcon = vm.toastKey?.let { keyIcon(it, vm.muted) },
-                                        onKey = onKey, onTick = { vm.scrubTick(it) },
-                                        onVoice = { vm.feel.fire(Feel.HEAVY); vm.press(RemoteKey.VOICE) },
-                                        offline = offline, onOffline = { vm.feel.fire(Feel.PRESS); openDevices() },
-                                    )
-                                    Deck.TRACKPAD -> Trackpad(
-                                        size = pad, accent = accent, stepDp = vm.settings.scrubStepDp, offline = offline,
-                                        onKey = onKey, onTick = { vm.scrubTick(it) },
-                                        onVoice = { vm.feel.fire(Feel.HEAVY); vm.press(RemoteKey.VOICE) },
-                                        onOffline = { vm.feel.fire(Feel.PRESS); openDevices() },
-                                    )
-                                }
+                Box(
+                    Modifier.size(pad).semantics {
+                        customActions = listOf(
+                            CustomAccessibilityAction("Mute") { vm.press(RemoteKey.MUTE); true },
+                            CustomAccessibilityAction("Volume and channels") { tray(true); true },
+                        )
+                    },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AnimatedContent(deck, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "deck") { d ->
+                        CompositionLocalProvider(LocalK provides pad.value / 780f) {
+                            when (d) {
+                                Deck.NUMPAD -> Numpad(vm, accent, Modifier.size(pad))
+                                Deck.DIAL -> Clickpad(
+                                    size = pad, accent = accent, stepDp = vm.settings.scrubStepDp, toast = vm.toast,
+                                    toastIcon = vm.toastKey?.let { keyIcon(it, vm.muted) },
+                                    onKey = onKey, onTick = { vm.scrubTick(it) },
+                                    onVoice = { vm.feel.fire(Feel.HEAVY); vm.press(RemoteKey.VOICE) },
+                                    offline = offline, onOffline = { vm.feel.fire(Feel.PRESS); openDevices() },
+                                )
+                                Deck.TRACKPAD -> Trackpad(
+                                    size = pad, accent = accent, stepDp = vm.settings.scrubStepDp, offline = offline,
+                                    onKey = onKey, onTick = { vm.scrubTick(it) },
+                                    onVoice = { vm.feel.fire(Feel.HEAVY); vm.press(RemoteKey.VOICE) },
+                                    onOffline = { vm.feel.fire(Feel.PRESS); openDevices() },
+                                )
                             }
                         }
                     }
-                    EdgeStrip(
-                        if (vm.muted) "MUTE" else "VOL", accent, "Volume up", "Volume down", Modifier.width(strip).height(pad * 0.82f), stepDp = 24f,
-                        highlight = vm.muted,
-                        onStep = { up, drag -> val k = if (up) RemoteKey.VOL_UP else RemoteKey.VOL_DOWN; if (drag) vm.scrubTick(k) else vm.press(k, quiet = true) },
-                    )
                 }
-                DeckDots(deck, accent, Modifier.padding(top = 10.dp)) { onDeck(it); vm.feel.fire(Feel.TICK) }
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(28.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(36.dp), verticalAlignment = Alignment.CenterVertically) {
                     KeyButton(accent, "Back", Modifier.size(56.dp), pressedScale = 1f, onPress = { vm.press(RemoteKey.BACK) }) { c, _ -> LineIcon(Ico.BACK, c, 22.dp) }
                     KeyButton(accent, "Home", Modifier.size(56.dp), pressedScale = 1f, onPress = { vm.press(RemoteKey.HOME) }) { c, _ -> LineIcon(Ico.HOME, c, 22.dp) }
@@ -196,89 +177,33 @@ fun HomeScreen(
 }
 
 /**
- * A slim slider along the dial's edge. Slide up or down to step (one step per [stepDp]),
- * tap the top or bottom half for one step, hold a half to repeat. [onStep] gets
- * (up, fromDrag). TalkBack sees two plain buttons.
+ * Volume and channels, tucked into the tab bar: it grows out of the pill when you swipe up
+ * on Home or on the pill, or tap Home again. Swipe down, or wait, and it tucks away.
  */
 @Composable
-private fun EdgeStrip(
-    word: String,
-    accent: Color,
-    upLabel: String,
-    downLabel: String,
-    modifier: Modifier,
-    stepDp: Float,
-    highlight: Boolean = false,
-    onStep: (up: Boolean, drag: Boolean) -> Unit,
-) {
-    val density = LocalDensity.current
-    val stepPx = with(density) { stepDp.dp.toPx() }
-    val slop = with(density) { 6.dp.toPx() }
-    val scope = rememberCoroutineScope()
-    val step by rememberUpdatedState(onStep)
-    var touchY by remember { mutableStateOf<Float?>(null) }
-    var lit by remember { mutableStateOf<Boolean?>(null) }
-
-    Box(
-        modifier.clip(RoundedCornerShape(22.dp)).background(M.Container)
-            .pointerInput(stepPx) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    down.consume()
-                    val upper = down.position.y < size.height / 2f
-                    touchY = down.position.y
-                    var acc = 0f
-                    var moved = false
-                    var held = false
-                    val hold = scope.launch {
-                        delay(380)
-                        if (moved) return@launch
-                        held = true
-                        var d = 160L
-                        while (true) { step(upper, true); lit = upper; delay(d); d = maxOf(70L, d - 12) }
-                    }
-                    while (true) {
-                        val ev = awaitPointerEvent()
-                        val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
-                        if (!ch.pressed) { ch.consume(); break }
-                        acc += ch.position.y - ch.previousPosition.y
-                        touchY = ch.position.y
-                        if (!moved && !held && abs(acc) > slop) { moved = true; hold.cancel() }
-                        if (moved) while (abs(acc) >= stepPx) {
-                            val up = acc < 0
-                            step(up, true); lit = up
-                            acc += if (up) stepPx else -stepPx
-                        }
-                        ch.consume()
-                    }
-                    hold.cancel()
-                    if (!moved && !held) { step(upper, false); lit = upper }
-                    touchY = null; lit = null
-                }
-            },
-        contentAlignment = Alignment.Center,
+fun ControlTray(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, onClose: () -> Unit) {
+    Column(
+        Modifier.width(320.dp).shadow(6.dp, RoundedCornerShape(28.dp)).background(M.Container, RoundedCornerShape(28.dp))
+            .padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(
-            Modifier.fillMaxSize().padding(vertical = 14.dp).clearAndSetSemantics {},
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            LineIcon(Ico.PLUS, if (lit == true) accent else T.Ink, 18.dp)
-            Text(word, color = if (highlight) accent else T.Dim, fontSize = 10.5.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.8.sp)
-            LineIcon(Ico.MINUS, if (lit == false) accent else T.Ink, 18.dp)
-        }
-        // A soft accent marker follows the finger.
-        touchY?.let { y ->
-            val half = with(density) { 20.dp.toPx() }
-            Box(
-                Modifier.align(Alignment.TopCenter)
-                    .offset { IntOffset(0, (y - half).roundToInt()) }
-                    .size(32.dp, 40.dp).clip(RoundedCornerShape(16.dp)).background(accent.copy(alpha = 0.28f)),
-            )
-        }
-        Column(Modifier.fillMaxSize()) {
-            Box(Modifier.weight(1f).fillMaxWidth().semantics { role = Role.Button; contentDescription = upLabel; onClick { step(true, false); true } })
-            Box(Modifier.weight(1f).fillMaxWidth().semantics { role = Role.Button; contentDescription = downLabel; onClick { step(false, false); true } })
+        Box(
+            Modifier.fillMaxWidth().height(22.dp).clickable(onClickLabel = "hide volume and channels", role = Role.Button, onClick = onClose),
+            contentAlignment = Alignment.Center,
+        ) { Box(Modifier.size(32.dp, 4.dp).clip(CircleShape).background(Color(0xFF4A4A50))) }
+        VolumePill(
+            accent, vm.muted, Modifier.fillMaxWidth().height(54.dp),
+            onDown = { vm.press(RemoteKey.VOL_DOWN, quiet = true) },
+            onMute = { vm.press(RemoteKey.MUTE) },
+            onUp = { vm.press(RemoteKey.VOL_UP, quiet = true) },
+        )
+        Row(Modifier.fillMaxWidth().height(54.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ChannelPill(accent, Modifier.weight(1f).fillMaxHeight(),
+                onDown = { vm.press(RemoteKey.CH_DOWN) }, onUp = { vm.press(RemoteKey.CH_UP) })
+            KeyButton(accent, "Number pad", Modifier.size(54.dp), state = if (numpad) "Showing" else null, pressedScale = 1f,
+                restColor = if (numpad) accent else T.Ink, onPress = onNumpad) { c, _ ->
+                Text("123", color = c, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            }
         }
     }
 }
@@ -313,19 +238,3 @@ private fun TvLine(vm: RemoteVM, openDevices: () -> Unit) {
     }
 }
 
-/** Three quiet dots under the control: which one is showing. Tap one to jump to it. */
-@Composable
-private fun DeckDots(deck: Deck, accent: Color, modifier: Modifier, onPick: (Deck) -> Unit) {
-    Row(modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-        Deck.entries.forEach { d ->
-            val sel = d == deck
-            Box(
-                Modifier.size(24.dp).clip(CircleShape).selectable(sel, role = Role.Tab) { onPick(d) }
-                    .semantics { contentDescription = d.label },
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(Modifier.size(if (sel) 18.dp else 6.dp, 6.dp).clip(CircleShape).background(if (sel) accent else Color(0xFF4A4A50)))
-            }
-        }
-    }
-}

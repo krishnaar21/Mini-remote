@@ -570,8 +570,9 @@ internal fun Modifier.matchParentSizeCompat(): Modifier = this.fillMaxWidth().he
 internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
     val s = vm.settings
     SectionTitle("Remote")
-    SegRow("Home opens with", listOf("dial" to "Dial", "trackpad" to "Trackpad"), s.controlStyle) { vm.update(s.copy(controlStyle = it)) }
-    Hint("Swipe left or right beside the control on Home to change it for now. This picks the one Home always starts with.", top = 6)
+    SegRow("Control", listOf("dial" to "Dial", "trackpad" to "Trackpad"), s.controlStyle) { vm.update(s.copy(controlStyle = it)) }
+    ToggleRow("Phone volume buttons", "Change the TV's volume while the app is open", s.volumeKeys) { vm.update(s.copy(volumeKeys = it)) }
+    Hint("Volume and channels: swipe up on Home or on the tab bar, or tap Home again. Double tap OK to mute.", top = 6)
 
     SectionTitle("Accent colour")
     Row(Modifier.selectableGroup().padding(top = 8.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

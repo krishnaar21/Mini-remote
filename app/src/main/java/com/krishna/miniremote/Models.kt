@@ -78,6 +78,8 @@ data class Settings(
     val controlStyle: String = "dial",
     /** Shown on Home as "Hello, <first name>!". */
     val profileName: String = "",
+    /** The phone's own volume buttons change the TV's volume while the app is open. */
+    val volumeKeys: Boolean = true,
 )
 
 enum class ShortcutKind { APP, CHANNEL }

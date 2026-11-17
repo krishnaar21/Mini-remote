@@ -28,6 +28,7 @@ class Store(ctx: Context) {
             autoUpdate = p.getBoolean("autoupdate", d.autoUpdate),
             controlStyle = p.getString("control", d.controlStyle)?.takeIf { it == "dial" || it == "trackpad" } ?: d.controlStyle,
             profileName = p.getString("profileName", d.profileName) ?: d.profileName,
+            volumeKeys = p.getBoolean("volumeKeys", d.volumeKeys),
         )
     }
 
@@ -37,7 +38,8 @@ class Store(ctx: Context) {
         .putString("accent", s.accentHex).putFloat("step", s.scrubStepDp)
         .putBoolean("gyro", s.gyro).putBoolean("awake", s.keepAwake)
         .putBoolean("autoupdate", s.autoUpdate)
-        .putString("control", s.controlStyle).putString("profileName", s.profileName).apply()
+        .putString("control", s.controlStyle).putString("profileName", s.profileName)
+        .putBoolean("volumeKeys", s.volumeKeys).apply()
 
     fun loadShortcuts(): List<Shortcut> = Shortcut.listFromJson(p.getString("shortcuts", null))
     fun saveShortcuts(l: List<Shortcut>) = p.edit().putString("shortcuts", Shortcut.listToJson(l)).apply()

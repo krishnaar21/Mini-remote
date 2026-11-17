@@ -5,6 +5,10 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -104,9 +108,13 @@ fun AppShell(vm: RemoteVM) {
     var sheet by remember { mutableStateOf<Page?>(null) }
     var keys by remember { mutableStateOf(false) }
     val style = vm.settings.controlStyle
-    var deck by remember { mutableStateOf(if (style == "trackpad") Deck.TRACKPAD else Deck.DIAL) }
-    // The Settings choice is the permanent one: changing it switches Home right away.
-    LaunchedEffect(style) { deck = if (style == "trackpad") Deck.TRACKPAD else Deck.DIAL }
+    // Dial or trackpad is a setting; the tray's 123 key swaps in the number pad for a while.
+    var numpad by remember { mutableStateOf(false) }
+    val deck = if (numpad) Deck.NUMPAD else if (style == "trackpad") Deck.TRACKPAD else Deck.DIAL
+    var tray by remember { mutableStateOf(false) }
+    // The tray tucks itself away a few seconds after the last command.
+    LaunchedEffect(tray, vm.txCount) { if (tray) { kotlinx.coroutines.delay(7000); tray = false } }
+    fun openTray() { if (tab != Tab.HOME) tab = Tab.HOME; tray = true; vm.feel.fire(com.krishna.miniremote.Feel.TICK) }
     val tilt = rememberTilt(false) // the flat Material faces have no sheen to tilt
     BackHandler(enabled = tab != Tab.HOME) { tab = Tab.HOME }
 
@@ -118,9 +126,10 @@ fun AppShell(vm: RemoteVM) {
                     Crossfade(tab, label = "tab") { t ->
                         when (t) {
                             Tab.HOME -> HomeScreen(
-                                vm, accent, deck, onDeck = { deck = it },
+                                vm, accent, deck,
                                 openDevices = { sheet = Page.Devices },
                                 openKeys = { keys = true },
+                                onTray = { open -> if (open) openTray() else tray = false },
                             )
                             Tab.CHANNELS -> ChannelsScreen(vm, accent, openDevices = { sheet = Page.Devices })
                             Tab.PROFILE -> ProfileScreen(vm, accent, open = { sheet = it })
@@ -128,7 +137,7 @@ fun AppShell(vm: RemoteVM) {
                     }
                     // The dial shows messages in its well; everywhere else they float above the pill.
                     val inWell = tab == Tab.HOME && deck == Deck.DIAL
-                    ToastChip(if (inWell) null else vm.toast, Modifier.align(Alignment.BottomCenter).padding(bottom = NAV_H + 30.dp))
+                    ToastChip(if (inWell && !tray) null else vm.toast, Modifier.align(Alignment.BottomCenter).padding(bottom = NAV_H + if (tray) 200.dp else 34.dp))
                     when (val u = vm.update) {
                         is RemoteVM.Update.Downloading, is RemoteVM.Update.Ready ->
                             Box(Modifier.align(Alignment.TopCenter).padding(top = 4.dp).height(32.dp)) {
@@ -136,9 +145,28 @@ fun AppShell(vm: RemoteVM) {
                             }
                         else -> {}
                     }
-                    NavPill(tab, accent, initials(vm.settings.profileName), Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp)) {
-                        if (it != tab) vm.feel.fire(com.krishna.miniremote.Feel.TICK)
-                        tab = it
+                    // The tab bar: swipe up on it for volume and channels (it grows the tray), down to hide.
+                    Column(
+                        Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp).pointerInput(Unit) {
+                            var total = 0f
+                            detectVerticalDragGestures(
+                                onDragStart = { total = 0f },
+                                onDragEnd = { if (total < -24.dp.toPx()) openTray() else if (total > 24.dp.toPx()) tray = false },
+                            ) { change, dy -> change.consume(); total += dy }
+                        },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        AnimatedVisibility(tab == Tab.HOME && tray, enter = expandVertically(expandFrom = Alignment.Bottom) + fadeIn(), exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut()) {
+                            Box(Modifier.padding(bottom = 10.dp)) {
+                                ControlTray(vm, accent, numpad, onNumpad = { numpad = !numpad }, onClose = { tray = false })
+                            }
+                        }
+                        // A small handle hints that the bar opens upwards.
+                        if (tab == Tab.HOME && !tray) Box(Modifier.padding(bottom = 6.dp).size(28.dp, 4.dp).clip(CircleShape).background(Color(0xFF4A4A50)))
+                        NavPill(tab, accent, initials(vm.settings.profileName), homeOpen = tray) {
+                            if (it == tab && it == Tab.HOME) { if (tray) tray = false else openTray() }
+                            else { vm.feel.fire(com.krishna.miniremote.Feel.TICK); tab = it; tray = false }
+                        }
                     }
                 }
             }
@@ -151,7 +179,7 @@ fun AppShell(vm: RemoteVM) {
 
 /** One floating, fully round pill of icons; the current tab sits in a recessed well. */
 @Composable
-fun NavPill(tab: Tab, accent: Color, initial: String, modifier: Modifier = Modifier, onPick: (Tab) -> Unit) {
+fun NavPill(tab: Tab, accent: Color, initial: String, modifier: Modifier = Modifier, homeOpen: Boolean = false, onPick: (Tab) -> Unit) {
     Row(
         modifier.height(NAV_H).shadow(6.dp, CircleShape).background(M.High, CircleShape).padding(6.dp).selectableGroup(),
         verticalAlignment = Alignment.CenterVertically,
@@ -164,10 +192,11 @@ fun NavPill(tab: Tab, accent: Color, initial: String, modifier: Modifier = Modif
                     .clip(CircleShape)
                     .background(if (sel) accent.copy(alpha = 0.22f) else Color.Transparent)
                     .selectable(sel, role = Role.Tab) { onPick(t) }
-                    .semantics { contentDescription = t.label },
+                    .semantics { contentDescription = if (t == Tab.HOME && sel) "Home. Tap again for volume and channels" else t.label },
                 contentAlignment = Alignment.Center,
             ) {
-                if (t == Tab.PROFILE) Avatar(initial, accent, 26.dp, dim = !sel)
+                if (t == Tab.HOME && sel && homeOpen) LineIcon(Ico.DOWN, accent, 23.dp)
+                else if (t == Tab.PROFILE) Avatar(initial, accent, 26.dp, dim = !sel)
                 else LineIcon(t.ico, if (sel) accent else T.Dim, 23.dp)
             }
         }
