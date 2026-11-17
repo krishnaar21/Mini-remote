@@ -4,7 +4,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import com.krishna.miniremote.R
 
 /** Colours from the design preview (its final "charcoal soft-touch" layer). */
 object T {
@@ -19,10 +18,8 @@ object T {
 
 /** Material uses the system font (Roboto on most phones). Kept under this name so every screen follows. */
 val Inter: FontFamily = FontFamily.Default
-val Mono = FontFamily(
-    Font(R.font.plexmono_regular, FontWeight.Normal),
-    Font(R.font.plexmono_medium, FontWeight.Medium),
-)
+/** Numbers and codes: the system monospace font (no bundled font files). */
+val Mono: FontFamily = FontFamily.Monospace
 
 fun accentColor(hex: String): Color =
     runCatching { Color(("FF$hex").toLong(16)) }.getOrDefault(Color(0xFFFF453A))

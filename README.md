@@ -16,3 +16,13 @@ Universal TV remote with a soft-touch charcoal design. Kotlin + Jetpack Compose.
 ## Install
 Every push to `main` builds an APK and publishes it here:
 `https://github.com/krishnaar21/mini-remote/releases/tag/latest-build` (download `MiniRemote.apk`).
+
+## Privacy
+See [PRIVACY.md](PRIVACY.md). No accounts, ads or tracking. Data stays on the phone, and pairing keys are encrypted with the Android Keystore.
+
+## Legal
+- Roku, Samsung, LG, webOS, Android TV, Google TV and all app names and logos are trademarks of their respective owners. Mini Remote is independent and not affiliated with or endorsed by any of them.
+- Third-party software: AndroidX / Jetpack Compose, Kotlin, kotlinx.coroutines, OkHttp / Okio and AndroidSVG are under the Apache License 2.0; Simple Icons is CC0 1.0. The full licence texts ship in the app under **Settings › About › Open-source licences**.
+- No fonts or images from third parties are bundled; logos are downloaded on demand (and can be turned off).
+- **Google Play note:** the in-app updater uses `REQUEST_INSTALL_PACKAGES`, which Google Play only allows for apps whose main purpose is installing apps. Remove the updater (and that permission) before publishing on Play; it's meant for sideloaded builds from GitHub.
+- This repository has no licence file yet, so all rights are reserved by default. Add one (for example MIT or Apache-2.0) if you want others to reuse the code.

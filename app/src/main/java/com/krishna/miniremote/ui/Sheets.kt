@@ -120,6 +120,7 @@ sealed interface Page {
     data object Manual : Page
     data class Pairing(val id: String) : Page
     data object Settings : Page
+    data object Licenses : Page
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -169,9 +170,13 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
                     if (d == null) { LaunchedEffect(Unit) { back() }; return@Column }
                     PairPage(vm, d, accent, onClose, back = ::back)
                 }
+                Page.Licenses -> {
+                    Header("Open-source licences", onClose, back = ::back)
+                    Body { LicensesPage() }
+                }
                 Page.Settings -> {
                     Header("Settings", onClose, back = if (canBack) ::back else null)
-                    Body { SettingsPage(vm, accent, manage = null) }
+                    Body { SettingsPage(vm, accent, manage = null, openLicenses = { go(Page.Licenses) }) }
                 }
             }
         }
@@ -627,7 +632,7 @@ internal fun Modifier.matchParentSizeCompat(): Modifier = this.fillMaxWidth().he
 /* ---------------------------------------------------------------- settings */
 
 @Composable
-internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
+internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, openLicenses: (() -> Unit)? = null) {
     val s = vm.settings
     SectionTitle("Remote")
     Group {
@@ -769,12 +774,25 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
     Group {
     Text("Mini Remote needs no account and has no ads, analytics or tracking.",
         color = Muted, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 16.dp))
+    Text("Roku, Samsung, LG, webOS, Android TV, Google TV and the app names and logos shown are trademarks of their owners. " +
+        "Mini Remote is an independent app, not affiliated with or endorsed by them; it uses the TVs' published or documented remote-control interfaces on your own network.",
+        color = Muted, fontSize = 12.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 10.dp))
     // Lets you tell builds apart: CI numbers every build (0.2.<run>).
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val version = remember {
         runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "dev"
     }
-    Text("Version $version", color = T.Ink, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp, bottom = 16.dp))
+    Text("Version $version", color = T.Ink, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
+    if (openLicenses != null) {
+        Divider()
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(role = Role.Button, onClick = openLicenses).padding(vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Open-source licences", color = T.Ink, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Chevron()
+        }
+    } else Spacer(Modifier.height(10.dp))
     }
 }
 
@@ -954,4 +972,38 @@ internal fun InfoBlock(title: String, body: String) {
         Text(title, color = T.Ink, fontSize = 15.sp)
         Text(body, color = Muted, fontSize = 12.5.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 4.dp))
     }
+}
+
+/** Third-party software in the app, its licence, and the full licence texts (shipped in res/raw). */
+private val THIRD_PARTY = listOf(
+    Triple("AndroidX, Jetpack Compose, Material 3", "Google LLC · The Android Open Source Project", "Apache License 2.0"),
+    Triple("Kotlin standard library, kotlinx.coroutines", "JetBrains s.r.o. and contributors", "Apache License 2.0"),
+    Triple("OkHttp, Okio", "Square, Inc.", "Apache License 2.0"),
+    Triple("AndroidSVG", "Paul LeBeau, Cave Rock Software Ltd.", "Apache License 2.0"),
+    Triple("Simple Icons (app logos, downloaded when enabled)", "Simple Icons contributors", "CC0 1.0 Universal; logos remain trademarks of their owners"),
+)
+
+@Composable
+internal fun LicensesPage() {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var shown by remember { mutableStateOf<Int?>(null) }
+    Group {
+        THIRD_PARTY.forEachIndexed { i, (name, who, lic) ->
+            Column(Modifier.fillMaxWidth().padding(vertical = 14.dp)) {
+                Text(name, color = T.Ink, fontSize = 15.sp)
+                Text(who, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
+                Text(lic, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
+            }
+            if (i < THIRD_PARTY.lastIndex) Divider()
+        }
+    }
+    Hint("Tap a licence to read it in full.", top = 10)
+    listOf("Apache License 2.0" to com.krishna.miniremote.R.raw.apache_2_0, "CC0 1.0 Universal" to com.krishna.miniremote.R.raw.cc0_1_0)
+        .forEach { (title, res) ->
+            Btn(if (shown == res) "Hide $title" else title, kind = 1) { shown = if (shown == res) null else res }
+            if (shown == res) {
+                val text = remember(res) { runCatching { ctx.resources.openRawResource(res).bufferedReader().use { it.readText() } }.getOrDefault("") }
+                Text(text, color = Muted, fontSize = 11.sp, lineHeight = 15.sp, fontFamily = Mono, modifier = Modifier.padding(top = 12.dp))
+            }
+        }
 }
