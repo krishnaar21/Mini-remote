@@ -66,6 +66,8 @@ fun Trackpad(
 ) {
     val twoStepPx = with(LocalDensity.current) { 30.dp.toPx() }
     val twoCb = androidx.compose.runtime.rememberUpdatedState(onTwoFinger)
+    var twoMode by remember { mutableStateOf(false) }
+    var twoKey by remember { mutableStateOf<RemoteKey?>(null) }
     val density = LocalDensity.current
     val stepPx = with(density) { stepDp.dp.toPx() }
     val slop = with(density) { 8.dp.toPx() }
@@ -99,10 +101,11 @@ fun Trackpad(
                     var moved = false
                     var held = false
                     val hold = scope.launch { delay(450); if (!moved) { held = true; onVoice() } }
-                    val two = twoCb.value?.let { cb -> TwoFinger(twoStepPx) { k -> cb(k) } }
+                    val two = twoCb.value?.let { cb -> TwoFinger(twoStepPx) { k -> twoKey = k; cb(k) } }
                     while (true) {
                         val ev = awaitPointerEvent()
                         if (two != null && two.feed(ev)) {
+                            twoMode = true
                             if (!moved) { moved = true; hold.cancel() }
                             if (ev.changes.none { it.pressed }) break
                             continue
@@ -127,7 +130,7 @@ fun Trackpad(
                     }
                     hold.cancel()
                     if (!moved && !held) onKey(RemoteKey.OK)
-                    touch = null; lit = null
+                    touch = null; lit = null; twoMode = false; twoKey = null
                 }
             },
         contentAlignment = Alignment.Center,
@@ -138,6 +141,11 @@ fun Trackpad(
                 Text("No TV connected", color = Color(0xFFB0B0B5), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Text("Tap to choose a TV", color = Color(0xFFA1A1A6), fontSize = 12.sp)
             }
+            return@Box
+        }
+        // Two fingers: arrows and hint give way to the direction being slid.
+        if (twoMode) {
+            TwoFingerHint(twoKey, accent, 56.dp, 16.sp)
             return@Box
         }
         val e = size * 0.05f

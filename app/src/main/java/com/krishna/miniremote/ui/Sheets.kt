@@ -630,12 +630,15 @@ internal fun Modifier.matchParentSizeCompat(): Modifier = this.fillMaxWidth().he
 internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
     val s = vm.settings
     SectionTitle("Remote")
+    Group {
     SegRow("Control", listOf("dial" to "Dial", "trackpad" to "Trackpad"), s.controlStyle) { vm.update(s.copy(controlStyle = it)) }
     ToggleRow("Phone volume buttons", "Change the TV's volume while the app is open", s.volumeKeys) { vm.update(s.copy(volumeKeys = it)) }
-    Hint("On the remote, one finger navigates and two fingers slide for volume (up or down) and channels (sideways). Tap Vol · Ch (or swipe up) for the volume and channel buttons. Double tap OK to mute; hold it for voice.", top = 6)
+    }
+    Hint("One finger navigates; two fingers slide for volume (up or down) and channels (sideways). Swipe up, or tap the chevron, for the volume and channel buttons. Double tap OK to mute; hold it for voice.", top = 8)
 
     SectionTitle("Accent colour")
-    Row(Modifier.selectableGroup().padding(top = 8.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    Group {
+    Row(Modifier.fillMaxWidth().selectableGroup().padding(vertical = 18.dp), horizontalArrangement = Arrangement.SpaceBetween) {
         ACCENTS.forEach { (name, hex) ->
             val sel = s.accentHex.equals(hex, true)
             Box(
@@ -650,9 +653,11 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
             }
         }
     }
-    Hint("Pressed icons, the active arrow and the transmit light use this colour.", top = 6)
+    }
+    Hint("Pressed keys, switches and highlights use this colour.", top = 8)
 
     SectionTitle("Feel")
+    Group {
     ToggleRow("Haptics", "Physical feedback on every press and scrub", s.haptics) { vm.update(s.copy(haptics = it)) }
     SegRow("Strength", HAPTIC_STRENGTHS, s.hapticStrength) { vm.update(s.copy(hapticStrength = it)) }
     ToggleRow("Sound", "Soft click with every press and scrub", s.sound) { vm.update(s.copy(sound = it)) }
@@ -674,10 +679,12 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
         }
     }
     Divider()
-    ToggleRow("Keep screen on", "While the remote is open", s.keepAwake) { vm.update(s.copy(keepAwake = it)) }
+    ToggleRow("Keep screen on", "While the remote is open", s.keepAwake, last = true) { vm.update(s.copy(keepAwake = it)) }
+    }
 
     if (manage != null) {
     SectionTitle("Devices")
+    Group {
     Row(
         Modifier.fillMaxWidth().heightIn(min = 68.dp).clickable(role = Role.Button, onClick = manage).padding(vertical = 16.dp, horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -688,9 +695,10 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
         }
         Chevron()
     }
-    Divider()
+    }
     }
     SectionTitle("Updates")
+    Group {
     ToggleRow("Automatic updates", "Check for new builds, download them, and notify you to install", s.autoUpdate) {
         vm.update(s.copy(autoUpdate = it)); if (it) vm.checkForUpdate()
     }
@@ -724,22 +732,35 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
         }
         Chevron()
     }
-    Divider()
+    }
     SectionTitle("About")
-    Hint("Remote talks only to devices on your local network. No account, no tracking. Pairing keys stay on this phone.", top = 4)
+    Group {
+    Text("Mini Remote talks only to TVs on your home network. No account, no tracking. Pairing keys stay on this phone.",
+        color = Muted, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 16.dp))
     // Lets you tell builds apart: CI numbers every build (0.2.<run>).
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val version = remember {
         runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "dev"
     }
-    Text("Version $version", color = Muted, fontSize = 12.5.sp, fontFamily = Mono, modifier = Modifier.padding(top = 10.dp))
+    Text("Version $version", color = T.Ink, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp, bottom = 16.dp))
+    }
 }
 
+/** A settings section's rows on one rounded card, with thin lines between rows. */
 @Composable
-internal fun Divider() = Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF262627)))
+internal fun Group(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(20.dp)).background(M.Container).padding(horizontal = 16.dp),
+        content = content,
+    )
+}
+
 
 @Composable
-internal fun ToggleRow(title: String, sub: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
+internal fun Divider() = Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF3A3A3E)))
+
+@Composable
+internal fun ToggleRow(title: String, sub: String?, checked: Boolean, last: Boolean = false, onChange: (Boolean) -> Unit) {
     // Whole row is one switch for TalkBack and one big touch target for fingers.
     Row(
         Modifier.fillMaxWidth().heightIn(min = 68.dp).toggleable(checked, role = Role.Switch, onValueChange = onChange).padding(vertical = 16.dp, horizontal = 2.dp),
@@ -752,7 +773,7 @@ internal fun ToggleRow(title: String, sub: String?, checked: Boolean, onChange: 
         }
         Toggle(checked)
     }
-    Divider()
+    if (!last) Divider()
 }
 
 @Composable

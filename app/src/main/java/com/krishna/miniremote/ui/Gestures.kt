@@ -45,3 +45,24 @@ internal class TwoFinger(private val stepPx: Float, private val emit: (RemoteKey
         }
     }
 }
+
+/** What a two-finger slide is doing, shown in place of the arrows: big arrow + "Volume +" etc. */
+@androidx.compose.runtime.Composable
+internal fun TwoFingerHint(key: RemoteKey?, accent: androidx.compose.ui.graphics.Color, icon: androidx.compose.ui.unit.Dp, text: androidx.compose.ui.unit.TextUnit) {
+    androidx.compose.foundation.layout.Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+        if (key == null) {
+            // Fingers down, no step yet: show both directions.
+            androidx.compose.material3.Text("↕ Volume   ↔ Channel", color = T.Ink, fontSize = text)
+        } else {
+            val (ico, word) = when (key) {
+                RemoteKey.VOL_UP -> Ico.UP to "Volume +"
+                RemoteKey.VOL_DOWN -> Ico.DOWN to "Volume −"
+                RemoteKey.CH_UP -> Ico.RIGHT to "Channel +"
+                else -> Ico.LEFT to "Channel −"
+            }
+            LineIcon(ico, accent, icon, stroke = 2.4f)
+            androidx.compose.material3.Text(word, color = T.Ink, fontSize = text,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+        }
+    }
+}

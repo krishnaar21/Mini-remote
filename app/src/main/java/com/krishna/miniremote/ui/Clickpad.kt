@@ -76,6 +76,9 @@ fun Clickpad(
 ) {
     val twoStepPx = with(LocalDensity.current) { 30.dp.toPx() }
     val twoCb = androidx.compose.runtime.rememberUpdatedState(onTwoFinger)
+    // While two fingers slide, the arrows hide and the well shows the direction instead.
+    var twoMode by remember { mutableStateOf(false) }
+    var twoKey by remember { mutableStateOf<RemoteKey?>(null) }
     val isOffline = androidx.compose.runtime.rememberUpdatedState(offline)
     val density = LocalDensity.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -139,10 +142,11 @@ fun Clickpad(
                     }
 
                     var last = down.position
-                    val two = twoCb.value?.let { cb -> TwoFinger(twoStepPx) { k -> cb(k) } }
+                    val two = twoCb.value?.let { cb -> TwoFinger(twoStepPx) { k -> twoKey = k; cb(k) } }
                     while (true) {
                         val ev = awaitPointerEvent()
                         if (two != null && two.feed(ev)) {
+                            twoMode = true
                             if (!moved) { moved = true; hold.cancel(); litDir = null; wellDown = false }
                             if (ev.changes.none { it.pressed }) break
                             continue
@@ -176,7 +180,7 @@ fun Clickpad(
                     }
                     hold.cancel()
                     if (!moved && !holdFired) onKey(if (inWell) RemoteKey.OK else zoneKey)
-                    litDir = null; wellDown = false; listening = false; touch = null
+                    litDir = null; wellDown = false; listening = false; touch = null; twoMode = false; twoKey = null
                 }
             },
         contentAlignment = Alignment.Center,
@@ -200,7 +204,7 @@ fun Clickpad(
                 }
             }
         })
-        if (!offline) Canvas(Modifier.size(size)) {
+        if (!offline && !twoMode) Canvas(Modifier.size(size)) {
             // .pchev: 76px chevrons, 52px in from the edge, stroke 2.3, lit in the accent colour.
             val u = this.size.width / 780f
             val cs = 76f * u
@@ -246,7 +250,9 @@ fun Clickpad(
             Modifier.size(size * WELL_FRAC).graphicsLayer { scaleX = wellScale; scaleY = wellScale }.softFace(wellFace, sheen = false),
             contentAlignment = Alignment.Center,
         ) {
-            if (toast == null) {
+            if (twoMode) {
+                TwoFingerHint(twoKey, accent, bdp(64f), bsp(24f))
+            } else if (toast == null) {
                 Text("OK", Modifier.clearAndSetSemantics {}, color = if (wellDown) accent else Color(0xFFA1A1A6),
                     fontSize = bsp(40f), fontWeight = FontWeight.SemiBold, letterSpacing = bsp(40f * 0.06f))
             } else {

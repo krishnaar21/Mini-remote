@@ -111,7 +111,7 @@ fun HomeScreen(
     val onKey: (RemoteKey) -> Unit = { k -> if (k == RemoteKey.OK) okTap() else vm.press(k) }
     val onTick: (RemoteKey) -> Unit = { k -> vm.scrubTick(k) }
     // One surface does both: one finger navigates, two fingers change volume and channels.
-    val onTwo: (RemoteKey) -> Unit = { k -> vm.scrubTick(k); if (k == RemoteKey.CH_UP || k == RemoteKey.CH_DOWN) vm.say(k.word, k) }
+    val onTwo: (RemoteKey) -> Unit = { k -> vm.scrubTick(k) }
     val setTray by rememberUpdatedState(onTray)
     val swipe = Modifier.pointerInput(Unit) {
         var total = 0f
