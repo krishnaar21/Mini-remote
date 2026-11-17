@@ -238,8 +238,8 @@ fun HomeScreen(
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         when (p) {
                             0 -> padArea(padOnly, Modifier.fillMaxSize())
-                            1 -> Box(Modifier.fillMaxSize().clip(RoundedCornerShape(30.dp)).background(M.Container), contentAlignment = Alignment.Center) { VolChCard(vm, accent) }
-                            else -> BoxWithConstraints(Modifier.fillMaxSize().clip(RoundedCornerShape(30.dp)).background(M.Container).padding(18.dp), contentAlignment = Alignment.Center) {
+                            1 -> Box(Modifier.fillMaxWidth(0.84f).fillMaxHeight(0.86f).clip(RoundedCornerShape(28.dp)).background(M.Container), contentAlignment = Alignment.Center) { VolChCard(vm, accent) }
+                            else -> BoxWithConstraints(Modifier.fillMaxWidth(0.84f).fillMaxHeight(0.86f).clip(RoundedCornerShape(28.dp)).background(M.Container).padding(18.dp), contentAlignment = Alignment.Center) {
                                 val s = minOf(maxWidth, maxHeight, 340.dp)
                                 CompositionLocalProvider(LocalK provides s.value / 780f) { Numpad(vm, accent, Modifier.size(s)) }
                             }

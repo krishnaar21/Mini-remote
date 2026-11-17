@@ -212,9 +212,9 @@ fun CardDots(n: Int, page: Int, onPick: (Int) -> Unit) {
 fun VolChCard(vm: RemoteVM, accent: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(22.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-            VerticalRocker(accent, "VOL", "Volume up", "Volume down", Ico.PLUS, Ico.MINUS, Modifier.width(86.dp).height(240.dp),
+            VerticalRocker(accent, "VOL", "Volume up", "Volume down", Ico.PLUS, Ico.MINUS, Modifier.width(80.dp).height(210.dp),
                 onUp = { vm.press(RemoteKey.VOL_UP, quiet = true) }, onDown = { vm.press(RemoteKey.VOL_DOWN, quiet = true) })
-            VerticalRocker(accent, "CH", "Channel up", "Channel down", Ico.PLUS, Ico.MINUS, Modifier.width(86.dp).height(240.dp),
+            VerticalRocker(accent, "CH", "Channel up", "Channel down", Ico.PLUS, Ico.MINUS, Modifier.width(80.dp).height(210.dp),
                 onUp = { vm.press(RemoteKey.CH_UP) }, onDown = { vm.press(RemoteKey.CH_DOWN) })
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
