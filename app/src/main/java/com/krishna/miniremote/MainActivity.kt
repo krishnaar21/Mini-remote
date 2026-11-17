@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         vm.maybeCheckForUpdate()
+        vm.autoConnect()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {

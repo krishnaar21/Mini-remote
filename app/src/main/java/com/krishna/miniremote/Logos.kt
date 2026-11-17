@@ -54,6 +54,29 @@ object Logos {
         }.getOrNull()?.also { mem.put(key, it) }
     }
 
+    /**
+     * The app's own website icon (full colour, PNG) for apps Simple Icons doesn't carry, through
+     * Google's public favicon service. Only the website's domain is sent. Cached like the logos.
+     */
+    suspend fun siteIcon(ctx: Context, domain: String, px: Int): Bitmap? = withContext(Dispatchers.IO) {
+        if (domain.isEmpty() || !domain.all { it.isLetterOrDigit() || it == '.' || it == '-' }) return@withContext null
+        val key = "site:$domain"
+        mem.get(key)?.let { return@withContext it }
+        if (key in misses) return@withContext null
+        val dir = File(ctx.cacheDir, "logos").apply { mkdirs() }
+        val file = File(dir, "site-$domain.png")
+        val bytes = if (file.exists()) file.readBytes() else runCatching {
+            http.newCall(Request.Builder().url("https://www.google.com/s2/favicons?domain=$domain&sz=128").build()).execute().use { r ->
+                if (!r.isSuccessful) null else r.body?.bytes()?.takeIf { it.size in 200..300_000 }
+            }
+        }.getOrNull()?.also { file.writeBytes(it) }
+        val bmp = bytes?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }
+        // The service returns a tiny generic globe when a site has no icon: treat that as none.
+        if (bmp == null || bmp.width < 48) { synchronized(misses) { misses += key }; return@withContext null }
+        mem.put(key, bmp)
+        bmp
+    }
+
     /** Removes downloaded logos (with "Erase all data"). */
     fun clear(ctx: Context) { runCatching { File(ctx.cacheDir, "logos").deleteRecursively() }; mem.evictAll() }
 }

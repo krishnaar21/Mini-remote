@@ -58,6 +58,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     private var connectJob: Job? = null
     private var toastJob: Job? = null
     private val queue = Channel<RemoteKey>(64, BufferOverflow.DROP_OLDEST)
+    private var autoJob: Job? = null
 
     /** What the TV shows (Roku and LG can tell), and whether the dial is in Watch mode. */
     var nowOn by mutableStateOf<NowOn?>(null); private set
@@ -194,7 +195,43 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
-        active?.let { connect(it) }
+        autoConnect()
+    }
+
+    /** Whether a saved TV has its pairing done, so connecting needs nothing from the user. */
+    private fun paired(d: Device) = when (d.brand) {
+        Brand.ROKU -> true
+        Brand.SAMSUNG -> d.token != null || d.pin != null
+        Brand.LG -> d.token != null
+        Brand.ANDROID_TV -> d.pin != null
+    }
+
+    /** Quick check that the TV answers on its remote port (no pairing, nothing sent). */
+    private suspend fun reachable(d: Device): Boolean = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        if (!HostValidator.isPrivateIPv4(d.host)) return@withContext false
+        val port = when (d.brand) { Brand.ROKU -> 8060; Brand.SAMSUNG -> 8002; Brand.LG -> if (d.pin != null) 3001 else 3000; Brand.ANDROID_TV -> 6466 }
+        runCatching { java.net.Socket().use { it.connect(java.net.InetSocketAddress(d.host, port), 800); true } }.getOrDefault(false)
+    }
+
+    /**
+     * Connects by itself to a paired TV that's on the same Wi-Fi: the last one used first, then
+     * the others. Runs on launch and when the app comes back. Never starts a new pairing.
+     */
+    fun autoConnect() {
+        if (link == Link.READY || link == Link.CONNECTING || autoJob?.isActive == true) return
+        val list = (listOfNotNull(active) + devices.filter { it.id != activeId }).filter(::paired)
+        if (list.isEmpty()) { active?.let { if (link == Link.IDLE) connect(it) }; return }
+        autoJob = viewModelScope.launch {
+            for (d in list) {
+                if (reachable(d)) {
+                    if (link == Link.READY || link == Link.CONNECTING) return@launch
+                    if (d.id == activeId) connect(d) else select(d)
+                    return@launch
+                }
+            }
+            // None answered: try the chosen one anyway, so its status and error show.
+            active?.let { if (link == Link.IDLE || link == Link.ERROR) connect(it) }
+        }
     }
 
     fun press(key: RemoteKey, quiet: Boolean = false) {
@@ -443,6 +480,23 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
             active?.brand != s.brand -> { feel.fire(Feel.ERROR); say("${s.name} was saved from a ${s.brand?.label ?: "different"} TV") }
             else -> launchApp(s.name, s.value)
         }
+    }
+
+    /** Opens the TV's search screen when the search panel opens. Quiet: no message if the TV can't. */
+    fun openTvSearch() {
+        val a = adapter ?: return
+        if (link != Link.READY) return
+        viewModelScope.launch { runCatching { a.openSearch(); txCount++ } }
+    }
+
+    /**
+     * Sends what was typed or spoken in the search panel: on Roku straight to its search
+     * results, elsewhere typed into the TV's (now open) search box.
+     */
+    fun sendText(text: String) {
+        val t = text.trim()
+        if (t.isEmpty()) return
+        if (active?.brand == Brand.ROKU) search(t) else typeText(t)
     }
 
     fun search(query: String) {

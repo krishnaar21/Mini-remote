@@ -652,14 +652,14 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
         ACCENTS.forEach { (name, hex) ->
             val sel = s.accentHex.equals(hex, true)
             Box(
-                Modifier.size(44.dp)
+                Modifier.size(42.dp)
                     .selectable(sel, role = Role.RadioButton) { vm.update(s.copy(accentHex = hex)) }
                     .semantics { contentDescription = name },
                 contentAlignment = Alignment.Center,
             ) {
-                Box(Modifier.size(44.dp).background(accentColor(hex), CircleShape).border(2.dp, Color.Black.copy(0.25f), CircleShape))
-                // ::after ring: 2px white, 5px outside the swatch
-                if (sel) Box(Modifier.requiredSize(54.dp).border(2.dp, Color.White, CircleShape))
+                Box(Modifier.size(32.dp).background(accentColor(hex), CircleShape).border(2.dp, Color.Black.copy(0.25f), CircleShape))
+                // Selected: a white ring 4dp outside the swatch.
+                if (sel) Box(Modifier.requiredSize(42.dp).border(2.dp, Color.White, CircleShape))
             }
         }
     }
@@ -697,7 +697,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
     }
     SectionTitle("Apps")
     Group {
-    ToggleRow("App logos", "Download logos from Simple Icons (open source) for Quick access", s.logos, last = true) { vm.update(s.copy(logos = it)) }
+    ToggleRow("App logos", "Download logos for Quick access (Simple Icons, or the app's website icon)", s.logos, last = true) { vm.update(s.copy(logos = it)) }
     }
     SectionTitle("Screen")
     Group {
@@ -865,26 +865,26 @@ fun linkWord(l: Link) = when (l) { Link.READY -> "Connected"; Link.CONNECTING ->
 @Composable
 fun KeyboardSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
     var text by remember { mutableStateOf("") }
-    var search by remember { mutableStateOf(true) }
     // Voice search: the phone's own speech recogniser fills in the words, then we search the TV.
     val speech = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
     ) { res ->
         val said = res.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-        if (!said.isNullOrBlank()) { text = said; vm.search(said); onClose() }
+        if (!said.isNullOrBlank()) { vm.sendText(said); text = "" }
     }
     fun listen() {
         val i = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Search on TV")
         // No speech service on the phone: fall back to the TV's own voice search.
-        try { speech.launch(i) } catch (e: android.content.ActivityNotFoundException) { vm.press(com.krishna.miniremote.RemoteKey.VOICE); onClose() }
+        try { speech.launch(i) } catch (e: android.content.ActivityNotFoundException) { vm.press(com.krishna.miniremote.RemoteKey.VOICE) }
     }
     val shown = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
     val shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
     BackHandler { onClose() }
-    LaunchedEffect(Unit) { kotlinx.coroutines.delay(250); runCatching { focus.requestFocus() } }
+    // Open the TV's search screen right away, then focus the box.
+    LaunchedEffect(Unit) { vm.openTvSearch(); kotlinx.coroutines.delay(250); runCatching { focus.requestFocus() } }
     Box(Modifier.fillMaxSize()) {
         androidx.compose.animation.AnimatedVisibility(shown, enter = androidx.compose.animation.fadeIn()) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(0.55f)).pointerInput(Unit) { detectTapGestures { onClose() } })
@@ -898,35 +898,23 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
                     .pointerInput(Unit) { detectTapGestures { } }
                     .statusBarsPadding().padding(top = 8.dp),
             ) {
-                Header(if (search) "Search on TV" else "Type on TV", onClose)
+                Header("Search on TV", onClose)
                 Body {
-                    // One sheet for both: search the TV, or type into a box that's already open on it.
-                    SegRow("Mode", listOf(true to "Search", false to "Type"), search) { search = it }
-                    Spacer(Modifier.height(14.dp))
-                    if (search) {
-                        Lead("Find movies, shows and apps. The TV opens its own search with your words.")
-                        Field("Search for", text, { text = it }, modifier = Modifier.focusRequester(focus), placeholder = "Movies, shows, apps",
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions = KeyboardActions(onSearch = { if (text.isNotBlank()) { vm.search(text); onClose() } }),
-                            trailing = {
-                                Box(
-                                    Modifier.size(40.dp).clip(CircleShape).background(accent.copy(alpha = 0.18f))
-                                        .clickable(onClickLabel = "search by voice", role = Role.Button) { listen() }
-                                        .semantics { contentDescription = "Voice search" },
-                                    contentAlignment = Alignment.Center,
-                                ) { LineIcon(Ico.MIC, accent, 20.dp) }
-                            })
-                        Btn("Search", enabled = text.isNotBlank()) { vm.search(text); onClose() }
-                        return@Body
-                    }
-                    Lead("Open a search box on the TV, then type here and send.")
-                    Field("Text for the TV", text, { text = it }, modifier = Modifier.focusRequester(focus),
+                    Lead("The TV's search is open. Type or tap the mic and speak, then send.")
+                    Field("Search or type", text, { text = it }, modifier = Modifier.focusRequester(focus), placeholder = "Movies, shows, apps",
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        keyboardActions = KeyboardActions(onSend = { if (text.isNotEmpty()) { vm.typeText(text); text = "" } }))
-                    // .two: 1fr 1.4fr, gap 12
+                        keyboardActions = KeyboardActions(onSend = { if (text.isNotBlank()) { vm.sendText(text); text = "" } }),
+                        trailing = {
+                            Box(
+                                Modifier.size(40.dp).clip(CircleShape).background(accent.copy(alpha = 0.18f))
+                                    .clickable(onClickLabel = "speak", role = Role.Button) { listen() }
+                                    .semantics { contentDescription = "Voice" },
+                                contentAlignment = Alignment.Center,
+                            ) { LineIcon(Ico.MIC, accent, 20.dp) }
+                        })
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Box(Modifier.weight(1f)) { Btn("Delete", kind = 1) { vm.backspace() } }
-                        Box(Modifier.weight(1.4f)) { Btn("Send", enabled = text.isNotEmpty()) { vm.typeText(text); text = "" } }
+                        Box(Modifier.weight(1.4f)) { Btn("Send", enabled = text.isNotBlank()) { vm.sendText(text); text = "" } }
                     }
                 }
             }
@@ -1015,7 +1003,7 @@ internal fun PrivacyPage(vm: RemoteVM) {
     Group {
         InfoBlock("Stored on this phone", "Your TVs' names and addresses, their pairing keys (encrypted with a key held in the phone's secure hardware), quick access, channels and settings. Nothing is backed up or synced.")
         Divider()
-        InfoBlock("Network", "Controls only TVs on your home Wi-Fi; public addresses are refused. Update checks go to GitHub, and app logos come from Simple Icons; both can be turned off.")
+        InfoBlock("Network", "Controls only TVs on your home Wi-Fi; public addresses are refused. Update checks go to GitHub. App logos come from Simple Icons, or the app's own website icon through Google's favicon service (only the website's name is sent); both can be turned off.")
         Divider()
         InfoBlock("Voice search", "Uses your phone's speech service to turn speech into words, then sends the words to your TV. The app itself never records audio.")
         Divider()

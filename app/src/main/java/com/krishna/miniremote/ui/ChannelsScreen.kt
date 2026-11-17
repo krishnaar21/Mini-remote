@@ -102,6 +102,8 @@ private class AppEntry(
     val badge: String? = null,
     /** Simple Icons slug for its logo, if it may have one. */
     val logo: String? = null,
+    /** The app's website, for its icon when Simple Icons has none. */
+    val site: String? = null,
     val vendor: String? = null,
     val version: String? = null,
     /** true / false when the TV lists its apps; null when it can't tell. */
@@ -123,6 +125,8 @@ private class AppEntry(
 fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
     var adding by remember { mutableStateOf<ShortcutKind?>(null) }
     var details by remember { mutableStateOf<AppEntry?>(null) }
+    /** Index of the quick access item whose actions sheet is open. */
+    var quickMenu by remember { mutableStateOf<Int?>(null) }
     val d = vm.active
     val ready = d != null && vm.link == Link.READY
     LaunchedEffect(vm.activeId, vm.link) { if (vm.link == Link.READY) vm.refreshApps() }
@@ -166,7 +170,7 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
     val popular = Catalog.apps.filter { brand == null || it.ids.containsKey(brand) }.map { c ->
         val pin = vm.pinnedCatalog(c)
         AppEntry(
-            key = "cat:${c.key}", name = c.name, bg = Color(c.bg), ink = Color(c.ink), vendor = c.vendor.ifEmpty { null }, logo = c.logo,
+            key = "cat:${c.key}", name = c.name, bg = Color(c.bg), ink = Color(c.ink), vendor = c.vendor.ifEmpty { null }, logo = c.logo, site = c.site.ifEmpty { null },
             installed = vm.installed(c), pinned = pin != null,
             storeId = brand?.let { b -> if (b == Brand.ROKU || b == Brand.ANDROID_TV) c.ids[b] else null },
             open = { vm.launchCatalog(c) }, pin = { vm.pinCatalog(c) }, unpin = { pin?.let { vm.setPinned(it, false) } },
@@ -218,12 +222,8 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     pinned.forEachIndexed { i, s ->
-                        QuickTile(s, accent, icon = s.icon ?: vm.tvApps.firstOrNull { it.name.equals(s.name, true) }?.icon, logoOn = vm.settings.logos, onClick = { if (!needTv()) vm.launch(s) }, menu = buildList {
-                            if (i > 0) add("Move left" to { vm.movePinned(s, -1) })
-                            if (i < pinned.lastIndex) add("Move right" to { vm.movePinned(s, 1) })
-                            add("Remove from quick access" to { vm.setPinned(s, false) })
-                            if (s.added) add("Delete" to { vm.removeShortcut(s) })
-                        })
+                        QuickTile(s, accent, icon = s.icon ?: vm.tvApps.firstOrNull { it.name.equals(s.name, true) }?.icon, logoOn = vm.settings.logos,
+                            onClick = { if (!needTv()) vm.launch(s) }, onLongPress = { quickMenu = i })
                     }
                 }
             }
@@ -272,6 +272,18 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
         AppSheet(e, accent, vm.settings.logos, onOpen = { if (!needTv()) e.open() }, onStore = { if (!needTv()) e.storeId?.let { id -> vm.openStore(e.name, id) } }) { details = null }
     }
     adding?.let { k -> AddShortcutSheet(vm, accent, k) { adding = null } }
+    quickMenu?.let { i ->
+        val pinned = vm.shortcuts.filter { it.pinned }
+        val s = pinned.getOrNull(i)
+        if (s == null) quickMenu = null
+        else QuickActionsSheet(s, i, pinned.size, vm.settings.logos,
+            icon = s.icon ?: vm.tvApps.firstOrNull { it.name.equals(s.name, true) }?.icon,
+            onOpen = { if (!needTv()) vm.launch(s) },
+            onMove = { by -> vm.movePinned(s, by); quickMenu = i + by },
+            onRemove = { vm.setPinned(s, false) },
+            onDelete = if (s.added) ({ vm.removeShortcut(s) }) else null,
+        ) { quickMenu = null }
+    }
 }
 
 /** Where a dragged app lands: a grey dashed box in the Quick access row. Lights up when the tile is over it. */
@@ -374,7 +386,7 @@ private fun AppSheet(e: AppEntry, accent: Color, logosOn: Boolean, onOpen: () ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Box(Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)).background(e.bg), contentAlignment = Alignment.Center) {
                     val short: @Composable () -> Unit = { Text(e.name.take(2).uppercase(), color = e.ink, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
-                    val logo: @Composable () -> Unit = { AppLogo(e.logo, e.ink, 34.dp, logosOn, short) }
+                    val logo: @Composable () -> Unit = { AppLogo(e.logo, e.ink, 34.dp, logosOn, e.site, short) }
                     if (e.icon != null) TvIcon(e.icon, Modifier.fillMaxSize().padding(6.dp), logo) else logo()
                 }
                 Column(Modifier.weight(1f)) {
@@ -426,8 +438,7 @@ private fun InfoRow(label: String, value: String) {
 /** Quick access item: a rounded square with the app's colour or the channel number, name below. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun QuickTile(s: Shortcut, accent: Color, icon: String?, logoOn: Boolean, onClick: () -> Unit, menu: List<Pair<String, () -> Unit>>) {
-    var open by remember { mutableStateOf(false) }
+private fun QuickTile(s: Shortcut, accent: Color, icon: String?, logoOn: Boolean, onClick: () -> Unit, onLongPress: () -> Unit) {
     val cat = if (s.kind == ShortcutKind.APP && s.brand == null) Catalog.byKey(s.value) else null
     val bg = when {
         s.kind == ShortcutKind.CHANNEL -> ChannelBg
@@ -438,7 +449,7 @@ private fun QuickTile(s: Shortcut, accent: Color, icon: String?, logoOn: Boolean
     Column(Modifier.width(74.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.size(70.dp).clip(RoundedCornerShape(20.dp)).background(bg)
-                .combinedClickable(onClickLabel = "open ${s.name}", onLongClickLabel = "options", role = Role.Button, onClick = onClick, onLongClick = { open = true }),
+                .combinedClickable(onClickLabel = "open ${s.name}", onLongClickLabel = "options", role = Role.Button, onClick = onClick, onLongClick = onLongPress),
             contentAlignment = Alignment.Center,
         ) {
             val short: @Composable () -> Unit = {
@@ -451,12 +462,39 @@ private fun QuickTile(s: Shortcut, accent: Color, icon: String?, logoOn: Boolean
             // The TV's own icon for the app when it has one (Roku, LG); otherwise its initials.
             // Logo, in order: the TV's own icon, then Simple Icons, then the initials.
             val slug = if (s.kind == ShortcutKind.CHANNEL) null else cat?.logo ?: Logos.slugFor(s.name)
-            val logo: @Composable () -> Unit = { AppLogo(slug, ink, 34.dp, logoOn, short) }
+            val logo: @Composable () -> Unit = { AppLogo(slug, ink, 34.dp, logoOn, cat?.site, short) }
             if (icon != null) TvIcon(icon, Modifier.fillMaxSize().padding(8.dp), logo) else logo()
-            OptionsMenu(open, { open = false }, menu)
         }
         Text(s.name, color = T.Ink, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 6.dp))
+    }
+}
+
+/** Long-press on a quick access item: its tile and name, then Open, move, remove (and delete for added ones). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QuickActionsSheet(
+    s: Shortcut, index: Int, count: Int, logoOn: Boolean, icon: String?,
+    onOpen: () -> Unit, onMove: (Int) -> Unit, onRemove: () -> Unit, onDelete: (() -> Unit)?, onClose: () -> Unit,
+) {
+    val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val cat = if (s.kind == ShortcutKind.APP && s.brand == null) Catalog.byKey(s.value) else null
+    ModalBottomSheet(
+        onDismissRequest = onClose, sheetState = state, containerColor = SheetBg, contentColor = T.Ink,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp), scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
+    ) {
+        Column(Modifier.navigationBarsPadding().padding(horizontal = 24.dp).padding(top = 6.dp, bottom = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            QuickTile(s, T.Ink, icon, logoOn, onClick = { onOpen(); onClose() }, onLongPress = {})
+            Text(when (s.kind) { ShortcutKind.CHANNEL -> "Channel ${s.value}"; else -> cat?.vendor?.ifEmpty { null } ?: s.brand?.label ?: "App" },
+                color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp, bottom = 6.dp))
+            Btn(if (s.kind == ShortcutKind.CHANNEL) "Tune to this channel" else "Open on TV") { onOpen(); onClose() }
+            if (count > 1) Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.weight(1f)) { Btn("Move left", kind = 1, enabled = index > 0) { onMove(-1) } }
+                Box(Modifier.weight(1f)) { Btn("Move right", kind = 1, enabled = index < count - 1) { onMove(1) } }
+            }
+            Btn("Remove from Quick access", kind = 2) { onRemove(); onClose() }
+            onDelete?.let { del -> Btn("Delete from Apps", kind = 2) { del(); onClose() } }
+        }
     }
 }
 
@@ -471,16 +509,29 @@ private fun OptionsMenu(open: Boolean, onDismiss: () -> Unit, items: List<Pair<S
 
 /* ------------------------------------------------------------- TV icons */
 
-/** An app's logo from Simple Icons, drawn in [ink]; [fallback] while loading, when off, or if there's none. */
+/**
+ * An app's logo: Simple Icons (drawn in [ink]) first, then the app's own website icon for apps
+ * Simple Icons doesn't carry (JioHotstar, Prime Video…). [fallback] while loading, when off, or if neither exists.
+ */
 @Composable
-private fun AppLogo(slug: String?, ink: Color, size: androidx.compose.ui.unit.Dp, enabled: Boolean, fallback: @Composable () -> Unit) {
+private fun AppLogo(slug: String?, ink: Color, size: androidx.compose.ui.unit.Dp, enabled: Boolean, site: String? = null, fallback: @Composable () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val px = with(LocalDensity.current) { size.roundToPx() }
     val hex = String.format("%06X", ink.toArgb() and 0xFFFFFF)
-    var bmp by remember(slug, hex) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(slug, hex, enabled) { bmp = if (enabled && slug != null) Logos.get(ctx, slug, hex, px)?.asImageBitmap() else null }
+    var bmp by remember(slug, hex, site) { mutableStateOf<ImageBitmap?>(null) }
+    var full by remember(slug, hex, site) { mutableStateOf(false) }
+    LaunchedEffect(slug, hex, enabled, site) {
+        if (!enabled) { bmp = null; return@LaunchedEffect }
+        val mono = slug?.let { Logos.get(ctx, it, hex, px) }
+        if (mono != null) { bmp = mono.asImageBitmap(); full = false; return@LaunchedEffect }
+        val icon = site?.let { Logos.siteIcon(ctx, it, px * 2) }
+        bmp = icon?.asImageBitmap(); full = icon != null
+    }
     val b = bmp
-    if (b != null) Image(b, contentDescription = null, modifier = Modifier.size(size)) else fallback()
+    if (b == null) fallback()
+    // Full-colour site icons get a small rounded plate so they sit well on any tile colour.
+    else if (full) Image(b, contentDescription = null, modifier = Modifier.size(size).clip(RoundedCornerShape(size * 0.22f)))
+    else Image(b, contentDescription = null, modifier = Modifier.size(size))
 }
 
 private val icons = LruCache<String, ImageBitmap>(80)

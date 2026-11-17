@@ -57,6 +57,9 @@ interface RemoteAdapter {
         for (k in keys) { send(k); delay(180) }
     }
 
+    /** Opens the TV's own search screen (where the TV has a key for it). */
+    suspend fun openSearch() { send(RemoteKey.VOICE) }
+
     /** Opens the TV's search and types [query] into it. */
     suspend fun search(query: String) {
         send(RemoteKey.VOICE)
@@ -263,6 +266,9 @@ class SamsungAdapter(
         throw Unsupported("Search isn't supported on Samsung TVs yet")
     }
 
+    // KEY_VOICE starts Bixby listening rather than a search box, so don't press it here.
+    override suspend fun openSearch() {}
+
     override fun close() { ws?.close(1000, null); ws = null }
 }
 
@@ -438,6 +444,8 @@ class LgAdapter(
     override suspend fun search(query: String) {
         throw Unsupported("Open a search box on the LG, then use the keyboard to type")
     }
+
+    override suspend fun openSearch() {}
 
     override suspend fun typeText(text: String) {
         request("ssap://com.webos.service.ime/insertText", JSONObject().put("text", text).put("replace", 0))

@@ -213,13 +213,13 @@ fun PageDots(page: Int, accent: Color, modifier: Modifier = Modifier, onSwipe: (
                 if (total < -16.dp.toPx()) onSwipe(1) else if (total > 16.dp.toPx()) onSwipe(-1)
             }) { c, dx -> c.consume(); total += dx }
         }.selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(0.dp), verticalAlignment = Alignment.CenterVertically,
     ) {
         Tab.entries.forEach { t ->
             val sel = t.ordinal == page
             Box(
                 Modifier.height(24.dp).clip(CircleShape).selectable(sel, role = Role.Tab) { onPick(t) }
-                    .semantics { contentDescription = t.label }.padding(horizontal = 6.dp),
+                    .semantics { contentDescription = t.label }.padding(horizontal = 3.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Box(Modifier.size(if (sel) 18.dp else 6.dp, 6.dp).clip(CircleShape).background(if (sel) accent else Color(0xFF7C7C82)))
