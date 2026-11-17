@@ -78,10 +78,22 @@ enum class Deck(val label: String, val ico: Ico) {
 /** How long OK waits for a second tap (double tap = mute). */
 private const val DOUBLE_TAP_MS = 260L
 
+/** In Watch mode the dial's arrows become volume (up / down) and channel (left / right). */
+private fun watchKey(k: RemoteKey): RemoteKey = when (k) {
+    RemoteKey.UP -> RemoteKey.VOL_UP
+    RemoteKey.DOWN -> RemoteKey.VOL_DOWN
+    RemoteKey.LEFT -> RemoteKey.CH_DOWN
+    RemoteKey.RIGHT -> RemoteKey.CH_UP
+    else -> k
+}
+
 /**
- * Minimal Home: greeting, search and power on top; the dial (or trackpad) in the middle;
- * Back · Home · Play below. Volume and channels stay out of sight: swipe up for them.
- * OK: tap = OK, double tap = mute, hold = voice search.
+ * Home, after the Apple TV Remote: the TV picker centred on top (with what's on screen under
+ * it) and power on the right; one big touch surface (or the dial); two rows of round keys.
+ *
+ * Watch / Navigate: on live TV or an input the surface changes volume (up / down) and channel
+ * (left / right); in the TV's menus and apps it moves around. Roku and LG switch by themselves.
+ * OK: tap = OK, double tap = mute, hold = voice. Swipe up for volume and channels.
  */
 @Composable
 fun HomeScreen(
@@ -94,7 +106,8 @@ fun HomeScreen(
 ) {
     val scope = rememberCoroutineScope()
     val pendingOk = remember { arrayOfNulls<Job>(1) }
-    /** A second OK within [DOUBLE_TAP_MS] mutes instead; otherwise OK goes out after that wait. */
+    val watching = vm.watching && deck != Deck.NUMPAD
+    val watchNow by rememberUpdatedState(watching)
     fun okTap() {
         val waiting = pendingOk[0]
         if (waiting?.isActive == true) {
@@ -104,9 +117,15 @@ fun HomeScreen(
             pendingOk[0] = scope.launch { delay(DOUBLE_TAP_MS); pendingOk[0] = null; vm.press(RemoteKey.OK, quiet = true) }
         }
     }
-    val onKey: (RemoteKey) -> Unit = { if (it == RemoteKey.OK) okTap() else vm.press(it) }
+    val onKey: (RemoteKey) -> Unit = { k ->
+        when {
+            k == RemoteKey.OK -> okTap()
+            watchNow -> vm.press(watchKey(k), quiet = true)
+            else -> vm.press(k)
+        }
+    }
+    val onTick: (RemoteKey) -> Unit = { k -> vm.scrubTick(if (watchNow) watchKey(k) else k) }
     val tray by rememberUpdatedState(onTray)
-    // Swipe up anywhere the dial doesn't take the finger: volume and channels. Swipe down hides them.
     val swipe = Modifier.pointerInput(Unit) {
         var total = 0f
         detectVerticalDragGestures(
@@ -114,63 +133,148 @@ fun HomeScreen(
             onDragEnd = { if (abs(total) > 40.dp.toPx()) tray(total < 0) },
         ) { change, dy -> change.consume(); total += dy }
     }
+    // Ask the TV what's on screen while Home is open (Roku and LG answer).
+    androidx.compose.runtime.DisposableEffect(vm.activeId, vm.link) {
+        vm.followNowOn(vm.link == Link.READY)
+        onDispose { vm.followNowOn(false) }
+    }
     val offline = vm.active == null || vm.link == Link.ERROR
 
-    Column(Modifier.fillMaxSize().then(swipe).padding(horizontal = 12.dp).padding(top = 12.dp, bottom = NAV_H + 34.dp)) {
-        Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Column(Modifier.weight(1f)) {
-                val first = vm.settings.profileName.trim().substringBefore(' ')
-                Text(if (first.isEmpty()) "Hello" else "Hello, $first", color = T.Ink, fontSize = 22.sp,
-                    fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                TvLine(vm, openDevices)
-            }
-            KeyButton(accent, "Search and type", Modifier.size(48.dp), actionLabel = "search or type on TV", pressedScale = 1f, onPress = openKeys) { c, _ ->
-                LineIcon(Ico.SEARCH, c, 20.dp)
-            }
-            KeyButton(accent, "Power", Modifier.size(48.dp), restColor = accent, pressedScale = 1f, onPress = { vm.press(RemoteKey.POWER) }) { c, _ ->
-                LineIcon(Ico.POWER, c, 20.dp)
+    Column(
+        Modifier.fillMaxSize().then(swipe).padding(horizontal = 16.dp).padding(top = 6.dp, bottom = NAV_H + 34.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // Top: TV picker in the middle, power on the right (a spacer keeps the picker centred).
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.size(44.dp))
+            TvPicker(vm, Modifier.weight(1f), openDevices)
+            KeyButton(accent, "Power", Modifier.size(44.dp), restColor = accent, pressedScale = 1f, onPress = { vm.press(RemoteKey.POWER) }) { c, _ ->
+                LineIcon(Ico.POWER, c, 19.dp)
             }
         }
+        Spacer(Modifier.height(10.dp))
+        if (deck != Deck.NUMPAD && vm.active != null) ModeSwitch(watching, accent) { vm.setWatching(it) }
 
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            val pad: Dp = minOf(maxWidth - 40.dp, maxHeight - 110.dp).coerceIn(180.dp, 330.dp)
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(
-                    Modifier.size(pad).semantics {
-                        customActions = listOf(
-                            CustomAccessibilityAction("Mute") { vm.press(RemoteKey.MUTE); true },
-                            CustomAccessibilityAction("Volume and channels") { tray(true); true },
-                        )
-                    },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    AnimatedContent(deck, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "deck") { d ->
-                        CompositionLocalProvider(LocalK provides pad.value / 780f) {
-                            when (d) {
-                                Deck.NUMPAD -> Numpad(vm, accent, Modifier.size(pad))
-                                Deck.DIAL -> Clickpad(
-                                    size = pad, accent = accent, stepDp = vm.settings.scrubStepDp, toast = vm.toast,
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
+            val w = maxWidth
+            val h = maxHeight
+            Box(
+                Modifier.semantics {
+                    customActions = listOf(
+                        CustomAccessibilityAction("Mute") { vm.press(RemoteKey.MUTE); true },
+                        CustomAccessibilityAction("Volume and channels") { tray(true); true },
+                    )
+                },
+                contentAlignment = Alignment.Center,
+            ) {
+                AnimatedContent(deck, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "deck") { d ->
+                    when (d) {
+                        Deck.NUMPAD -> {
+                            val s = minOf(w, h, 340.dp)
+                            CompositionLocalProvider(LocalK provides s.value / 780f) { Numpad(vm, accent, Modifier.size(s)) }
+                        }
+                        Deck.DIAL -> {
+                            val s = minOf(w - 8.dp, h, 340.dp)
+                            CompositionLocalProvider(LocalK provides s.value / 780f) {
+                                Clickpad(
+                                    size = s, accent = accent, stepDp = vm.settings.scrubStepDp, toast = vm.toast,
                                     toastIcon = vm.toastKey?.let { keyIcon(it, vm.muted) },
-                                    onKey = onKey, onTick = { vm.scrubTick(it) },
+                                    onKey = onKey, onTick = onTick,
                                     onVoice = { vm.feel.fire(Feel.HEAVY); vm.press(RemoteKey.VOICE) },
                                     offline = offline, onOffline = { vm.feel.fire(Feel.PRESS); openDevices() },
+                                    watch = watching,
                                 )
-                                Deck.TRACKPAD -> Trackpad(
-                                    size = pad, accent = accent, stepDp = vm.settings.scrubStepDp, offline = offline,
-                                    onKey = onKey, onTick = { vm.scrubTick(it) },
+                            }
+                        }
+                        Deck.TRACKPAD -> {
+                            // Apple-style: the full width, a little taller than wide where there's room.
+                            val tw = w
+                            val th = minOf(h, tw * 1.25f)
+                            CompositionLocalProvider(LocalK provides tw.value / 780f) {
+                                Trackpad(
+                                    size = tw, height = th, accent = accent, stepDp = vm.settings.scrubStepDp, offline = offline,
+                                    onKey = onKey, onTick = onTick,
                                     onVoice = { vm.feel.fire(Feel.HEAVY); vm.press(RemoteKey.VOICE) },
                                     onOffline = { vm.feel.fire(Feel.PRESS); openDevices() },
+                                    watch = watching,
                                 )
                             }
                         }
                     }
                 }
-                Spacer(Modifier.height(28.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(36.dp), verticalAlignment = Alignment.CenterVertically) {
-                    KeyButton(accent, "Back", Modifier.size(56.dp), pressedScale = 1f, onPress = { vm.press(RemoteKey.BACK) }) { c, _ -> LineIcon(Ico.BACK, c, 22.dp) }
-                    KeyButton(accent, "Home", Modifier.size(56.dp), pressedScale = 1f, onPress = { vm.press(RemoteKey.HOME) }) { c, _ -> LineIcon(Ico.HOME, c, 22.dp) }
-                    KeyButton(accent, "Play or pause", Modifier.size(56.dp), pressedScale = 1f, onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { c, _ -> LineIcon(Ico.PLAY, c, 21.dp) }
-                }
+            }
+        }
+
+        // Two rows of round keys, as on the Apple TV Remote.
+        val k = Modifier.size(62.dp)
+        Row(horizontalArrangement = Arrangement.spacedBy(30.dp)) {
+            KeyButton(accent, "Back", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.BACK) }) { c, _ -> LineIcon(Ico.CHEVRON_L, c, 24.dp, stroke = 2.2f) }
+            KeyButton(accent, "Home", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.HOME) }) { c, _ -> LineIcon(Ico.TV, c, 22.dp) }
+            KeyButton(accent, "Play or pause", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { c, _ -> LineIcon(Ico.PLAY, c, 21.dp) }
+        }
+        Spacer(Modifier.height(16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(30.dp)) {
+            KeyButton(accent, "Mute", k, state = if (vm.muted) "Muted" else null, pressedScale = 1f, onPress = { vm.press(RemoteKey.MUTE) }) { c, _ ->
+                LineIcon(if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, if (vm.muted) accent else c, 21.dp)
+            }
+            KeyButton(accent, "Search and type", k, actionLabel = "search or type on TV", pressedScale = 1f, onPress = openKeys) { c, _ -> LineIcon(Ico.SEARCH, c, 21.dp) }
+            KeyButton(accent, "Voice", k, pressedScale = 1f, onPress = { vm.feel.fire(Feel.HEAVY); vm.press(RemoteKey.VOICE) }) { c, _ -> LineIcon(Ico.MIC, c, 21.dp) }
+        }
+    }
+}
+
+/** "Living room TV ▾" centred, with what's on screen (Roku / LG) or the link state under it. */
+@Composable
+private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) {
+    val d = vm.active
+    val on = d != null && vm.link == Link.READY
+    val sub = when {
+        d == null -> "Tap to add a TV"
+        !on -> linkWord(vm.link).ifEmpty { "Not connected" }
+        else -> vm.nowOn?.name ?: "Connected"
+    }
+    val subCol = when {
+        d == null -> T.Dim
+        on -> Color(0xFF6DD58C)
+        vm.link == Link.CONNECTING -> Color(0xFFFDD663)
+        else -> Color(0xFFF2B8B5)
+    }
+    Column(
+        modifier.clip(RoundedCornerShape(14.dp))
+            .clickable(onClickLabel = "choose a TV", role = Role.Button, onClick = openDevices)
+            .semantics(mergeDescendants = true) {
+                contentDescription = d?.let { "TV: ${it.name}" } ?: "Choose a TV"
+                stateDescription = sub
+            }
+            .padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(d?.name ?: "Choose a TV", color = T.Ink, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            LineIcon(Ico.DOWN, T.Dim, 15.dp, stroke = 2.2f)
+        }
+        Text(sub, color = subCol, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** Navigate | Watch: what the dial does. Follows the TV on Roku and LG; tap to choose yourself. */
+@Composable
+private fun ModeSwitch(watching: Boolean, accent: Color, onPick: (Boolean) -> Unit) {
+    Row(
+        Modifier.height(34.dp).clip(CircleShape).background(M.Container).padding(3.dp).selectableGroup(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        listOf(false to "Navigate", true to "Watch").forEach { (v, label) ->
+            val sel = v == watching
+            Box(
+                Modifier.fillMaxHeight().clip(CircleShape)
+                    .background(if (sel) M.Highest else Color.Transparent)
+                    .selectable(sel, role = Role.Tab) { if (!sel) onPick(v) }
+                    .padding(horizontal = 16.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(label, color = if (sel) T.Ink else T.Dim, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             }
         }
     }
@@ -205,36 +309,6 @@ fun ControlTray(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Un
                 Text("123", color = c, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             }
         }
-    }
-}
-
-/** "📺 Living room TV ▾" in green when connected; opens the TV list. */
-@Composable
-private fun TvLine(vm: RemoteVM, openDevices: () -> Unit) {
-    val d = vm.active
-    val on = d != null && vm.link == Link.READY
-    val col = when {
-        d == null -> T.Dim
-        on -> Color(0xFF6DD58C)
-        vm.link == Link.CONNECTING -> Color(0xFFFDD663)
-        else -> Color(0xFFF2B8B5)
-    }
-    Row(
-        Modifier.padding(top = 2.dp).clip(CircleShape)
-            .clickable(onClickLabel = "choose a TV", role = Role.Button, onClick = openDevices)
-            .semantics(mergeDescendants = true) {
-                contentDescription = d?.let { "TV: ${it.name}" } ?: "Choose a TV"
-                if (d != null) stateDescription = linkWord(vm.link)
-            }
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        LineIcon(Ico.TV, col, 15.dp)
-        Text(d?.name ?: "Choose a TV", color = col, fontSize = 14.sp, maxLines = 1,
-            overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-        if (d != null && !on) Text("· ${linkWord(vm.link)}", color = T.Dim, fontSize = 12.5.sp, maxLines = 1)
-        LineIcon(Ico.DOWN, T.Dim, 14.dp)
     }
 }
 

@@ -11,6 +11,7 @@ import com.krishna.miniremote.net.Discovery
 import com.krishna.miniremote.net.HostValidator
 import com.krishna.miniremote.net.RemoteAdapter
 import com.krishna.miniremote.net.TvApp
+import com.krishna.miniremote.net.NowOn
 import com.krishna.miniremote.net.Unsupported
 import com.krishna.miniremote.net.UserFacing
 import com.krishna.miniremote.net.adapterFor
@@ -55,6 +56,37 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     private var connectJob: Job? = null
     private var toastJob: Job? = null
     private val queue = Channel<RemoteKey>(64, BufferOverflow.DROP_OLDEST)
+
+    /** What the TV shows (Roku and LG can tell), and whether the dial is in Watch mode. */
+    var nowOn by mutableStateOf<NowOn?>(null); private set
+    /** The user's own choice; cleared whenever the TV moves between live TV and apps. */
+    private var watchChoice by mutableStateOf<Boolean?>(null)
+    val watching: Boolean get() = watchChoice ?: (nowOn?.live == true)
+    private var nowJob: Job? = null
+    private var nowFor: String? = null
+
+    fun setWatching(on: Boolean) { watchChoice = on; feel.fire(Feel.DETENT); say(if (on) "Watch: dial = volume & channels" else "Navigate: dial moves around") }
+
+    /** Polls what's on screen every few seconds while Home is showing ([on]). Stops if the TV can't tell. */
+    fun followNowOn(on: Boolean) {
+        nowJob?.cancel(); nowJob = null
+        if (!on) return
+        nowJob = viewModelScope.launch {
+            while (true) {
+                val a = adapter
+                if (a != null && link == Link.READY) {
+                    try {
+                        val n = a.nowOn()
+                        if (n.live != nowOn?.live) watchChoice = null
+                        nowOn = n
+                    } catch (e: Unsupported) { nowOn = null; return@launch
+                    } catch (e: CancellationException) { if (e !is TimeoutCancellationException) throw e
+                    } catch (e: Exception) { /* try again next round */ }
+                }
+                delay(3500)
+            }
+        }
+    }
 
     /* Channels tab state. Declared before init, which may connect (and reset tvApps). */
     var shortcuts by mutableStateOf(store.loadShortcuts()); private set
@@ -158,6 +190,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
 
     fun connect(d: Device) {
         if (d.id != appsFor) { tvApps = emptyList(); appsFor = null }
+        if (d.id != nowFor) { nowOn = null; watchChoice = null; nowFor = d.id }
         connectJob?.cancel()
         adapter?.close(); adapter = null
         link = Link.CONNECTING

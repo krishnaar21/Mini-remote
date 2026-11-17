@@ -69,6 +69,8 @@ fun Clickpad(
     /** No TV connected: the pad dims, shows a hint, and any tap calls [onOffline]. */
     offline: Boolean = false,
     onOffline: () -> Unit = {},
+    /** Watch mode: up / down are volume, so they show + and −. */
+    watch: Boolean = false,
 ) {
     val isOffline = androidx.compose.runtime.rememberUpdatedState(offline)
     val density = LocalDensity.current
@@ -202,8 +204,8 @@ fun Clickpad(
                 }
             }
             val mid = (this.size.width - cs) / 2f
-            chev(RemoteKey.UP, Ico.UP, mid, e)
-            chev(RemoteKey.DOWN, Ico.DOWN, mid, this.size.height - e - cs)
+            chev(RemoteKey.UP, if (watch) Ico.PLUS else Ico.UP, mid, e)
+            chev(RemoteKey.DOWN, if (watch) Ico.MINUS else Ico.DOWN, mid, this.size.height - e - cs)
             chev(RemoteKey.LEFT, Ico.LEFT, e, mid)
             chev(RemoteKey.RIGHT, Ico.RIGHT, this.size.width - e - cs, mid)
         }

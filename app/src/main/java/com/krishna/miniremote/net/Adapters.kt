@@ -26,6 +26,9 @@ open class UserFacing(msg: String) : Exception(msg)
 
 class Unsupported(msg: String) : UserFacing(msg)
 
+/** What the TV is showing: an app or input by name, and whether it's live TV / an input. */
+data class NowOn(val name: String, val live: Boolean)
+
 /** An app installed on the TV, as the TV lists it. [icon] is a URL on the TV, if it has one. */
 data class TvApp(val id: String, val name: String, val icon: String? = null)
 
@@ -37,6 +40,9 @@ interface RemoteAdapter {
 
     /** Apps installed on the TV. */
     suspend fun listApps(): List<TvApp> { throw Unsupported("This TV can't list its apps") }
+
+    /** What's on screen now, for Watch / Navigate. Brands that can't tell throw [Unsupported]. */
+    suspend fun nowOn(): NowOn { throw Unsupported("This TV can't say what's on screen") }
 
     /** Opens an app by this TV's own id for it. */
     suspend fun launchApp(id: String) { throw Unsupported("Opening apps isn't supported on this TV yet") }
@@ -130,6 +136,15 @@ class RokuAdapter(private val host: String) : RemoteAdapter {
         }.toList()
 
     override suspend fun launchApp(id: String) { post("launch/${enc(id)}") }
+
+    /** active-app: an <app> with an id (tvinput.* = antenna or HDMI), or the bare "Roku" home screen. */
+    override suspend fun nowOn(): NowOn {
+        val m = Regex("<app( id=\"([^\"]*)\")?[^>]*>([^<]*)</app>").find(get("query/active-app"))
+            ?: return NowOn("Home", false)
+        val id = m.groupValues[2]
+        if (id.isEmpty()) return NowOn("Home", false)
+        return NowOn(xmlText(m.groupValues[3]).ifEmpty { id }, id.startsWith("tvinput."))
+    }
 
     /** Roku TVs tune live TV through the antenna input with a channel number like 7 or 7.1. */
     override suspend fun tuneChannel(number: String) { post("launch/tvinput.dtv?ch=${enc(number)}") }
@@ -398,6 +413,19 @@ class LgAdapter(
     }
 
     override suspend fun launchApp(id: String) { request("ssap://system.launcher/launch", JSONObject().put("id", id)) }
+
+    private val liveIds = Regex("livetv|hdmi|externalinput|tvinput|av[0-9]|component", RegexOption.IGNORE_CASE)
+
+    override suspend fun nowOn(): NowOn {
+        val id = request("ssap://com.webos.applicationManager/getForegroundAppInfo").optJSONObject("payload")?.optString("appId").orEmpty()
+        val name = when {
+            id.isEmpty() || id.contains("home", true) || id.contains("launcher", true) -> "Home"
+            id.contains("livetv", true) -> "Live TV"
+            id.contains("hdmi", true) -> "HDMI " + id.filter { it.isDigit() }
+            else -> id.substringAfterLast('.').replaceFirstChar { it.uppercase() }
+        }
+        return NowOn(name, liveIds.containsMatchIn(id))
+    }
 
     override suspend fun search(query: String) {
         throw Unsupported("Open a search box on the LG, then use the keyboard to type")

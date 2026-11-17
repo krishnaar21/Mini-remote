@@ -58,6 +58,9 @@ fun Trackpad(
     onTick: (RemoteKey) -> Unit,
     onVoice: () -> Unit,
     onOffline: () -> Unit,
+    /** Taller than wide, like Apple's touch surface. */
+    height: Dp = size,
+    watch: Boolean = false,
 ) {
     val density = LocalDensity.current
     val stepPx = with(density) { stepDp.dp.toPx() }
@@ -66,16 +69,17 @@ fun Trackpad(
     val scope = rememberCoroutineScope()
     var touch by remember { mutableStateOf<Offset?>(null) }
     var lit by remember { mutableStateOf<RemoteKey?>(null) }
-    val corner = size * 0.12f
+    val corner = 28.dp
 
     Box(
-        Modifier.size(size)
+        Modifier.size(size, height)
             .softFace(PAD, corner = corner)
             .drawWithContent {
                 val u = this.size.width
                 val gap = u / 11f
                 val r = 1.3.dp.toPx()
-                for (i in 1..10) for (j in 1..10) drawCircle(Color.White.copy(alpha = 0.09f), r, Offset(i * gap, j * gap))
+                val rows = (this.size.height / gap).toInt()
+                for (i in 1..10) for (j in 1 until rows) drawCircle(Color.White.copy(alpha = 0.07f), r, Offset(i * gap, j * gap))
                 touch?.let { t ->
                     drawCircle(Brush.radialGradient(0f to Color.White.copy(0.13f), 0.7f to Color.Transparent, center = t, radius = u * 0.3f), u * 0.3f, t)
                 }
@@ -129,12 +133,13 @@ fun Trackpad(
         val e = size * 0.05f
         val cs = size * 0.09f
         fun col(k: RemoteKey) = if (lit == k) accent else Color(0xFF5A5A60)
-        LineIcon(Ico.UP, col(RemoteKey.UP), cs, Modifier.align(Alignment.TopCenter).padding(top = e), stroke = 2.2f)
-        LineIcon(Ico.DOWN, col(RemoteKey.DOWN), cs, Modifier.align(Alignment.BottomCenter).padding(bottom = e), stroke = 2.2f)
+        LineIcon(if (watch) Ico.PLUS else Ico.UP, col(RemoteKey.UP), cs, Modifier.align(Alignment.TopCenter).padding(top = e), stroke = 2.2f)
+        LineIcon(if (watch) Ico.MINUS else Ico.DOWN, col(RemoteKey.DOWN), cs, Modifier.align(Alignment.BottomCenter).padding(bottom = e), stroke = 2.2f)
         LineIcon(Ico.LEFT, col(RemoteKey.LEFT), cs, Modifier.align(Alignment.CenterStart).padding(start = e), stroke = 2.2f)
         LineIcon(Ico.RIGHT, col(RemoteKey.RIGHT), cs, Modifier.align(Alignment.CenterEnd).padding(end = e), stroke = 2.2f)
-        if (touch == null) Text("Tap for OK · slide to move", color = Color(0xFF5A5A60), fontSize = 11.sp,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = size * 0.16f))
+        if (touch == null) Text(if (watch) "Slide up or down for volume · sideways for channels" else "Tap for OK · slide to move",
+            color = Color(0xFF5A5A60), fontSize = 11.sp,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 44.dp))
 
         val zone = size * 0.28f
         PadZone("Up", Modifier.align(Alignment.TopCenter).size(zone)) { onKey(RemoteKey.UP) }
