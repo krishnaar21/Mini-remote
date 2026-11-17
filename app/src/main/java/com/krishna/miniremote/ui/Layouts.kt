@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -78,7 +81,7 @@ private const val RING_STEP = 18f
  * While turning, an accent arc follows the finger. Touches inside the dial go to [content].
  */
 @Composable
-fun RingDial(dial: Dp, accent: Color, level: Float? = null, value: String? = null, onStep: (up: Boolean) -> Unit, content: @Composable () -> Unit) {
+fun RingDial(dial: Dp, accent: Color, level: Float? = null, value: String? = null, onStep: (up: Boolean) -> Unit, content: @Composable (turning: Boolean) -> Unit) {
     val shown by animateFloatAsState(level ?: 0f, tween(160), label = "lvl")
     val step by rememberUpdatedState(onStep)
     var start by remember { mutableFloatStateOf(0f) }
@@ -124,17 +127,18 @@ fun RingDial(dial: Dp, accent: Color, level: Float? = null, value: String? = nul
                 val r = dial.toPx() / 2f + RING_BAND.toPx() / 2f
                 val tl = Offset(center.x - r, center.y - r)
                 val sz = Size(r * 2, r * 2)
-                drawCircle(M.Highest.copy(alpha = 0.55f), r, style = Stroke(5.dp.toPx()))
+                drawCircle(M.Highest.copy(alpha = 0.55f), r, style = Stroke(3.dp.toPx()))
                 // The TV's real volume, from the top, clockwise.
-                if (level != null) { if (shown > 0f) drawArc(accent, -90f, 360f * shown, false, tl, sz, style = Stroke(7.dp.toPx(), cap = StrokeCap.Round)) }
+                if (level != null) { if (shown > 0f) drawArc(accent, -90f, 360f * shown, false, tl, sz, style = Stroke(4.dp.toPx(), cap = StrokeCap.Round)) }
                 else if (glow > 0f && sweep != 0f) drawArc(accent.copy(alpha = glow), start, sweep, false, tl, sz,
-                    style = Stroke(7.dp.toPx(), cap = StrokeCap.Round))
+                    style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
             },
         contentAlignment = Alignment.Center,
     ) {
-        content()
-        if (value != null) Box(Modifier.align(Alignment.BottomCenter).clip(CircleShape).background(Color.Black).padding(horizontal = 8.dp)) {
-            Text(value, color = if (glow > 0f) accent else T.Dim, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        content(turning)
+        // At rest the number sits at the foot of the ring; while turning it shows in the middle (see content).
+        if (value != null && !turning) Box(Modifier.align(Alignment.BottomCenter).clip(CircleShape).background(Color.Black).padding(horizontal = 8.dp)) {
+            Text(value, color = T.Dim, fontSize = 12.sp, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -142,17 +146,22 @@ fun RingDial(dial: Dp, accent: Color, level: Float? = null, value: String? = nul
 /** A round key that fires on release (so it can sit in a scrolling strip). Icon or a short word, with an optional caption. */
 @Composable
 fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ico: Ico? = null, word: String? = null, caption: String? = null, onClick: () -> Unit) {
+    val src = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.94f else 1f, if (pressed) tween(70) else androidx.compose.animation.core.spring(0.45f, 700f), label = "press")
     Box(
-        Modifier.size(size).clip(CircleShape).background(if (active) accent.copy(alpha = 0.25f) else Color(0xFF1C1C1E))
-            .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
+        Modifier.size(size).graphicsLayer { scaleX = scale; scaleY = scale }.clip(CircleShape)
+            .background(if (active) accent.copy(alpha = 0.25f) else if (pressed) Color(0xFF2A2A2D) else Color(0xFF1C1C1E))
+            .clickable(src, androidx.compose.material3.ripple(color = Color.White), onClickLabel = label, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             val c = if (active) accent else T.Ink
-            if (ico != null) LineIcon(ico, c, if (caption != null) 18.dp else 21.dp)
+            if (ico != null) LineIcon(ico, c, if (caption != null) 16.dp else 21.dp)
             if (word != null) Text(word, color = c, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            if (caption != null) Text(caption, color = T.Dim, fontSize = 9.sp, letterSpacing = 0.8.sp, fontWeight = FontWeight.Medium)
+            if (caption != null) Text(caption, color = T.Dim, fontSize = 9.sp, letterSpacing = 0.8.sp, fontWeight = FontWeight.Medium,
+                lineHeight = 9.sp, modifier = Modifier.offset(y = (-1).dp))
         }
     }
 }
@@ -289,12 +298,12 @@ fun VolChCard(vm: RemoteVM, accent: Color) {
 fun FourKeys(vm: RemoteVM, accent: Color, openKeys: () -> Unit, size: Dp = 62.dp, gap: Dp = 20.dp) {
     val k = Modifier.size(size)
     Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-        KeyButton(accent, "Back", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.BACK) }) { c, _ -> LineIcon(Ico.CHEVRON_L, c, 24.dp, stroke = 2.2f) }
-        KeyButton(accent, "Home", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.HOME) }) { c, _ -> LineIcon(Ico.TV, c, 22.dp) }
-        KeyButton(accent, if (vm.playing) "Pause" else "Play", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { c, _ ->
+        KeyButton(accent, "Back", k, pressedScale = 0.94f, onPress = { vm.press(RemoteKey.BACK) }) { c, _ -> LineIcon(Ico.CHEVRON_L, c, 24.dp, stroke = 2.2f) }
+        KeyButton(accent, "Home", k, pressedScale = 0.94f, onPress = { vm.press(RemoteKey.HOME) }) { c, _ -> LineIcon(Ico.TV, c, 22.dp) }
+        KeyButton(accent, if (vm.playing) "Pause" else "Play", k, pressedScale = 0.94f, onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { c, _ ->
             LineIcon(if (vm.playing) Ico.PAUSE else Ico.PLAY_ONLY, c, if (vm.playing) 22.dp else 20.dp, stroke = if (vm.playing) 2.4f else 1.8f)
         }
-        KeyButton(accent, "Search", k, actionLabel = "search or type on TV", pressedScale = 1f, onPress = openKeys) { c, _ -> LineIcon(Ico.SEARCH, c, 21.dp) }
+        KeyButton(accent, "Search", k, actionLabel = "search or type on TV", pressedScale = 0.94f, onPress = openKeys) { c, _ -> LineIcon(Ico.SEARCH, c, 21.dp) }
     }
 }
 

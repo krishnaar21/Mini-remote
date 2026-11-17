@@ -151,12 +151,12 @@ fun HomeScreen(
     val voice = { vm.feel.fire(Feel.HEAVY); vm.press(RemoteKey.VOICE) }
     val offlineTap = { vm.feel.fire(Feel.PRESS); openDevices() }
     // The dial at a given size; [round] = sits inside the volume ring.
-    val dialAt: @Composable (Dp, Boolean) -> Unit = { s, round ->
+    val dialAt: @Composable (Dp, Boolean, String?) -> Unit = { s, round, center ->
         CompositionLocalProvider(LocalK provides s.value / 780f) {
             Clickpad(
                 size = s, accent = accent, stepDp = vm.settings.scrubStepDp,
-                toast = if (layout == HomeLayout.CARDS) null else vm.toast,
-                toastIcon = vm.toastKey?.let { keyIcon(it, vm.muted, vm.playing) },
+                toast = center ?: if (layout == HomeLayout.CARDS) null else vm.toast,
+                toastIcon = if (center != null) (if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER) else vm.toastKey?.let { keyIcon(it, vm.muted, vm.playing) },
                 onKey = onKey, onTick = onTick, onVoice = voice,
                 offline = offline, onOffline = offlineTap,
                 onTwoFinger = onTwo, onTwoFingerTap = onTwoTap, roundOnly = round,
@@ -174,7 +174,7 @@ fun HomeScreen(
                         val s = minOf(w, h, 340.dp)
                         CompositionLocalProvider(LocalK provides s.value / 780f) { Numpad(vm, accent, Modifier.size(s)) }
                     }
-                    Deck.DIAL -> dialAt(minOf(w - 8.dp, h, 340.dp), false)
+                    Deck.DIAL -> dialAt(minOf(w - 8.dp, h, 340.dp), false, null)
                     Deck.TRACKPAD -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                         // A bit narrower than the screen, about square, near the top.
                         val tw = minOf(w * 0.86f, 330.dp)
@@ -197,7 +197,7 @@ fun HomeScreen(
         else BoxWithConstraints(m, contentAlignment = Alignment.Center) {
             val s = minOf(maxWidth - 8.dp - RING_BAND * 2, maxHeight - RING_BAND * 2, 300.dp)
             val v = vm.tvVolume
-            RingDial(s, accent, level = v?.let { if (it.muted) 0f else it.level.toFloat() / it.max }, value = v?.let { if (it.muted) "Muted" else "${it.level}" }, onStep = { up -> vm.scrubTick(if (up) RemoteKey.VOL_UP else RemoteKey.VOL_DOWN) }) { dialAt(s, true) }
+            RingDial(s, accent, level = v?.let { if (it.muted) 0f else it.level.toFloat() / it.max }, value = v?.let { if (it.muted) "Muted" else "${it.level}" }, onStep = { up -> vm.scrubTick(if (up) RemoteKey.VOL_UP else RemoteKey.VOL_DOWN) }) { turning -> dialAt(s, true, if (turning) v?.let { if (it.muted) "Muted" else "${it.level}" } ?: "Volume" else null) }
         }
     }
     val a11y = Modifier.semantics {
