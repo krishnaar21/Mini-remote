@@ -318,14 +318,12 @@ struct TwoHint: View {
                     switch k {
                     case .volUp: return ("speaker.wave.3.fill", "Vol")
                     case .volDown: return ("speaker.wave.1.fill", "Vol")
-                    case .chUp: return ("plus", "Channel")
-                    default: return ("minus", "Channel")
+                    case .chUp: return ("chevron.forward.2", "Channel")
+                    default: return ("chevron.backward.2", "Channel")
                     }
                 }()
                 Image(systemName: sym).font(.system(size: big, weight: .medium)).foregroundStyle(.white)
                 Text(word).font(.system(size: 14, weight: .medium)).foregroundStyle(.white)
-            } else {
-                Text("↕ Volume   ↔ Channel").font(.system(size: 13)).foregroundStyle(.white)
             }
         }
     }

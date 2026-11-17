@@ -158,7 +158,9 @@ final class RemoteModel: ObservableObject {
 
     func connect(_ d: Device) { connect(d, quiet: false) }
 
-    private func connect(_ d: Device, quiet: Bool) {
+    private func connect(_ d0: Device, quiet: Bool) {
+        // Always the saved copy: a reconnect must carry the pin and token saved since (or the TV asks to pair again).
+        let d = devices.first { $0.id == d0.id } ?? d0
         if d.id != appsFor { tvApps = []; appsFor = nil }
         nowOn = nil
         connectTask?.cancel()
