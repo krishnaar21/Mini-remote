@@ -630,14 +630,14 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
                 Text("Scrub distance", color = T.Ink, fontSize = 15.sp)
                 Text("Shorter = faster scrolling", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
             }
-            Text("${s.scrubStepDp.roundToInt()} dp", color = Muted, fontSize = 13.sp, fontFamily = Mono)
+            Text("${s.scrubStepDp.roundToInt()} dp", color = accent, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         }
         Fader(s.scrubStepDp, 24f..60f, accent, label = "Scrub distance", valueText = "${s.scrubStepDp.roundToInt()} dp", steps = 17) {
             vm.update(s.copy(scrubStepDp = it))
         }
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-            Text("FAST", color = Color(0xFFA8A8AD), fontSize = 11.sp, letterSpacing = 0.88.sp, fontFamily = Mono, modifier = Modifier.weight(1f))
-            Text("SLOW", color = Color(0xFFA8A8AD), fontSize = 11.sp, letterSpacing = 0.88.sp, fontFamily = Mono)
+        Row(Modifier.fillMaxWidth()) {
+            Text("Fast", color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
+            Text("Slow", color = Muted, fontSize = 12.sp)
         }
     }
     Divider()

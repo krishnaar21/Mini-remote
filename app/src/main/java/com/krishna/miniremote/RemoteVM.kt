@@ -378,19 +378,27 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
 
     /** Loads the TV's app list once per TV ([force] reloads it). Silent when the TV can't list apps. */
     fun refreshApps(force: Boolean = false) {
-        val a = adapter ?: return
-        val id = activeId ?: return
-        if (link != Link.READY || appsLoading || (!force && appsFor == id)) return
+        // A manual refresh always answers, even when there's nothing to load.
+        val a = adapter
+        val id = activeId
+        if (a == null || id == null || link != Link.READY) {
+            if (force) say(if (active == null) "Choose a TV first" else "Connect to ${active?.name} first")
+            return
+        }
+        if (appsLoading) { if (force) say("Already loading apps…"); return }
+        if (!force && appsFor == id) return
         appsLoading = true
+        val before = tvApps
         viewModelScope.launch {
             try {
                 tvApps = a.listApps().sortedBy { it.name.lowercase() }
                 appsFor = id
+                if (force) say(if (tvApps == before) "Already showing the latest apps" else "Apps updated · ${tvApps.size} on the TV")
             } catch (e: TimeoutCancellationException) {
                 if (force) say("The TV didn't send its apps")
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 appsFor = id
-                if (force) say(if (e is UserFacing) e.message ?: "Couldn't load apps" else "Couldn't load apps")
+                if (force) say(if (e is Unsupported) "This TV can't list its apps. Popular apps are up to date." else if (e is UserFacing) e.message ?: "Couldn't load apps" else "Couldn't load apps")
             } finally { appsLoading = false }
         }
     }
