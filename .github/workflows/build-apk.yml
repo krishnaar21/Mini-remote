@@ -42,7 +42,7 @@ jobs:
           printf '{"versionCode":%s,"versionName":"0.2.%s","sha256":"%s"}\n' \
             "$GITHUB_RUN_NUMBER" "$GITHUB_RUN_NUMBER" "$(sha256sum MiniRemote.apk | cut -d' ' -f1)" > version.json
           cat version.json
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: MiniRemote-apk
           path: |
