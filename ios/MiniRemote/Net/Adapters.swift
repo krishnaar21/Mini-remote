@@ -258,8 +258,9 @@ final class LgAdapter: RemoteAdapter {
     @discardableResult
     private func request(_ uri: String, _ payload: [String: Any] = [:]) async throws -> [String: Any] {
         guard let s = ws else { throw UserFacing("Not connected") }
-        lock.lock(); let id = "r\(nextId)"; nextId += 1; let d = Once<[String: Any]>(); pending[id] = d; lock.unlock()
-        defer { lock.lock(); pending[id] = nil; lock.unlock() }
+        let d = Once<[String: Any]>()
+        let id: String = lock.withLock { let id = "r\(nextId)"; nextId += 1; pending[id] = d; return id }
+        defer { lock.withLock { pending[id] = nil } }
         try await s.send(jsonString(["type": "request", "id": id, "uri": uri, "payload": payload]))
         let j = try await d.wait(6, "The TV didn't answer")
         if j["type"] as? String == "error" { throw UserFacing("The TV refused: \((j["error"] as? String) ?? "unknown error")") }

@@ -23,6 +23,7 @@ targets:
         CFBundleDisplayName: Mini Remote
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIRequiresFullScreen: true
         UIUserInterfaceStyle: Dark
         ITSAppUsesNonExemptEncryption: false
         NSLocalNetworkUsageDescription: Mini Remote finds and controls the TVs on your Wi-Fi. It only talks to devices on your own network.
