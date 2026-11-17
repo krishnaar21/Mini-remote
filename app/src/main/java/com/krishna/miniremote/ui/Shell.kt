@@ -99,7 +99,7 @@ private fun grain(): ImageBitmap {
 /** The icon the dial's well shows above a key's name. */
 fun keyIcon(k: RemoteKey, muted: Boolean, playing: Boolean = false): Ico? = when (k) {
     RemoteKey.UP -> Ico.UP; RemoteKey.DOWN -> Ico.DOWN; RemoteKey.LEFT -> Ico.LEFT; RemoteKey.RIGHT -> Ico.RIGHT
-    RemoteKey.BACK -> Ico.CHEVRON_L; RemoteKey.HOME -> Ico.TV; RemoteKey.PLAY_PAUSE -> if (playing) Ico.PLAY_ONLY else Ico.PAUSE; RemoteKey.POWER -> Ico.POWER
+    RemoteKey.BACK -> Ico.CHEVRON_L; RemoteKey.HOME -> Ico.HOME; RemoteKey.PLAY_PAUSE -> if (playing) Ico.PLAY_ONLY else Ico.PAUSE; RemoteKey.POWER -> Ico.POWER
     RemoteKey.VOL_UP -> Ico.PLUS; RemoteKey.VOL_DOWN -> Ico.MINUS; RemoteKey.VOICE -> Ico.MIC
     RemoteKey.MUTE -> if (muted) Ico.SPEAKER_MUTED else Ico.SPEAKER
     RemoteKey.REWIND -> Ico.REWIND; RemoteKey.FAST_FORWARD -> Ico.FFWD

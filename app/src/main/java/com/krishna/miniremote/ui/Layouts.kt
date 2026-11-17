@@ -170,7 +170,7 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             StripKey(accent, "Back", k, ico = Ico.CHEVRON_L) { vm.press(RemoteKey.BACK) }
-            StripKey(accent, "Home", k, ico = Ico.TV) { vm.press(RemoteKey.HOME) }
+            StripKey(accent, "Home", k, ico = Ico.HOME) { vm.press(RemoteKey.HOME) }
             StripKey(accent, if (vm.playing) "Pause" else "Play", k, ico = if (vm.playing) Ico.PAUSE else Ico.PLAY_ONLY) { vm.press(RemoteKey.PLAY_PAUSE) }
             StripKey(accent, "Search", k, ico = Ico.SEARCH, onClick = openKeys)
         }
@@ -234,7 +234,7 @@ fun FourKeys(vm: RemoteVM, accent: Color, openKeys: () -> Unit, size: Dp = 62.dp
     val k = Modifier.size(size)
     Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
         KeyButton(accent, "Back", k, pressedScale = 0.94f, onPress = { vm.press(RemoteKey.BACK) }) { c, _ -> LineIcon(Ico.CHEVRON_L, c, 24.dp, stroke = 2.2f) }
-        KeyButton(accent, "Home", k, pressedScale = 0.94f, onPress = { vm.press(RemoteKey.HOME) }) { c, _ -> LineIcon(Ico.TV, c, 22.dp) }
+        KeyButton(accent, "Home", k, pressedScale = 0.94f, onPress = { vm.press(RemoteKey.HOME) }) { c, _ -> LineIcon(Ico.HOME, c, 22.dp) }
         KeyButton(accent, if (vm.playing) "Pause" else "Play", k, pressedScale = 0.94f, onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { c, _ ->
             LineIcon(if (vm.playing) Ico.PAUSE else Ico.PLAY_ONLY, c, if (vm.playing) 22.dp else 20.dp, stroke = if (vm.playing) 2.4f else 1.8f)
         }

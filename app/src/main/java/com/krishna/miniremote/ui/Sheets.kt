@@ -1114,6 +1114,7 @@ private val THIRD_PARTY = listOf(
     Triple("Kotlin standard library, kotlinx.coroutines", "JetBrains s.r.o. and contributors", "Apache License 2.0"),
     Triple("OkHttp, Okio", "Square, Inc.", "Apache License 2.0"),
     Triple("AndroidSVG", "Paul LeBeau, Cave Rock Software Ltd.", "Apache License 2.0"),
+    Triple("Hugeicons (free Stroke Rounded icons)", "Hugeicons", "MIT License"),
     Triple("Simple Icons (app logos, downloaded when enabled)", "Simple Icons contributors", "CC0 1.0 Universal; logos remain trademarks of their owners"),
 )
 
@@ -1132,7 +1133,7 @@ internal fun LicensesPage() {
         }
     }
     Hint("Tap to read in full.", top = 10)
-    listOf("Apache License 2.0" to com.krishna.miniremote.R.raw.apache_2_0, "CC0 1.0 Universal" to com.krishna.miniremote.R.raw.cc0_1_0)
+    listOf("Apache License 2.0" to com.krishna.miniremote.R.raw.apache_2_0, "CC0 1.0 Universal" to com.krishna.miniremote.R.raw.cc0_1_0, "MIT License (Hugeicons)" to com.krishna.miniremote.R.raw.mit_hugeicons)
         .forEach { (title, res) ->
             Btn(if (shown == res) "Hide $title" else title, kind = 1) { shown = if (shown == res) null else res }
             if (shown == res) {
