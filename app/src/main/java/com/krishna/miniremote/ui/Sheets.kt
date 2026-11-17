@@ -441,8 +441,7 @@ internal fun DevicesPage(vm: RemoteVM, open: (String) -> Unit, add: () -> Unit) 
         TvIllustration(com.krishna.miniremote.ui.accentColor(vm.settings.accentHex))
         Text("No TVs yet", color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp))
-        Text("Add your TV to start. Your phone and TV need to be on the same Wi-Fi.", color = Muted, fontSize = 13.sp,
-            lineHeight = 19.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 22.dp))
+        Spacer(Modifier.height(14.dp))
     }
     vm.devices.forEach { d ->
         val on = vm.activeId == d.id && vm.link == Link.READY
