@@ -5,6 +5,9 @@ on:
     paths: ["ios/**", ".github/workflows/ios-screens.yml"]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   shots:
     runs-on: macos-15
@@ -47,3 +50,10 @@ jobs:
         with:
           name: ios-screenshots
           path: ios/shots
+      - name: Publish screenshots to the ios-screenshots branch
+        run: |
+          cd ios/shots
+          git init -q -b ios-screenshots
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "iOS screenshots for ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ios-screenshots
