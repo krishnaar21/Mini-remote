@@ -1,0 +1,35 @@
+name: Build iOS
+on:
+  pull_request:
+    paths: ["ios/**", ".github/workflows/build-ios.yml"]
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/build-ios.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+      - name: Build (no signing)
+        run: |
+          set -o pipefail
+          cd ios
+          xcodebuild -project MiniRemote.xcodeproj -scheme MiniRemote -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            -derivedDataPath build build | xcbeautify
+      - name: Package an unsigned IPA
+        run: |
+          cd ios
+          mkdir -p Payload && cp -R build/Build/Products/Release-iphoneos/MiniRemote.app Payload/
+          zip -qr MiniRemote-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v6
+        with:
+          name: MiniRemote-ios-unsigned
+          path: ios/MiniRemote-unsigned.ipa
