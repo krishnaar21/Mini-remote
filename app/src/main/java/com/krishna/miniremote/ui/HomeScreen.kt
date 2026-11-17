@@ -256,7 +256,7 @@ fun HomeScreen(
 
             HomeLayout.STRIP -> {
                 ringArea(Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp).then(a11y))
-                Box(Modifier.padding(top = 10.dp)) { KeyRows(vm, accent, numpad, onNumpad, openKeys) }
+                Box(Modifier.padding(top = 10.dp, bottom = 26.dp)) { KeyRows(vm, accent, numpad, onNumpad, openKeys) }
             }
 
         }

@@ -214,7 +214,14 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
             for (op in textOps) {
                 val a = adapter
                 if (link != Link.READY || a == null) continue
-                try { if (op == "\b") a.backspace() else a.typeText(op); txCount++ } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                try {
+                    when {
+                        op.startsWith("\u0001") -> a.setText(op.substring(1))
+                        op == "\b" -> a.backspace()
+                        else -> a.typeText(op)
+                    }
+                    txCount++
+                } catch (e: CancellationException) { throw e } catch (e: Exception) {
                     if (!typeWarned) { typeWarned = true; say(if (e is UserFacing) e.message ?: "Couldn't type" else "Couldn't type") }
                 }
             }
@@ -224,6 +231,8 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     /** Mirrors an edit of the search box on the TV: deletes what changed, types what's new. */
     fun liveType(old: String, new: String) {
         if (active == null) { say("Choose a TV first"); return }
+        // Android TV takes the whole box at once (any characters, no key-by-key typing).
+        if (adapter?.replacesText == true) { textOps.trySend("\u0001" + new); return }
         var common = 0
         while (common < old.length && common < new.length && old[common] == new[common]) common++
         repeat(old.length - common) { textOps.trySend("\b") }
@@ -327,7 +336,9 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
 
     fun connect(d: Device) = connect(d, quiet = false)
 
-    private fun connect(d: Device, quiet: Boolean) {
+    private fun connect(d0: Device, quiet: Boolean) {
+        // Always the saved copy: a reconnect must carry the pin and token saved since (or the TV asks to pair again).
+        val d = devices.firstOrNull { it.id == d0.id } ?: d0
         if (d.id != appsFor) { tvApps = emptyList(); appsFor = null }
         if (d.id != nowFor) { nowOn = null; watchChoice = null; nowFor = d.id }
         connectJob?.cancel()

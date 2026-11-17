@@ -60,16 +60,14 @@ internal class TwoFinger(private val stepPx: Float, private val emit: (RemoteKey
 @androidx.compose.runtime.Composable
 internal fun TwoFingerHint(key: RemoteKey?, accent: androidx.compose.ui.graphics.Color, icon: androidx.compose.ui.unit.Dp, text: androidx.compose.ui.unit.TextUnit) {
     androidx.compose.foundation.layout.Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
-        if (key == null) {
-            // Fingers down, no step yet: show both directions.
-            androidx.compose.material3.Text("↕ Volume   ↔ Channel", color = T.Ink, fontSize = text)
-        } else {
+        // Fingers down, no step yet: nothing to show until the slide picks a direction.
+        if (key != null) {
             // What the slide does, not where it goes: louder / quieter speaker, + / − channel.
             val (ico, word) = when (key) {
                 RemoteKey.VOL_UP -> Ico.SPEAKER_UP to "Vol"
                 RemoteKey.VOL_DOWN -> Ico.SPEAKER_DOWN to "Vol"
-                RemoteKey.CH_UP -> Ico.PLUS to "Channel"
-                else -> Ico.MINUS to "Channel"
+                RemoteKey.CH_UP -> Ico.CH_NEXT to "Channel"
+                else -> Ico.CH_PREV to "Channel"
             }
             LineIcon(ico, androidx.compose.ui.graphics.Color.White, icon, stroke = 2.2f)
             androidx.compose.material3.Text(word, color = T.Ink, fontSize = text,

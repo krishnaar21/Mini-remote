@@ -94,6 +94,7 @@ internal class Pb {
 }
 
 private fun Map<Int, List<Any>>.long(f: Int): Long? = this[f]?.firstOrNull() as? Long
+private fun Map<Int, List<Any>>.text(f: Int): String? = (this[f]?.firstOrNull() as? ByteArray)?.decodeToString()
 private fun Map<Int, List<Any>>.sub(f: Int): Map<Int, List<Any>>? = (this[f]?.firstOrNull() as? ByteArray)?.let { Pb.parse(it) }
 
 /** Messages on both ports are prefixed with their length as a varint. */
@@ -185,6 +186,10 @@ class AndroidTvAdapter(
     override var onVolume: ((TvVolume) -> Unit)? = null
     override var onDropped: (() -> Unit)? = null
     @Volatile private var closing = false
+    /** The TV's keyboard link: counters it last sent, and the app in front. */
+    @Volatile private var imeCounter = 0L
+    @Volatile private var fieldCounter = 0L
+    @Volatile private var currentApp: String? = null
 
     private val keys = mapOf(
         RemoteKey.UP to 19, RemoteKey.DOWN to 20, RemoteKey.LEFT to 21, RemoteKey.RIGHT to 22,
@@ -293,6 +298,15 @@ class AndroidTvAdapter(
                             f.send(Pb().apply { msg(9) { int(1, v) } }.toBytes())
                         }
                         // RemoteSetVolumeLevel: the TV's volume (max 6, level 7, muted 8), sent whenever it changes.
+                        // RemoteImeKeyInject: which app is in front (app_info.app_package), sent as it changes.
+                        m[20] != null -> m.sub(20)?.let { k ->
+                            k.sub(1)?.text(12)?.takeIf { it.isNotEmpty() }?.let { currentApp = it }
+                            k.sub(2)?.long(1)?.let { fieldCounter = it }
+                        }
+                        // RemoteImeBatchEdit from the TV: the counters our edits must carry.
+                        m[21] != null -> m.sub(21)?.let { b -> b.long(1)?.let { imeCounter = it }; b.long(2)?.let { fieldCounter = it } }
+                        // RemoteImeShowRequest: a text box got focus.
+                        m[22] != null -> m.sub(22)?.sub(2)?.long(1)?.let { fieldCounter = it }
                         m[50] != null -> m.sub(50)?.let { v ->
                             val max = v.long(6)?.toInt() ?: 0
                             if (max > 0) onVolume?.invoke(TvVolume((v.long(7) ?: 0L).toInt(), max, (v.long(8) ?: 0L) != 0L))
@@ -329,7 +343,36 @@ class AndroidTvAdapter(
     }
 
     /** Types letters, digits and a few symbols as key presses (the TV's IME protocol is far heavier). */
-    override suspend fun typeText(text: String) {
+    override val replacesText: Boolean get() = true
+
+    /** Puts [text] in the TV's focused box through its keyboard link (any characters). */
+    override suspend fun setText(text: String) = withContext(Dispatchers.IO) {
+        val f = io ?: error("Not connected")
+        val end = (text.length - 1).coerceAtLeast(0).toLong()
+        f.send(Pb().apply {
+            msg(21) {
+                int(1, imeCounter); int(2, fieldCounter)
+                msg(3) { int(1, 1); msg(2) { int(1, end); int(2, end); str(3, text) } }
+            }
+        }.toBytes())
+    }
+
+    /** Live TV apps (tuners) by package name. */
+    private fun isLive(pkg: String): Boolean {
+        val p = pkg.lowercase()
+        return p == "com.google.android.tv" || p == "com.android.tv" || p.endsWith(".tvinput") || "tvcenter" in p ||
+            "livetv" in p || "live_tv" in p || ".dtv" in p || "tvplayer" in p || ".tuner" in p || "channels" in p
+    }
+
+    override suspend fun nowOn(): NowOn {
+        val app = currentApp ?: return NowOn("", false)
+        return NowOn(app, isLive(app))
+    }
+
+    override suspend fun typeText(text: String) = setText(text)
+
+    @Suppress("unused")
+    private suspend fun typeKeys(text: String) {
         val codes = text.lowercase().map { c ->
             when (c) {
                 in 'a'..'z' -> 29 + (c - 'a')

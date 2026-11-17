@@ -47,6 +47,12 @@ interface RemoteAdapter {
         get() = null
         set(_) {}
 
+    /** True when [setText] can put the whole text in the TV's focused box (Android TV's keyboard link). */
+    val replacesText: Boolean get() = false
+
+    /** Makes the TV's focused text box read [text]. */
+    suspend fun setText(text: String) { throw Unsupported("Typing isn't supported on this TV yet") }
+
     /** Asks the TV for its volume; null when this TV can't tell. */
     suspend fun readVolume(): TvVolume? = null
 

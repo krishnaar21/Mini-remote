@@ -129,6 +129,8 @@ fun AppShell(vm: RemoteVM) {
     LaunchedEffect(tray) { if (!tray) numpad = false }
     val layout = vm.settings.layout
     LaunchedEffect(layout) { numpad = false; tray = false }
+    // The number pad belongs to live TV: put the dial back when an app takes over.
+    LaunchedEffect(vm.nowOn?.live) { if (vm.nowOn?.live != true) numpad = false }
     fun go(t: Tab) { scope.launch { pager.animateScrollToPage(t.ordinal) } }
     // Once a TV finishes connecting, the TV sheet has done its job: close it.
     var connecting by remember { mutableStateOf(false) }

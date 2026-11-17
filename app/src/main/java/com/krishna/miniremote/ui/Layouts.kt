@@ -163,9 +163,13 @@ fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ic
     }
 }
 
-/** Two rows of round keys: Back, Home, Play, Search; then channel down / up, numbers and input. Volume is the ring; mute is at the top. */
+/**
+ * Two rows of round keys: Back, Home, Play, Search; then, on live TV, channel down / up,
+ * numbers and input, and in apps volume down / up, mute and input.
+ */
 @Composable
 fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, openKeys: () -> Unit) {
+    val tv = vm.nowOn?.live == true
     val k = 68.dp
     Column(verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -175,9 +179,15 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
             StripKey(accent, "Search", k, ico = Ico.SEARCH, onClick = openKeys)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            StripKey(accent, "Channel down", k, ico = Ico.MINUS, caption = "CH") { vm.press(RemoteKey.CH_DOWN) }
-            StripKey(accent, "Channel up", k, ico = Ico.PLUS, caption = "CH") { vm.press(RemoteKey.CH_UP) }
-            StripKey(accent, "Number pad", k, active = numpad, word = "123", onClick = onNumpad)
+            if (tv) {
+                StripKey(accent, "Channel down", k, ico = Ico.MINUS, caption = "CH") { vm.press(RemoteKey.CH_DOWN) }
+                StripKey(accent, "Channel up", k, ico = Ico.PLUS, caption = "CH") { vm.press(RemoteKey.CH_UP) }
+                StripKey(accent, "Number pad", k, active = numpad, word = "123", onClick = onNumpad)
+            } else {
+                StripKey(accent, "Volume down", k, ico = Ico.MINUS, caption = "VOL") { vm.press(RemoteKey.VOL_DOWN, quiet = true) }
+                StripKey(accent, "Volume up", k, ico = Ico.PLUS, caption = "VOL") { vm.press(RemoteKey.VOL_UP, quiet = true) }
+                StripKey(accent, "Mute", k, active = vm.muted, ico = if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER) { vm.press(RemoteKey.MUTE) }
+            }
             StripKey(accent, "Input", k, ico = Ico.INPUT) { vm.press(RemoteKey.INPUT) }
         }
     }
