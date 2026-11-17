@@ -128,12 +128,12 @@ struct HomeView: View {
         VStack(spacing: 0) {
             TabView(selection: $card) {
                 GeometryReader { g in
-                    let s = min(g.size.width - 40, g.size.height, 340)
+                    let s = min(CARD_W, g.size.height, 340)
                     Group { if style == .trackpad { trackpad(size: s) } else { dial(size: s, ring: false) } }
                         .frame(width: g.size.width, height: g.size.height)
                 }.tag(0)
                 GlassCard { VolChCard(vm: vm) }.tag(1)
-                GlassCard { Numpad(vm: vm).padding(22) }.tag(2)
+                GlassCard { Numpad(vm: vm) }.tag(2)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .padding(.top, 8)
@@ -422,13 +422,17 @@ struct TrackpadFace: View {
     }
 }
 
-/** A Liquid Glass card for the Cards layout. */
+/** Width of the Cards layout's cards: the same as the row of four keys under them. */
+let CARD_W: CGFloat = 4 * 62 + 3 * 18
+
+/** A Liquid Glass card for the Cards layout: lined up with the keys, 24pt inside. */
 struct GlassCard<Content: View>: View {
     @ViewBuilder let content: () -> Content
     var body: some View {
         GeometryReader { g in
             content()
-                .frame(width: g.size.width * 0.84, height: g.size.height * 0.86)
+                .padding(24)
+                .frame(width: CARD_W, height: min(g.size.height - 16, 360))
                 .glassEffect(.regular, in: .rect(cornerRadius: 28))
                 .frame(width: g.size.width, height: g.size.height)
         }
@@ -440,13 +444,12 @@ struct VolChCard: View {
     @ObservedObject var vm: RemoteModel
     var body: some View {
         VStack(spacing: 22) {
-            HStack(spacing: 28) {
+            HStack(spacing: 28) { // 80 + 28 = 54 + 54
                 Rocker(word: "VOL", up: { vm.press(.volUp, quiet: true) }, down: { vm.press(.volDown, quiet: true) })
                 Rocker(word: "CH", up: { vm.press(.chUp) }, down: { vm.press(.chDown) })
             }
             GlassEffectContainer(spacing: 16) {
-                HStack(spacing: 16) {
-                    GlassKey(symbol: vm.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", label: "Mute", size: 54, icon: 19) { vm.press(.mute) }
+                HStack(spacing: 54) { // under the rockers' centres
                     GlassKey(symbol: "rectangle.portrait.and.arrow.right", label: "Input", size: 54, icon: 19) { vm.press(.input) }
                     GlassKey(symbol: "list.bullet.rectangle", label: "Guide", size: 54, icon: 19) { vm.press(.guide) }
                 }
