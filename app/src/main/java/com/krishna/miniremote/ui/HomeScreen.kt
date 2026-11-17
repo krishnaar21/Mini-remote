@@ -112,6 +112,17 @@ fun HomeScreen(
     val onTick: (RemoteKey) -> Unit = { k -> vm.scrubTick(k) }
     // One surface does both: one finger navigates, two fingers change volume and channels.
     val onTwo: (RemoteKey) -> Unit = { k -> vm.scrubTick(k) }
+    // Two-finger double tap: swap dial and trackpad (saved, like the setting).
+    val lastTwoTap = remember { longArrayOf(0L) }
+    val onTwoTap: () -> Unit = {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastTwoTap[0] < 450) {
+            lastTwoTap[0] = 0L
+            val next = if (vm.settings.controlStyle == "trackpad") "dial" else "trackpad"
+            vm.update(vm.settings.copy(controlStyle = next))
+            vm.feel.fire(Feel.DETENT); vm.say(if (next == "dial") "Dial" else "Trackpad")
+        } else lastTwoTap[0] = now
+    }
     val setTray by rememberUpdatedState(onTray)
     val swipe = Modifier.pointerInput(Unit) {
         var total = 0f
@@ -178,7 +189,7 @@ fun HomeScreen(
                                     onKey = onKey, onTick = onTick,
                                     onVoice = { vm.feel.fire(Feel.HEAVY); vm.press(RemoteKey.VOICE) },
                                     offline = offline, onOffline = { vm.feel.fire(Feel.PRESS); openDevices() },
-                                    onTwoFinger = onTwo,
+                                    onTwoFinger = onTwo, onTwoFingerTap = onTwoTap,
                                 )
                             }
                         }
@@ -192,7 +203,7 @@ fun HomeScreen(
                                     onKey = onKey, onTick = onTick,
                                     onVoice = { vm.feel.fire(Feel.HEAVY); vm.press(RemoteKey.VOICE) },
                                     onOffline = { vm.feel.fire(Feel.PRESS); openDevices() },
-                                    onTwoFinger = onTwo,
+                                    onTwoFinger = onTwo, onTwoFingerTap = onTwoTap,
                                 )
                             }
                         }

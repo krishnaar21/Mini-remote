@@ -60,4 +60,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // Renders app logos from Simple Icons (SVG). Apache 2.0.
+    implementation("com.caverock:androidsvg-aar:1.4")
 }

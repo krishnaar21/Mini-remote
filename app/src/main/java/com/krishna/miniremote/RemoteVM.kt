@@ -454,7 +454,9 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
 
     private fun saveShortcuts(l: List<Shortcut>) { shortcuts = l; store.saveShortcuts(l) }
 
-    fun addShortcut(kind: ShortcutKind, name: String, value: String, pin: Boolean) {
+    fun addShortcut(kind: ShortcutKind, name: String, value: String, pin0: Boolean) {
+        val pin = pin0 && (shortcuts.count { it.pinned } < maxPinned)
+        if (pin0 && !pin) say("Quick access is full ($maxPinned); added without pinning")
         val s = Shortcut(
             id = "s${System.currentTimeMillis()}", kind = kind, name = name.trim().take(30), value = value.trim(),
             brand = if (kind == ShortcutKind.APP) active?.brand else null, pinned = pin, added = true,
@@ -466,13 +468,23 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     fun pinnedCatalog(c: CatalogApp): Shortcut? = shortcuts.firstOrNull { it.kind == ShortcutKind.APP && it.brand == null && it.value == c.key }
     fun pinnedTvApp(app: TvApp): Shortcut? = shortcuts.firstOrNull { it.kind == ShortcutKind.APP && it.brand == active?.brand && it.value == app.id }
 
+    /** Quick access holds at most this many. */
+    val maxPinned = 8
+    private fun roomToPin(): Boolean {
+        if (shortcuts.count { it.pinned } < maxPinned) return true
+        feel.fire(Feel.ERROR); say("Quick access is full ($maxPinned). Remove one first.")
+        return false
+    }
+
     fun pinCatalog(c: CatalogApp) {
+        if (pinnedCatalog(c) == null && !roomToPin()) return
         if (pinnedCatalog(c) == null) saveShortcuts(shortcuts + Shortcut("c${System.currentTimeMillis()}", ShortcutKind.APP, c.name, c.key, pinned = true))
         say("${c.name} added to quick access")
     }
 
     fun pinTvApp(app: TvApp) {
         val brand = active?.brand ?: return
+        if (pinnedTvApp(app) == null && !roomToPin()) return
         if (pinnedTvApp(app) == null) {
             saveShortcuts(shortcuts + Shortcut("t${System.currentTimeMillis()}", ShortcutKind.APP, app.name, app.id, brand, app.icon, pinned = true))
         }
@@ -481,6 +493,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
 
     /** Unpinning something that was only pinned (not added) forgets it. */
     fun setPinned(s: Shortcut, pinned: Boolean) {
+        if (pinned && !s.pinned && !roomToPin()) return
         saveShortcuts(if (!pinned && !s.added) shortcuts.filter { it.id != s.id } else shortcuts.map { if (it.id == s.id) it.copy(pinned = pinned) else it })
         say(if (pinned) "${s.name} added to quick access" else "${s.name} removed from quick access")
     }
@@ -515,6 +528,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         shortcuts = emptyList()
         settings = Settings(); applyFeel(settings)
         runCatching { java.io.File(getApplication<Application>().cacheDir, "updates").deleteRecursively() }
+        Logos.clear(getApplication())
         say("All data erased")
     }
 

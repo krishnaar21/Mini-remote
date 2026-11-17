@@ -80,6 +80,8 @@ data class Settings(
     val profileName: String = "",
     /** The phone's own volume buttons change the TV's volume while the app is open. */
     val volumeKeys: Boolean = true,
+    /** Download app logos from Simple Icons for Quick access and app details. */
+    val logos: Boolean = true,
 )
 
 enum class ShortcutKind { APP, CHANNEL }

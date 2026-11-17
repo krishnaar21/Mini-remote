@@ -16,17 +16,27 @@ internal class TwoFinger(private val stepPx: Float, private val emit: (RemoteKey
     private var acc = Offset.Zero
     private var last: Offset? = null
     private var count = 0
+    private var maxCount = 0
+    private var travel = 0f
+    private var startMs = 0L
+    private var endMs = 0L
+
+    /** After the gesture: two fingers touched and lifted quickly without sliding. */
+    val tapped: Boolean get() = maxCount >= 2 && travel < stepPx * 0.4f && endMs - startMs < 350
 
     /** Feeds one event. True when it belongs to a two-finger gesture (and was consumed). */
     fun feed(ev: PointerEvent): Boolean {
         val pressed = ev.changes.filter { it.pressed }
         if (!active && pressed.size < 2) return false
+        if (!active) startMs = ev.changes.firstOrNull()?.uptimeMillis ?: 0L
         active = true
+        maxCount = maxOf(maxCount, pressed.size)
+        endMs = ev.changes.firstOrNull()?.uptimeMillis ?: endMs
         // A finger landing or lifting moves the midpoint: start measuring again from there.
         if (pressed.size != count) { count = pressed.size; last = null }
         if (pressed.isNotEmpty()) {
             val c = pressed.fold(Offset.Zero) { a, ch -> a + ch.position } / pressed.size.toFloat()
-            last?.let { if (pressed.size >= 2) acc += c - it }
+            last?.let { if (pressed.size >= 2) { acc += c - it; travel += (c - it).getDistance() } }
             last = c
             step()
         }

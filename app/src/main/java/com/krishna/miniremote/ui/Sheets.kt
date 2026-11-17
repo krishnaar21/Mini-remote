@@ -685,6 +685,10 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
         }
     }
     }
+    SectionTitle("Apps")
+    Group {
+    ToggleRow("App logos", "Download logos from Simple Icons (open source) for Quick access", s.logos, last = true) { vm.update(s.copy(logos = it)) }
+    }
     SectionTitle("Screen")
     Group {
     ToggleRow("Keep screen on", "While the remote is open", s.keepAwake, last = true) { vm.update(s.copy(keepAwake = it)) }
@@ -745,7 +749,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
     Group {
         InfoBlock("Stored on this phone", "Your TVs' names and addresses, their pairing keys (encrypted with a key held in the phone's secure hardware), quick access, channels and settings. Nothing is backed up or synced.")
         Divider()
-        InfoBlock("Network", "Talks only to TVs on your home Wi-Fi; public addresses are refused. Update checks go to GitHub; turn off Automatic updates to stop them.")
+        InfoBlock("Network", "Controls only TVs on your home Wi-Fi; public addresses are refused. Update checks go to GitHub, and app logos come from Simple Icons; both can be turned off.")
         Divider()
         InfoBlock("Voice search", "Uses your phone's speech service to turn speech into words, then sends the words to your TV. The app itself never records audio.")
         Divider()
