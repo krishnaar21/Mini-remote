@@ -182,6 +182,7 @@ class AndroidTvAdapter(
     @Volatile private var sock: SSLSocket? = null
     @Volatile private var io: Framed? = null
     private var scope: CoroutineScope? = null
+    override var onVolume: ((TvVolume) -> Unit)? = null
 
     private val keys = mapOf(
         RemoteKey.UP to 19, RemoteKey.DOWN to 20, RemoteKey.LEFT to 21, RemoteKey.RIGHT to 22,
@@ -288,6 +289,11 @@ class AndroidTvAdapter(
                         m[8] != null -> {
                             val v = m.sub(8)?.long(1) ?: 0L
                             f.send(Pb().apply { msg(9) { int(1, v) } }.toBytes())
+                        }
+                        // RemoteSetVolumeLevel: the TV's volume (max 6, level 7, muted 8), sent whenever it changes.
+                        m[50] != null -> m.sub(50)?.let { v ->
+                            val max = v.long(6)?.toInt() ?: 0
+                            if (max > 0) onVolume?.invoke(TvVolume((v.long(7) ?: 0L).toInt(), max, (v.long(8) ?: 0L) != 0L))
                         }
                         m[3] != null -> error("TV reported an error")
                     }

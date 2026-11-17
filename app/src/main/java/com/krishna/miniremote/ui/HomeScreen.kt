@@ -196,7 +196,8 @@ fun HomeScreen(
         if (deck != Deck.DIAL) padArea(deck, m)
         else BoxWithConstraints(m, contentAlignment = Alignment.Center) {
             val s = minOf(maxWidth - 8.dp - RING_BAND * 2, maxHeight - RING_BAND * 2, 300.dp)
-            RingDial(s, accent, onStep = { up -> vm.scrubTick(if (up) RemoteKey.VOL_UP else RemoteKey.VOL_DOWN) }) { dialAt(s, true) }
+            val v = vm.tvVolume
+            RingDial(s, accent, level = v?.let { if (it.muted) 0f else it.level.toFloat() / it.max }, value = v?.let { if (it.muted) "Muted" else "${it.level}" }, onStep = { up -> vm.scrubTick(if (up) RemoteKey.VOL_UP else RemoteKey.VOL_DOWN) }) { dialAt(s, true) }
         }
     }
     val a11y = Modifier.semantics {
@@ -274,7 +275,8 @@ fun HomeScreen(
                 padArea(deck, Modifier.weight(1f).fillMaxWidth().padding(vertical = 12.dp).then(a11y))
                 FourKeys(vm, accent, openKeys, 58.dp, 18.dp)
                 Column(Modifier.padding(top = 20.dp).width(320.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    DragBar("Volume", accent, Modifier.fillMaxWidth(), "Volume up", "Volume down") { up -> vm.scrubTick(if (up) RemoteKey.VOL_UP else RemoteKey.VOL_DOWN) }
+                    DragBar("Volume", accent, Modifier.fillMaxWidth(), "Volume up", "Volume down",
+                        level = vm.tvVolume?.let { it.level.toFloat() / it.max }, value = vm.tvVolume?.let { if (it.muted) "Muted" else "${it.level}" }) { up -> vm.scrubTick(if (up) RemoteKey.VOL_UP else RemoteKey.VOL_DOWN) }
                     DragBar("Channel", accent, Modifier.fillMaxWidth(), "Channel up", "Channel down") { up -> vm.scrubTick(if (up) RemoteKey.CH_UP else RemoteKey.CH_DOWN) }
                 }
             }

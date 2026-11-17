@@ -78,7 +78,8 @@ private const val RING_STEP = 18f
  * While turning, an accent arc follows the finger. Touches inside the dial go to [content].
  */
 @Composable
-fun RingDial(dial: Dp, accent: Color, onStep: (up: Boolean) -> Unit, content: @Composable () -> Unit) {
+fun RingDial(dial: Dp, accent: Color, level: Float? = null, value: String? = null, onStep: (up: Boolean) -> Unit, content: @Composable () -> Unit) {
+    val shown by animateFloatAsState(level ?: 0f, tween(160), label = "lvl")
     val step by rememberUpdatedState(onStep)
     var start by remember { mutableFloatStateOf(0f) }
     var sweep by remember { mutableFloatStateOf(0f) }
@@ -124,11 +125,18 @@ fun RingDial(dial: Dp, accent: Color, onStep: (up: Boolean) -> Unit, content: @C
                 val tl = Offset(center.x - r, center.y - r)
                 val sz = Size(r * 2, r * 2)
                 drawCircle(M.Highest.copy(alpha = 0.55f), r, style = Stroke(5.dp.toPx()))
-                if (glow > 0f && sweep != 0f) drawArc(accent.copy(alpha = glow), start, sweep, false, tl, sz,
+                // The TV's real volume, from the top, clockwise.
+                if (level != null) { if (shown > 0f) drawArc(accent, -90f, 360f * shown, false, tl, sz, style = Stroke(7.dp.toPx(), cap = StrokeCap.Round)) }
+                else if (glow > 0f && sweep != 0f) drawArc(accent.copy(alpha = glow), start, sweep, false, tl, sz,
                     style = Stroke(7.dp.toPx(), cap = StrokeCap.Round))
             },
         contentAlignment = Alignment.Center,
-    ) { content() }
+    ) {
+        content()
+        if (value != null) Box(Modifier.align(Alignment.BottomCenter).clip(CircleShape).background(Color.Black).padding(horizontal = 8.dp)) {
+            Text(value, color = if (glow > 0f) accent else T.Dim, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        }
+    }
 }
 
 /** A round key that fires on release (so it can sit in a scrolling strip). Icon or a short word, with an optional caption. */
@@ -174,7 +182,8 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
  * right half is one step down or up. Shows how many steps you've moved while dragging.
  */
 @Composable
-fun DragBar(label: String, accent: Color, modifier: Modifier = Modifier, upLabel: String, downLabel: String, onStep: (up: Boolean) -> Unit) {
+fun DragBar(label: String, accent: Color, modifier: Modifier = Modifier, upLabel: String, downLabel: String, level: Float? = null, value: String? = null, onStep: (up: Boolean) -> Unit) {
+    val shown by animateFloatAsState(level ?: 0f, tween(160), label = "lvl")
     val step by rememberUpdatedState(onStep)
     var x by remember { mutableStateOf<Float?>(null) }
     var lastX by remember { mutableFloatStateOf(0f) }
@@ -215,11 +224,15 @@ fun DragBar(label: String, accent: Color, modifier: Modifier = Modifier, upLabel
                     x = null
                 }
             }
-            .drawBehind { if (fill > 0f) drawRect(M.Highest.copy(alpha = fill), size = Size(lastX, size.height)) },
+            .drawBehind {
+                if (level != null) drawRect(M.Highest, size = Size(size.width * shown, size.height))
+                else if (fill > 0f) drawRect(M.Highest.copy(alpha = fill), size = Size(lastX, size.height))
+            },
     ) {
         Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(label, color = T.Ink, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-            if (count != 0) Text(if (count > 0) "+$count" else "−${-count}", color = accent, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            if (value != null) Text(value, color = if (x != null) accent else T.Ink, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            else if (count != 0) Text(if (count > 0) "+$count" else "−${-count}", color = accent, fontSize = 14.sp, fontWeight = FontWeight.Medium)
             else Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 LineIcon(Ico.LEFT, T.Dim, 14.dp, stroke = 2.2f); LineIcon(Ico.RIGHT, T.Dim, 14.dp, stroke = 2.2f)
             }

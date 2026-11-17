@@ -47,6 +47,9 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     var muted by mutableStateOf(false); private set
     /** Play / pause is a toggle too: tracked locally so the key shows one icon at a time. */
     var playing by mutableStateOf(false); private set
+    /** The TV's own volume, when it tells us (Android TV, LG, most Samsung). Null = unknown. */
+    var tvVolume by mutableStateOf<com.krishna.miniremote.net.TvVolume?>(null); private set
+    private var volJob: Job? = null
     /** Non-null while an Android / Google TV is showing a pairing code and we're waiting for it. */
     var pairPrompt by mutableStateOf<PairPrompt?>(null); private set
     private var codeAnswer: CompletableDeferred<String?>? = null
@@ -262,11 +265,35 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         if (key == RemoteKey.MUTE) muted = !muted
         if (key == RemoteKey.PLAY_PAUSE) playing = !playing
         if (key == RemoteKey.VOL_UP) muted = false
+        nudgeVolume(key)
         if (!quiet) say(if (key == RemoteKey.PLAY_PAUSE) (if (playing) "Play" else "Pause") else key.word, key)
         queue.trySend(key)
     }
 
-    fun scrubTick(key: RemoteKey) { feel.fire(Feel.TICK); queue.trySend(key) }
+    fun scrubTick(key: RemoteKey) { feel.fire(Feel.TICK); nudgeVolume(key); queue.trySend(key) }
+
+    /** Moves the shown volume right away, then asks the TV for the real value a moment later. */
+    private fun nudgeVolume(key: RemoteKey) {
+        if (key != RemoteKey.VOL_UP && key != RemoteKey.VOL_DOWN && key != RemoteKey.MUTE) return
+        tvVolume?.let { v ->
+            tvVolume = when (key) {
+                RemoteKey.VOL_UP -> v.copy(level = (v.level + 1).coerceAtMost(v.max), muted = false)
+                RemoteKey.VOL_DOWN -> v.copy(level = (v.level - 1).coerceAtLeast(0))
+                else -> v.copy(muted = !v.muted)
+            }
+        }
+        refreshVolume(700)
+    }
+
+    private fun refreshVolume(after: Long) {
+        volJob?.cancel()
+        volJob = viewModelScope.launch {
+            delay(after)
+            val a = adapter ?: return@launch
+            val v = try { a.readVolume() } catch (e: CancellationException) { throw e } catch (e: Exception) { null } ?: return@launch
+            tvVolume = v; muted = v.muted
+        }
+    }
 
     fun say(t: String, key: RemoteKey? = null) {
         toast = t
@@ -290,8 +317,11 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                     onPin = { pin -> updateDevice(d.id) { it.copy(pin = pin) } },
                     askCode = { err -> askCode(d.name, err) },
                 )
+                tvVolume = null
+                a.onVolume = { v -> viewModelScope.launch { tvVolume = v; muted = v.muted } }
                 a.connect()
                 adapter = a
+                refreshVolume(0)
                 link = Link.READY
                 feel.fire(Feel.SUCCESS)
             } catch (e: CancellationException) {

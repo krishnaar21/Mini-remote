@@ -10,6 +10,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
@@ -30,9 +31,20 @@ class Unsupported(msg: String) : UserFacing(msg)
 data class NowOn(val name: String, val live: Boolean)
 
 /** An app installed on the TV, as the TV lists it. [icon] is a URL on the TV, if it has one. */
+/** The TV's own volume: [level] of [max], and whether it's muted. */
+data class TvVolume(val level: Int, val max: Int, val muted: Boolean)
+
 data class TvApp(val id: String, val name: String, val icon: String? = null, val version: String? = null)
 
 interface RemoteAdapter {
+    /** Called when the TV reports its volume by itself (Android TV, LG). */
+    var onVolume: ((TvVolume) -> Unit)?
+        get() = null
+        set(_) {}
+
+    /** Asks the TV for its volume; null when this TV can't tell. */
+    suspend fun readVolume(): TvVolume? = null
+
     suspend fun connect()
     suspend fun send(key: RemoteKey)
     suspend fun typeText(text: String) { throw Unsupported("Typing isn't supported on this TV yet") }
@@ -189,6 +201,20 @@ class SamsungAdapter(
         RemoteKey.INPUT to "KEY_SOURCE", RemoteKey.MENU to "KEY_MENU", RemoteKey.AUDIO to "KEY_MTS",
     ) + RemoteKey.entries.filter { it.digit != null }.associateWith { "KEY_${it.digit}" }
 
+    /** Volume through UPnP RenderingControl (port 9197), which most Samsung TVs since 2016 answer. */
+    override suspend fun readVolume(): TvVolume? = withContext(Dispatchers.IO) {
+        fun ask(action: String, tag: String): String? = runCatching {
+            val body = """<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:$action xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID><Channel>Master</Channel></u:$action></s:Body></s:Envelope>"""
+            val req = Request.Builder().url("http://$host:9197/upnp/control/RenderingControl1")
+                .header("SOAPACTION", "\"urn:schemas-upnp-org:service:RenderingControl:1#$action\"")
+                .post(body.toRequestBody("text/xml; charset=\"utf-8\"".toMediaType())).build()
+            Net.plain.newCall(req).execute().use { r -> if (!r.isSuccessful) null else Regex("<$tag>([^<]*)</$tag>").find(r.body?.string().orEmpty())?.groupValues?.get(1) }
+        }.getOrNull()
+        val v = ask("GetVolume", "CurrentVolume")?.trim()?.toIntOrNull() ?: return@withContext null
+        val m = ask("GetMute", "CurrentMute")?.trim()
+        TvVolume(v, 100, m == "1" || m.equals("true", true))
+    }
+
     /** Waiting for the TV's answer to "which apps are installed". */
     @Volatile private var appsReply: CompletableDeferred<JSONArray>? = null
 
@@ -302,10 +328,25 @@ class LgAdapter(
         )
     )
 
+    override var onVolume: ((TvVolume) -> Unit)? = null
+
+    private fun parseVolume(p: JSONObject?): TvVolume? {
+        if (p == null) return null
+        val st = p.optJSONObject("volumeStatus")
+        val level = st?.optInt("volume", -1) ?: p.optInt("volume", -1)
+        if (level < 0) return null
+        val max = (st?.optInt("maxVolume", 100) ?: 100).takeIf { it > 0 } ?: 100
+        val mute = st?.optBoolean("muteStatus", false) ?: p.optBoolean("muted", p.optBoolean("mute", false))
+        return TvVolume(level, max, mute)
+    }
+
+    override suspend fun readVolume(): TvVolume? = parseVolume(request("ssap://audio/getVolume").optJSONObject("payload"))
+
     private fun listener(registered: CompletableDeferred<Unit>) = object : WebSocketListener() {
         override fun onMessage(webSocket: WebSocket, text: String) {
             val j = runCatching { JSONObject(text) }.getOrNull() ?: return
             val type = j.optString("type")
+            if (j.optString("id") == "vol") { parseVolume(j.optJSONObject("payload"))?.let { v -> onVolume?.invoke(v) }; return }
             if (type == "registered") {
                 j.optJSONObject("payload")?.optString("client-key")?.takeIf { it.isNotEmpty() }?.let { token = it; onToken(it) }
                 registered.complete(Unit)
@@ -329,6 +370,8 @@ class LgAdapter(
         )
         s.send(reg.toString())
         try { withTimeout(30_000) { registered.await() } } catch (e: Exception) { s.cancel(); ws = null; throw e }
+        // Keep the volume in step: the TV sends it again whenever it changes.
+        s.send(JSONObject().put("type", "subscribe").put("id", "vol").put("uri", "ssap://audio/getVolume").toString())
     }
 
     override suspend fun connect() {
