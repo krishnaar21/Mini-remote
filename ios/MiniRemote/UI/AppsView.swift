@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-private func tint(_ name: String) -> Color {
+private func tileColor(_ name: String) -> Color {
     let palette: [UInt32] = [0x2B3A55, 0x3B2B55, 0x2B4A3F, 0x4A3A2B, 0x4A2B3A, 0x2B4450, 0x3A3A3F]
     var h: UInt64 = 5381
     for u in name.lowercased().unicodeScalars { h = (h &* 33) &+ UInt64(u.value) }
@@ -48,7 +48,7 @@ struct AppsView: View {
         let brand = vm.active?.brand
         return vm.tvApps.map { a in
             let pin = vm.pinnedTvApp(a)
-            let e = AppEntry(id: "tv:\(a.id)", name: a.name, bg: tint(a.name), ink: .white)
+            let e = AppEntry(id: "tv:\(a.id)", name: a.name, bg: tileColor(a.name), ink: .white)
             e.icon = a.icon; e.version = a.version; e.installed = true; e.pinned = pin != nil
             e.storeId = brand == .ROKU ? a.id : nil
             e.open = { vm.launchApp(a.name, a.id) }; e.pin = { vm.pinTvApp(a) }; e.unpin = { if let p = pin { vm.setPinned(p, false) } }
@@ -70,7 +70,7 @@ struct AppsView: View {
 
     private func shortcutEntries(_ kind: ShortcutKind) -> [AppEntry] {
         vm.shortcuts.filter { $0.kind == kind && (kind == .channel || $0.added) }.map { s in
-            let e = AppEntry(id: "s:\(s.id)", name: s.name, bg: kind == .channel ? channelBg : tint(s.name), ink: .white)
+            let e = AppEntry(id: "s:\(s.id)", name: s.name, bg: kind == .channel ? channelBg : tileColor(s.name), ink: .white)
             e.badge = kind == .channel ? s.value : s.brand?.label; e.pinned = s.pinned
             if kind == .app, let b = s.brand, (b == .ROKU || b == .ANDROID_TV), !s.value.contains("://") { e.storeId = s.value }
             e.open = { vm.launch(s) }; e.pin = { vm.setPinned(s, true) }; e.unpin = { vm.setPinned(s, false) }
@@ -223,7 +223,7 @@ private struct QuickTile: View {
     let icon: String?
     var body: some View {
         let cat = s.kind == .app && s.brand == nil ? Catalog.byKey(s.value) : nil
-        let bg = s.kind == .channel ? channelBg : (cat.map { Color(hex: $0.bg) } ?? tint(s.name))
+        let bg = s.kind == .channel ? channelBg : (cat.map { Color(hex: $0.bg) } ?? tileColor(s.name))
         let ink = cat.map { Color(hex: $0.ink) } ?? .white
         VStack(spacing: 6) {
             ZStack {
