@@ -393,6 +393,38 @@ internal fun statusLine(vm: RemoteVM, d: Device): String {
 
 /* ---------------------------------------------------------------- devices */
 
+/**
+ * One saved TV: name and chevron on the first line, brand · address under it, and for the
+ * active TV a status line with its coloured dot ("● Connected"). All left-aligned.
+ */
+@Composable
+internal fun DeviceRow(vm: RemoteVM, d: Device, onClick: () -> Unit) {
+    val active = vm.activeId == d.id
+    val (word, dot) = when {
+        !active -> null to null
+        vm.link == Link.READY -> "Connected" to OkGreen
+        vm.link == Link.CONNECTING -> "Connecting…" to Color(0xFFFDD663)
+        else -> "Not connected" to Color(0xFF8A8A8E)
+    }
+    Column(
+        Modifier.fillMaxWidth().padding(bottom = 12.dp)
+            .pressable(CARD, CARD_DOWN, 16.dp, label = "open", onClick = onClick)
+            .semantics(mergeDescendants = true) {}
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(d.name, color = T.Ink, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Chevron()
+        }
+        Text("${d.brand.label} · ${d.host}", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+        if (word != null && dot != null) Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Box(Modifier.size(8.dp).background(dot, CircleShape))
+            Text(word, color = if (dot == OkGreen) OkGreen else Muted, fontSize = 13.sp)
+        }
+    }
+}
+
 @Composable
 internal fun DevicesPage(vm: RemoteVM, open: (String) -> Unit, add: () -> Unit) {
     if (vm.devices.isEmpty()) {
@@ -404,7 +436,7 @@ internal fun DevicesPage(vm: RemoteVM, open: (String) -> Unit, add: () -> Unit) 
     }
     vm.devices.forEach { d ->
         val on = vm.activeId == d.id && vm.link == Link.READY
-        CardRow(d.name, statusLine(vm, d), dot = if (on) OkGreen else Color(0xFF555555), onClick = { open(d.id) }, clickLabel = "open") { Chevron() }
+        DeviceRow(vm, d) { open(d.id) }
     }
     Btn("Add a TV", onClick = add)
 }
