@@ -61,8 +61,8 @@ object Discovery {
             val name = runCatching { JSONObject(json).getJSONObject("device").optString("name") }.getOrNull()
             return Device("samsung-$host", name?.ifBlank { null } ?: "Samsung TV", host, Brand.SAMSUNG)
         }
-        if (open(host, 3000) && open(host, 3001)) return Device("lg-$host", "LG TV ($host)", host, Brand.LG)
-        if (open(host, 6466) && open(host, 6467)) return Device("android_tv-$host", "Google TV ($host)", host, Brand.ANDROID_TV)
+        if (open(host, 3000) && open(host, 3001)) return Device("lg-$host", "LG TV", host, Brand.LG)
+        if (open(host, 6466) && open(host, 6467)) return Device("android_tv-$host", "Google TV", host, Brand.ANDROID_TV)
         return null
     }
 }

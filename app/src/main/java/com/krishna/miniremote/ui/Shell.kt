@@ -14,6 +14,8 @@ import kotlinx.coroutines.launch
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
@@ -73,12 +75,13 @@ import com.krishna.miniremote.RemoteVM
 import kotlin.random.Random
 
 /** The four places in the floating pill at the bottom. */
+/** The app's two pages. Settings live in a sheet, behind the gear in the TV sheet. */
 enum class Tab(val label: String, val ico: Ico) {
-    HOME("Remote", Ico.HOME), CHANNELS("Apps and channels", Ico.GRID), PROFILE("Settings", Ico.USER)
+    HOME("Remote", Ico.HOME), CHANNELS("Apps and channels", Ico.GRID)
 }
 
 /** Height of the floating tab pill; screens leave this much room (plus a gap) at the bottom. */
-val NAV_H = 22.dp
+val NAV_H = 34.dp
 
 /** Raised capsule the tab pill and the control switcher sit on. */
 val NAV_FACE = Face(listOf(Color(0xFF303033), Color(0xFF1E1E21)), listOf(
@@ -122,7 +125,8 @@ fun AppShell(vm: RemoteVM) {
     val onRemote = pager.currentPage == Tab.HOME.ordinal
     // The tray tucks itself away a few seconds after the last command, and when you leave the page.
     LaunchedEffect(tray, vm.txCount) { if (tray) { kotlinx.coroutines.delay(7000); tray = false } }
-    LaunchedEffect(onRemote) { if (!onRemote) tray = false }
+    // Closing the tray puts the dial (or trackpad) back.
+    LaunchedEffect(tray) { if (!tray) numpad = false }
     fun go(t: Tab) { scope.launch { pager.animateScrollToPage(t.ordinal) } }
     // Once a TV finishes connecting, the TV sheet has done its job: close it.
     var connecting by remember { mutableStateOf(false) }
@@ -150,12 +154,11 @@ fun AppShell(vm: RemoteVM) {
                                 onTray = { open -> tray = open; if (open) vm.feel.fire(com.krishna.miniremote.Feel.TICK) },
                             )
                             Tab.CHANNELS -> ChannelsScreen(vm, accent, openDevices = { sheet = Page.Devices })
-                            Tab.PROFILE -> ProfileScreen(vm, accent, open = { sheet = it })
                         }
                     }
                     // The dial shows messages in its well; everywhere else they float near the bottom.
                     val inWell = onRemote && deck == Deck.DIAL && !tray
-                    ToastChip(if (inWell) null else vm.toast, Modifier.align(Alignment.BottomCenter).padding(bottom = if (tray) 200.dp else 56.dp))
+                    ToastChip(if (inWell) null else vm.toast, Modifier.align(Alignment.BottomCenter).padding(bottom = if (tray) 230.dp else 72.dp))
                     when (val u = vm.update) {
                         is RemoteVM.Update.Downloading, is RemoteVM.Update.Ready ->
                             Box(Modifier.align(Alignment.TopCenter).padding(top = 4.dp).height(32.dp)) {
@@ -165,7 +168,7 @@ fun AppShell(vm: RemoteVM) {
                     }
                     // Volume and channels: grows up from the bottom of the Remote page.
                     AnimatedVisibility(
-                        onRemote && tray, Modifier.align(Alignment.BottomCenter).padding(bottom = 34.dp).pointerInput(Unit) {
+                        tray, Modifier.align(Alignment.BottomCenter).padding(bottom = 64.dp).pointerInput(Unit) {
                             var total = 0f
                             detectVerticalDragGestures(onDragStart = { total = 0f }, onDragEnd = { if (total > 24.dp.toPx()) tray = false }) { c, dy -> c.consume(); total += dy }
                         },
@@ -173,7 +176,18 @@ fun AppShell(vm: RemoteVM) {
                     ) {
                         ControlTray(vm, accent, numpad, onNumpad = { numpad = !numpad }, onClose = { tray = false })
                     }
-                    PageDots(pager.currentPage, accent, Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp)) { go(it) }
+                    // Bottom row: the Vol · Ch pill on the left, the page dots on the right.
+                    Row(
+                        Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TrayPill(tray, accent) { open -> tray = open; if (open) vm.feel.fire(com.krishna.miniremote.Feel.TICK) }
+                        Spacer(Modifier.weight(1f))
+                        PageDots(pager.currentPage, accent, onSwipe = { by ->
+                            val to = (pager.currentPage + by).coerceIn(0, Tab.entries.lastIndex)
+                            if (to != pager.currentPage) { vm.feel.fire(com.krishna.miniremote.Feel.TICK); go(Tab.entries[to]) }
+                        }) { go(it) }
+                    }
                 }
             }
         }
@@ -183,10 +197,41 @@ fun AppShell(vm: RemoteVM) {
     }
 }
 
-/** Remote · Apps · Settings: three small labels under the pages; the current one is lit. */
+/** "Vol · Ch" pill: tap (or swipe up) for the volume and channel tray; tap again or swipe down to hide. */
 @Composable
-fun PageDots(page: Int, accent: Color, modifier: Modifier = Modifier, onPick: (Tab) -> Unit) {
-    Row(modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+fun TrayPill(open: Boolean, accent: Color, onToggle: (Boolean) -> Unit) {
+    Row(
+        Modifier.height(40.dp).clip(CircleShape).background(if (open) accent.copy(alpha = 0.22f) else M.High)
+            .clickable(onClickLabel = if (open) "hide volume and channels" else "show volume and channels", role = Role.Button) { onToggle(!open) }
+            .pointerInput(Unit) {
+                var total = 0f
+                detectVerticalDragGestures(onDragStart = { total = 0f }, onDragEnd = {
+                    if (total < -16.dp.toPx()) onToggle(true) else if (total > 16.dp.toPx()) onToggle(false)
+                }) { c, dy -> c.consume(); total += dy }
+            }
+            .semantics { contentDescription = "Volume and channels" }
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        LineIcon(Ico.SPEAKER, if (open) accent else T.Ink, 18.dp)
+        Text("Vol · Ch", color = if (open) accent else T.Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        LineIcon(if (open) Ico.DOWN else Ico.UP, T.Dim, 14.dp, stroke = 2.2f)
+    }
+}
+
+/** Two page dots; tap one, or swipe across them, to change page. */
+@Composable
+fun PageDots(page: Int, accent: Color, modifier: Modifier = Modifier, onSwipe: (Int) -> Unit, onPick: (Tab) -> Unit) {
+    Row(
+        modifier.height(40.dp).pointerInput(Unit) {
+            var total = 0f
+            detectHorizontalDragGestures(onDragStart = { total = 0f }, onDragEnd = {
+                if (total < -16.dp.toPx()) onSwipe(1) else if (total > 16.dp.toPx()) onSwipe(-1)
+            }) { c, dx -> c.consume(); total += dx }
+        }.selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically,
+    ) {
         Tab.entries.forEach { t ->
             val sel = t.ordinal == page
             Box(
@@ -195,32 +240,6 @@ fun PageDots(page: Int, accent: Color, modifier: Modifier = Modifier, onPick: (T
                 contentAlignment = Alignment.Center,
             ) {
                 Box(Modifier.size(if (sel) 18.dp else 6.dp, 6.dp).clip(CircleShape).background(if (sel) accent else Color(0xFF4A4A50)))
-            }
-        }
-    }
-}
-
-/** One floating, fully round pill of icons; the current tab sits in a recessed well. */
-@Composable
-fun NavPill(tab: Tab, accent: Color, initial: String, modifier: Modifier = Modifier, homeOpen: Boolean = false, onPick: (Tab) -> Unit) {
-    Row(
-        modifier.height(NAV_H).shadow(6.dp, CircleShape).background(M.High, CircleShape).padding(6.dp).selectableGroup(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Tab.entries.forEach { t ->
-            val sel = t == tab
-            Box(
-                Modifier.width(66.dp).fillMaxHeight()
-                    .clip(CircleShape)
-                    .background(if (sel) accent.copy(alpha = 0.22f) else Color.Transparent)
-                    .selectable(sel, role = Role.Tab) { onPick(t) }
-                    .semantics { contentDescription = if (t == Tab.HOME && sel) "Home. Tap again for volume and channels" else t.label },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (t == Tab.HOME && sel && homeOpen) LineIcon(Ico.DOWN, accent, 23.dp)
-                else if (t == Tab.PROFILE) Avatar(initial, accent, 26.dp, dim = !sel)
-                else LineIcon(t.ico, if (sel) accent else T.Dim, 23.dp)
             }
         }
     }

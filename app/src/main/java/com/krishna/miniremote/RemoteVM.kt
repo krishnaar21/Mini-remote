@@ -268,7 +268,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     fun addManual(host: String, brand: Brand): Pair<String?, Device?> {
         val h = host.trim()
         if (!HostValidator.isPrivateIPv4(h)) return "Enter a home-network address like 192.168.1.20." to null
-        val d = Device("${brand.name.lowercase()}-$h", "${brand.label} $h", h, brand)
+        val d = Device("${brand.name.lowercase()}-$h", brand.label, h, brand)
         addAndSelect(d)
         return null to d
     }

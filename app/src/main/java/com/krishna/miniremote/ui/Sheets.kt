@@ -139,7 +139,7 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
         Column(Modifier.navigationBarsPadding()) {
             when (page) {
                 Page.Devices -> {
-                    Header("Devices", onClose)
+                    Header("Choose a TV", onClose, gear = { go(Page.Settings) })
                     Body { DevicesPage(vm, open = { go(Page.DeviceInfo(it)) }, add = { go(if (vm.localSeen) Page.Scan else Page.Local) }) }
                 }
                 is Page.DeviceInfo -> {
@@ -167,7 +167,7 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
                 }
                 Page.Settings -> {
                     Header("Settings", onClose, back = if (canBack) ::back else null)
-                    Body { SettingsPage(vm, accent, manage = { go(Page.Devices) }) }
+                    Body { SettingsPage(vm, accent, manage = null) }
                 }
             }
         }
@@ -242,7 +242,7 @@ internal fun Header(title: String, onClose: () -> Unit, back: (() -> Unit)? = nu
         back?.let { CircleIcon(Ico.CHEVRON_L, "Back", it) }
         Text(title, color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.18).sp, maxLines = 2,
             modifier = Modifier.weight(1f).semantics { heading() })
-        gear?.let { CircleIcon(Ico.SLIDERS, "Settings", it) }
+        gear?.let { CircleIcon(Ico.GEAR, "Settings", it) }
         CircleIcon(Ico.CLOSE, "Close", onClose)
     }
 }
@@ -572,7 +572,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
     SectionTitle("Remote")
     SegRow("Control", listOf("dial" to "Dial", "trackpad" to "Trackpad"), s.controlStyle) { vm.update(s.copy(controlStyle = it)) }
     ToggleRow("Phone volume buttons", "Change the TV's volume while the app is open", s.volumeKeys) { vm.update(s.copy(volumeKeys = it)) }
-    Hint("On the Remote page, one finger navigates and two fingers slide for volume (up or down) and channels (sideways). Swipe up there for the volume and channel buttons. Double tap OK to mute; hold it for voice.", top = 6)
+    Hint("On the remote, one finger navigates and two fingers slide for volume (up or down) and channels (sideways). Tap Vol · Ch (or swipe up) for the volume and channel buttons. Double tap OK to mute; hold it for voice.", top = 6)
 
     SectionTitle("Accent colour")
     Row(Modifier.selectableGroup().padding(top = 8.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

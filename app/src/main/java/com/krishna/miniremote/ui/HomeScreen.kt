@@ -197,12 +197,6 @@ fun HomeScreen(
             KeyButton(accent, "Play or pause", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { c, _ -> LineIcon(Ico.PLAY, c, 21.dp) }
             KeyButton(accent, "Search", k, actionLabel = "search or type on TV", pressedScale = 1f, onPress = openKeys) { c, _ -> LineIcon(Ico.SEARCH, c, 21.dp) }
         }
-        // Handle: tap or swipe up for volume, channels and numbers.
-        Box(
-            Modifier.padding(top = 14.dp).size(64.dp, 22.dp).clip(CircleShape)
-                .clickable(onClickLabel = "show volume and channels", role = Role.Button) { tray(true) },
-            contentAlignment = Alignment.Center,
-        ) { Box(Modifier.size(32.dp, 4.dp).clip(CircleShape).background(Color(0xFF4A4A50))) }
     }
 }
 
@@ -233,7 +227,7 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(d?.name ?: "Choose a TV", color = T.Ink, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+            Text(d?.let { shortName(it.name, it.brand.label) } ?: "Choose a TV", color = T.Ink, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             LineIcon(Ico.DOWN, T.Dim, 15.dp, stroke = 2.2f)
         }
@@ -273,3 +267,9 @@ fun ControlTray(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Un
     }
 }
 
+
+/** A TV's name for the top bar: without its IP address, and at most 18 characters. */
+fun shortName(name: String, fallback: String): String {
+    val n = name.replace(Regex("\\(?\\b\\d{1,3}(\\.\\d{1,3}){3}\\b\\)?"), "").replace(Regex("\\s+"), " ").trim().ifEmpty { fallback }
+    return if (n.length > 18) n.take(17).trimEnd() + "…" else n
+}
