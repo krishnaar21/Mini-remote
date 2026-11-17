@@ -116,7 +116,9 @@ class SamsungAdapter(
                     j.optJSONObject("data")?.optString("token")?.takeIf { it.isNotEmpty() }?.let { token = it; onToken(it) }
                     ready.complete(Unit)
                 } else if (j.optString("event") == "ms.channel.timeOut") {
-                    ready.completeExceptionally(IllegalStateException("Pairing prompt timed out on the TV"))
+                    ready.completeExceptionally(UserFacing("The TV's Allow prompt timed out. Connect again and choose Allow."))
+                } else if (j.optString("event") == "ms.channel.unauthorized") {
+                    ready.completeExceptionally(UserFacing("The TV denied access. Connect again and choose Allow on the TV."))
                 }
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -156,6 +158,8 @@ class LgAdapter(
     private val ids = AtomicInteger(1)
     private val pending = ConcurrentHashMap<String, CompletableDeferred<JSONObject>>()
     private var muted = false
+    /** webOS has no play/pause toggle, so we alternate between play and pause. */
+    private var playing = false
 
     private val manifest = JSONObject().put("manifestVersion", 1).put("appVersion", "1.1").put(
         "permissions", org.json.JSONArray(
@@ -253,7 +257,7 @@ class LgAdapter(
             RemoteKey.OK -> button("ENTER")
             RemoteKey.BACK -> button("BACK")
             RemoteKey.HOME -> button("HOME")
-            RemoteKey.PLAY_PAUSE -> request("ssap://media.controls/play")
+            RemoteKey.PLAY_PAUSE -> { playing = !playing; request(if (playing) "ssap://media.controls/play" else "ssap://media.controls/pause") }
             RemoteKey.POWER -> request("ssap://system/turnOff")
             RemoteKey.VOL_UP -> request("ssap://audio/volumeUp")
             RemoteKey.VOL_DOWN -> request("ssap://audio/volumeDown")
