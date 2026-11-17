@@ -96,16 +96,16 @@ import kotlin.math.roundToInt
 /* ---------------------------------------------------------------- palette */
 
 /** Sheets use the remote's own charcoal so they read as part of the same object. */
-private val SheetBg = T.Bg
-private val CardBg = Color(0xFF222223)
-private val Line = Color(0xFF2E2E30)
-private val Muted = Color(0xFF8C8C90)
-private val LeadInk = Color(0xFFC3C3C7)
-private val Fill2 = Color(0xFF2A2A2B)
-private val OkGreen = Color(0xFF4DDC88)
-private val SwitchOn = Color(0xFF34C759)
-private val DangerBg = Color(0xFF3A1E1E)
-private val DangerInk = Color(0xFFFF8A8A)
+internal val SheetBg = T.Bg
+internal val CardBg = Color(0xFF222223)
+internal val Line = Color(0xFF2E2E30)
+internal val Muted = Color(0xFF8C8C90)
+internal val LeadInk = Color(0xFFC3C3C7)
+internal val Fill2 = Color(0xFF2A2A2B)
+internal val OkGreen = Color(0xFF4DDC88)
+internal val SwitchOn = Color(0xFF34C759)
+internal val DangerBg = Color(0xFF3A1E1E)
+internal val DangerInk = Color(0xFFFF8A8A)
 
 /* ------------------------------------------------------------------ pages */
 
@@ -176,15 +176,15 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
 
 /* ------------------------------------------------------------ building blocks */
 
-private val SheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+internal val SheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
 
 /** .grab: 38 x 4 handle, 12 above and 4 below. */
 @Composable
-private fun Grab() = Box(Modifier.padding(top = 12.dp, bottom = 4.dp).size(38.dp, 4.dp).background(Color(0xFF444444), RoundedCornerShape(4.dp)))
+internal fun Grab() = Box(Modifier.padding(top = 12.dp, bottom = 4.dp).size(38.dp, 4.dp).background(Color(0xFF444444), RoundedCornerShape(4.dp)))
 
 /** .field: label above (13, muted), 52 tall, radius 12, #141415, 1px line, 16 text. */
 @Composable
-private fun Field(
+internal fun Field(
     label: String,
     value: String,
     onChange: (String) -> Unit,
@@ -227,7 +227,7 @@ private fun Field(
 
 /** .sw: 50 x 30 track (#34c759 on, #3a3a3c off), 24px white knob that slides 20. */
 @Composable
-private fun Toggle(on: Boolean) {
+internal fun Toggle(on: Boolean) {
     val x by androidx.compose.animation.core.animateDpAsState(if (on) 20.dp else 0.dp, label = "sw")
     val bg by androidx.compose.animation.animateColorAsState(if (on) SwitchOn else Color(0xFF3A3A3C), label = "swbg")
     // Recessed track (tinted green when on) with a raised light knob.
@@ -237,7 +237,7 @@ private fun Toggle(on: Boolean) {
 }
 
 @Composable
-private fun Header(title: String, onClose: () -> Unit, back: (() -> Unit)? = null, gear: (() -> Unit)? = null) {
+internal fun Header(title: String, onClose: () -> Unit, back: (() -> Unit)? = null, gear: (() -> Unit)? = null) {
     Row(
         Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 10.dp, bottom = 12.dp).padding(bottom = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -252,7 +252,7 @@ private fun Header(title: String, onClose: () -> Unit, back: (() -> Unit)? = nul
 }
 
 @Composable
-private fun CircleIcon(ico: Ico, label: String, onClick: () -> Unit) {
+internal fun CircleIcon(ico: Ico, label: String, onClick: () -> Unit) {
     Box(
         Modifier.size(44.dp).pressable(CARD, CARD_DOWN, null, label = null, onClick = onClick)
             .semantics { contentDescription = label },
@@ -265,7 +265,7 @@ private fun CircleIcon(ico: Ico, label: String, onClick: () -> Unit) {
  * finger is on it. [corner] null = pill/circle. Shadows are in dp.
  */
 @Composable
-private fun Modifier.pressable(
+internal fun Modifier.pressable(
     up: Face, down: Face, corner: androidx.compose.ui.unit.Dp?, enabled: Boolean = true,
     role: Role = Role.Button, label: String? = null, onClick: () -> Unit,
 ): Modifier {
@@ -278,26 +278,26 @@ private fun Modifier.pressable(
 }
 
 @Composable
-private fun Body(content: @Composable ColumnScope.() -> Unit) {
+internal fun Body(content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp), content = content)
 }
 
 @Composable
-private fun Lead(text: String, center: Boolean = false) =
+internal fun Lead(text: String, center: Boolean = false) =
     Text(text, color = LeadInk, fontSize = 14.5.sp, lineHeight = 23.2.sp, textAlign = if (center) TextAlign.Center else TextAlign.Start,
         modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp))
 
 @Composable
-private fun Hint(text: String, top: Int = 18) =
+internal fun Hint(text: String, top: Int = 18) =
     Text(text, color = Muted, fontSize = 12.5.sp, lineHeight = 20.sp, modifier = Modifier.padding(top = top.dp))
 
 @Composable
-private fun SectionTitle(t: String) =
+internal fun SectionTitle(t: String) =
     Text(t.uppercase(), color = Muted, fontSize = 12.sp, letterSpacing = 0.96.sp, fontWeight = FontWeight.Medium,
         modifier = Modifier.padding(top = 32.dp, bottom = 4.dp).semantics { heading() })
 
 @Composable
-private fun Btn(text: String, kind: Int = 0, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun Btn(text: String, kind: Int = 0, enabled: Boolean = true, onClick: () -> Unit) {
     // 0 = primary (white), 1 = secondary, 2 = danger
     val (faces, fg) = when (kind) { 1 -> (CARD to CARD_DOWN) to T.Ink; 2 -> (DANGER to DANGER_DOWN) to DangerInk; else -> (LIGHT to LIGHT_DOWN) to Color(0xFF111111) }
     Box(
@@ -311,14 +311,14 @@ private fun Btn(text: String, kind: Int = 0, enabled: Boolean = true, onClick: (
 }
 
 @Composable
-private fun Hero(ico: Ico, bg: Color, fg: Color) {
+internal fun Hero(ico: Ico, bg: Color, fg: Color) {
     Box(Modifier.fillMaxWidth().padding(bottom = 18.dp).height(96.dp), contentAlignment = Alignment.Center) {
         Box(Modifier.size(56.dp).softFace(Face(listOf(mix(bg, 0.8f, Color.White), bg), CARD.shadows), dpUnits = true), contentAlignment = Alignment.Center) { LineIcon(ico, fg, 30.dp) }
     }
 }
 
 @Composable
-private fun Spinner(accent: Color) {
+internal fun Spinner(accent: Color) {
     Box(Modifier.fillMaxWidth().height(96.dp), contentAlignment = Alignment.Center) {
         CircularProgressIndicator(color = accent, trackColor = Color(0xFF333333), strokeWidth = 3.dp, modifier = Modifier.size(38.dp))
     }
@@ -326,7 +326,7 @@ private fun Spinner(accent: Color) {
 
 /** Card-style list row: optional status dot, title + subtitle, then a trailing slot. */
 @Composable
-private fun CardRow(
+internal fun CardRow(
     title: String,
     sub: String?,
     dot: Color? = null,
@@ -358,14 +358,14 @@ private fun CardRow(
     }
 }
 
-@Composable private fun Chevron() = LineIcon(Ico.CHEVRON_R, Color(0xFF6C6C70), 18.dp)
+@Composable internal fun Chevron() = LineIcon(Ico.CHEVRON_R, Color(0xFF6C6C70), 18.dp)
 
 @Composable
-private fun Badge(text: String) =
+internal fun Badge(text: String) =
     Text(text, color = Color(0xFFBBBBBB), fontSize = 11.5.sp, maxLines = 1,
         modifier = Modifier.background(Color(0xFF2C2C2E), RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 3.dp))
 
-private fun statusLine(vm: RemoteVM, d: Device): String {
+internal fun statusLine(vm: RemoteVM, d: Device): String {
     val st = if (vm.activeId != d.id) "" else when (vm.link) {
         Link.READY -> " · Connected"; Link.CONNECTING -> " · Connecting…"; else -> " · Not connected"
     }
@@ -375,7 +375,7 @@ private fun statusLine(vm: RemoteVM, d: Device): String {
 /* ---------------------------------------------------------------- devices */
 
 @Composable
-private fun DevicesPage(vm: RemoteVM, open: (String) -> Unit, add: () -> Unit) {
+internal fun DevicesPage(vm: RemoteVM, open: (String) -> Unit, add: () -> Unit) {
     if (vm.devices.isEmpty()) Lead("No TVs yet. Add one to start controlling it.")
     vm.devices.forEach { d ->
         val on = vm.activeId == d.id && vm.link == Link.READY
@@ -386,7 +386,7 @@ private fun DevicesPage(vm: RemoteVM, open: (String) -> Unit, add: () -> Unit) {
 }
 
 @Composable
-private fun DevicePage(vm: RemoteVM, d: Device, accent: Color) {
+internal fun DevicePage(vm: RemoteVM, d: Device, accent: Color) {
     val on = vm.activeId == d.id && vm.link == Link.READY
     var name by remember(d.id) { mutableStateOf(d.name) }
     var arm by remember(d.id) { mutableStateOf(false) }
@@ -404,14 +404,14 @@ private fun DevicePage(vm: RemoteVM, d: Device, accent: Color) {
 }
 
 @Composable
-private fun LocalPage(onContinue: () -> Unit) {
+internal fun LocalPage(onContinue: () -> Unit) {
     Hero(Ico.WIFI, Color(0xFF1D2A3A), Color(0xFF6FB1FF))
     Lead("Remote will look for TVs on your Wi-Fi. It only talks to devices on your own network, and it needs no account.")
     Btn("Continue", onClick = onContinue)
 }
 
 @Composable
-private fun ScanPage(vm: RemoteVM, accent: Color, pick: (Device) -> Unit, manual: () -> Unit) {
+internal fun ScanPage(vm: RemoteVM, accent: Color, pick: (Device) -> Unit, manual: () -> Unit) {
     LaunchedEffect(Unit) { vm.scan() }
     if (vm.scanning) {
         Spinner(accent)
@@ -432,7 +432,7 @@ private fun ScanPage(vm: RemoteVM, accent: Color, pick: (Device) -> Unit, manual
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ManualPage(vm: RemoteVM, accent: Color, onAdded: (Device) -> Unit) {
+internal fun ManualPage(vm: RemoteVM, accent: Color, onAdded: (Device) -> Unit) {
     var ip by remember { mutableStateOf("") }
     var brand by remember { mutableStateOf(Brand.ROKU) }
     var open by remember { mutableStateOf(false) }
@@ -458,7 +458,7 @@ private fun ManualPage(vm: RemoteVM, accent: Color, onAdded: (Device) -> Unit) {
 /* ----------------------------------------------------------------- pairing */
 
 @Composable
-private fun PairPage(vm: RemoteVM, d: Device, accent: Color, onClose: () -> Unit, back: () -> Unit) {
+internal fun PairPage(vm: RemoteVM, d: Device, accent: Color, onClose: () -> Unit, back: () -> Unit) {
     val active = vm.activeId == d.id
     val prompt = vm.pairPrompt
     when {
@@ -520,7 +520,7 @@ private fun PairPage(vm: RemoteVM, d: Device, accent: Color, onClose: () -> Unit
     }
 }
 
-private fun brandHelp(b: Brand): String? = when (b) {
+internal fun brandHelp(b: Brand): String? = when (b) {
     Brand.ROKU -> "Roku doesn't need a pairing code. If it can't connect, open Settings › System › Advanced system settings › Control by mobile apps on the TV and choose Default."
     Brand.SAMSUNG -> "On Samsung, check Settings › General › External Device Manager › Device Connect Manager. Menu names vary by model."
     Brand.LG -> "On LG, make sure LG Connect Apps / Mobile TV On is turned on. Menu names vary by model."
@@ -529,7 +529,7 @@ private fun brandHelp(b: Brand): String? = when (b) {
 
 /** Six boxes, one per character, backed by a single text field so paste and TalkBack work normally. */
 @Composable
-private fun CodeEntry(vm: RemoteVM, prompt: PairPrompt) {
+internal fun CodeEntry(vm: RemoteVM, prompt: PairPrompt) {
     var code by remember(prompt) { mutableStateOf("") }
     val ok = code.length == 6
     Lead("${prompt.tvName} is showing a 6-character code. Type it here.")
@@ -566,13 +566,17 @@ private fun CodeEntry(vm: RemoteVM, prompt: PairPrompt) {
 }
 
 /** The inner text field fills the boxes' area so taps anywhere focus it. */
-private fun Modifier.matchParentSizeCompat(): Modifier = this.fillMaxWidth().height(56.dp)
+internal fun Modifier.matchParentSizeCompat(): Modifier = this.fillMaxWidth().height(56.dp)
 
 /* ---------------------------------------------------------------- settings */
 
 @Composable
-private fun SettingsPage(vm: RemoteVM, accent: Color, manage: () -> Unit) {
+internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: () -> Unit) {
     val s = vm.settings
+    SectionTitle("Remote")
+    SegRow("Home opens with", listOf("dial" to "Dial", "trackpad" to "Trackpad"), s.controlStyle) { vm.update(s.copy(controlStyle = it)) }
+    Hint("Swipe beside the dial or trackpad on Home, or on its switcher, to change it for now. This picks the one Home always starts with.", top = 6)
+
     SectionTitle("Accent colour")
     Row(Modifier.selectableGroup().padding(top = 8.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         ACCENTS.forEach { (name, hex) ->
@@ -669,10 +673,10 @@ private fun SettingsPage(vm: RemoteVM, accent: Color, manage: () -> Unit) {
 }
 
 @Composable
-private fun Divider() = Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF262627)))
+internal fun Divider() = Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF262627)))
 
 @Composable
-private fun ToggleRow(title: String, sub: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
+internal fun ToggleRow(title: String, sub: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
     // Whole row is one switch for TalkBack and one big touch target for fingers.
     Row(
         Modifier.fillMaxWidth().heightIn(min = 68.dp).toggleable(checked, role = Role.Switch, onValueChange = onChange).padding(vertical = 16.dp, horizontal = 2.dp),
@@ -689,7 +693,7 @@ private fun ToggleRow(title: String, sub: String?, checked: Boolean, onChange: (
 }
 
 @Composable
-private fun SegRow(title: String, opts: List<Pair<Float, String>>, value: Float, onPick: (Float) -> Unit) {
+internal fun <V> SegRow(title: String, opts: List<Pair<V, String>>, value: V, onPick: (V) -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).padding(vertical = 16.dp, horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(title, color = T.Ink, fontSize = 15.sp, modifier = Modifier.weight(1f))
         Row(Modifier.softFace(HOLLOW, sheen = false, corner = 10.dp, dpUnits = true).padding(3.dp).selectableGroup()) {
@@ -724,7 +728,7 @@ fun linkWord(l: Link) = when (l) { Link.READY -> "Connected"; Link.CONNECTING ->
  * the phone keyboard never covers it. The text box takes focus as soon as it opens.
  */
 @Composable
-fun KeyboardSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
+fun KeyboardSheet(vm: RemoteVM, accent: Color, search: Boolean = false, onClose: () -> Unit) {
     var text by remember { mutableStateOf("") }
     val shown = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
@@ -744,8 +748,16 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
                     .pointerInput(Unit) { detectTapGestures { } }
                     .statusBarsPadding().padding(top = 8.dp),
             ) {
-                Header("Type on TV", onClose)
+                Header(if (search) "Search on TV" else "Type on TV", onClose)
                 Body {
+                    if (search) {
+                        Lead("Find movies, shows and apps. The TV opens its own search with your words.")
+                        Field("Search for", text, { text = it }, modifier = Modifier.focusRequester(focus), placeholder = "Movies, shows, apps",
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = { if (text.isNotBlank()) { vm.search(text); onClose() } }))
+                        Btn("Search", enabled = text.isNotBlank()) { vm.search(text); onClose() }
+                        return@Body
+                    }
                     Lead("Open a search box on the TV, then type here and send.")
                     Field("Text for the TV", text, { text = it }, modifier = Modifier.focusRequester(focus),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),

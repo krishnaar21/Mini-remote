@@ -269,7 +269,7 @@ private const val WELL_FRAC = 300f / 780f
 
 /** Accessibility-only button over a clickpad zone. Draws nothing and takes no touches. */
 @Composable
-private fun PadZone(
+internal fun PadZone(
     label: String,
     modifier: Modifier,
     longLabel: String? = null,

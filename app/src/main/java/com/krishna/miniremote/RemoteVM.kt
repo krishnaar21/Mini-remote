@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.krishna.miniremote.net.Discovery
 import com.krishna.miniremote.net.HostValidator
 import com.krishna.miniremote.net.RemoteAdapter
+import com.krishna.miniremote.net.TvApp
 import com.krishna.miniremote.net.Unsupported
 import com.krishna.miniremote.net.UserFacing
 import com.krishna.miniremote.net.adapterFor
@@ -17,6 +18,7 @@ import com.krishna.miniremote.net.isCertChanged
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -53,6 +55,13 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     private var connectJob: Job? = null
     private var toastJob: Job? = null
     private val queue = Channel<RemoteKey>(64, BufferOverflow.DROP_OLDEST)
+
+    /* Channels tab state. Declared before init, which may connect (and reset tvApps). */
+    var shortcuts by mutableStateOf(store.loadShortcuts()); private set
+    /** Apps the connected TV reported, and which TV they belong to. */
+    var tvApps by mutableStateOf<List<TvApp>>(emptyList()); private set
+    var appsLoading by mutableStateOf(false); private set
+    private var appsFor: String? = null
 
     /* ------------------------------------------------------------ updates */
 
@@ -115,7 +124,9 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
             for (k in queue) {
                 val a = adapter
                 if (link != Link.READY || a == null) continue
-                try { a.send(k); txCount++ } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                try { a.send(k); txCount++ } catch (e: TimeoutCancellationException) {
+                    feel.fire(Feel.ERROR); say("The TV didn't answer")
+                } catch (e: CancellationException) { throw e } catch (e: Exception) {
                     feel.fire(Feel.ERROR)
                     say(if (e is Unsupported) e.message ?: "Not supported" else "Lost connection")
                     if (e !is Unsupported) { link = Link.ERROR }
@@ -146,6 +157,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     }
 
     fun connect(d: Device) {
+        if (d.id != appsFor) { tvApps = emptyList(); appsFor = null }
         connectJob?.cancel()
         adapter?.close(); adapter = null
         link = Link.CONNECTING
@@ -161,7 +173,15 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 adapter = a
                 link = Link.READY
                 feel.fire(Feel.SUCCESS)
-            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            } catch (e: CancellationException) {
+                // A timeout inside connect is a failure to show, not this job being cancelled.
+                if (e !is TimeoutCancellationException) throw e
+                link = Link.ERROR
+                val msg = "${d.name} didn't answer in time"
+                lastError = msg
+                say(msg)
+                feel.fire(Feel.ERROR)
+            } catch (e: Exception) {
                 link = Link.ERROR
                 val msg = when {
                     e is UserFacing -> e.message ?: "Not supported"
@@ -270,6 +290,125 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     private fun applyFeel(s: Settings) {
         feel.haptics = s.haptics; feel.sound = s.sound
         feel.strength = s.hapticStrength; feel.level = s.soundLevel
+    }
+
+    /* --------------------------------------------------- channels & apps */
+
+
+    /** Runs [block] on the connected TV, reporting problems as a toast. */
+    private fun act(fail: String, block: suspend (RemoteAdapter) -> Unit) {
+        val d = active ?: run { feel.fire(Feel.ERROR); say("Choose a TV first"); return }
+        val a = adapter
+        if (a == null || link != Link.READY) {
+            feel.fire(Feel.ERROR)
+            if (link == Link.CONNECTING) say("Still connecting to ${d.name}") else { say("Reconnecting to ${d.name}"); connect(d) }
+            return
+        }
+        viewModelScope.launch {
+            try { block(a); txCount++ } catch (e: TimeoutCancellationException) {
+                feel.fire(Feel.ERROR); say("The TV didn't answer")
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                feel.fire(Feel.ERROR); say(if (e is UserFacing) e.message ?: fail else fail)
+            }
+        }
+    }
+
+    /** Loads the TV's app list once per TV ([force] reloads it). Silent when the TV can't list apps. */
+    fun refreshApps(force: Boolean = false) {
+        val a = adapter ?: return
+        val id = activeId ?: return
+        if (link != Link.READY || appsLoading || (!force && appsFor == id)) return
+        appsLoading = true
+        viewModelScope.launch {
+            try {
+                tvApps = a.listApps().sortedBy { it.name.lowercase() }
+                appsFor = id
+            } catch (e: TimeoutCancellationException) {
+                if (force) say("The TV didn't send its apps")
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                appsFor = id
+                if (force) say(if (e is UserFacing) e.message ?: "Couldn't load apps" else "Couldn't load apps")
+            } finally { appsLoading = false }
+        }
+    }
+
+    fun launchApp(name: String, id: String) {
+        feel.fire(Feel.PRESS); say(name)
+        act("Couldn't open $name") { it.launchApp(id) }
+    }
+
+    /** A popular app: this TV's id from the catalog, or the TV's own app with the same name. */
+    fun launchCatalog(c: CatalogApp) {
+        val brand = active?.brand ?: run { feel.fire(Feel.ERROR); say("Choose a TV first"); return }
+        val id = c.ids[brand] ?: tvApps.firstOrNull { it.name.equals(c.name, true) || it.name.contains(c.name, true) }?.id
+        if (id == null) { feel.fire(Feel.ERROR); say("${c.name} isn't set up for this TV. Add it with its app ID."); return }
+        launchApp(c.name, id)
+    }
+
+    fun tune(name: String, number: String) {
+        feel.fire(Feel.PRESS); say("$number · $name")
+        act("Couldn't change the channel") { it.tuneChannel(number) }
+    }
+
+    fun launch(s: Shortcut) {
+        when {
+            s.kind == ShortcutKind.CHANNEL -> tune(s.name, s.value)
+            s.brand == null -> Catalog.byKey(s.value)?.let { launchCatalog(it) } ?: say("${s.name} isn't available any more")
+            active?.brand != s.brand -> { feel.fire(Feel.ERROR); say("${s.name} was saved from a ${s.brand?.label ?: "different"} TV") }
+            else -> launchApp(s.name, s.value)
+        }
+    }
+
+    fun search(query: String) {
+        val q = query.trim()
+        if (q.isEmpty()) return
+        say("Searching for $q")
+        act("Couldn't search") { it.search(q) }
+    }
+
+    private fun saveShortcuts(l: List<Shortcut>) { shortcuts = l; store.saveShortcuts(l) }
+
+    fun addShortcut(kind: ShortcutKind, name: String, value: String, pin: Boolean) {
+        val s = Shortcut(
+            id = "s${System.currentTimeMillis()}", kind = kind, name = name.trim().take(30), value = value.trim(),
+            brand = if (kind == ShortcutKind.APP) active?.brand else null, pinned = pin, added = true,
+        )
+        saveShortcuts(shortcuts + s)
+        feel.fire(Feel.SUCCESS); say("Added ${s.name}")
+    }
+
+    fun pinnedCatalog(c: CatalogApp): Shortcut? = shortcuts.firstOrNull { it.kind == ShortcutKind.APP && it.brand == null && it.value == c.key }
+    fun pinnedTvApp(app: TvApp): Shortcut? = shortcuts.firstOrNull { it.kind == ShortcutKind.APP && it.brand == active?.brand && it.value == app.id }
+
+    fun pinCatalog(c: CatalogApp) {
+        if (pinnedCatalog(c) == null) saveShortcuts(shortcuts + Shortcut("c${System.currentTimeMillis()}", ShortcutKind.APP, c.name, c.key, pinned = true))
+        say("${c.name} added to quick access")
+    }
+
+    fun pinTvApp(app: TvApp) {
+        val brand = active?.brand ?: return
+        if (pinnedTvApp(app) == null) {
+            saveShortcuts(shortcuts + Shortcut("t${System.currentTimeMillis()}", ShortcutKind.APP, app.name, app.id, brand, app.icon, pinned = true))
+        }
+        say("${app.name} added to quick access")
+    }
+
+    /** Unpinning something that was only pinned (not added) forgets it. */
+    fun setPinned(s: Shortcut, pinned: Boolean) {
+        saveShortcuts(if (!pinned && !s.added) shortcuts.filter { it.id != s.id } else shortcuts.map { if (it.id == s.id) it.copy(pinned = pinned) else it })
+        say(if (pinned) "${s.name} added to quick access" else "${s.name} removed from quick access")
+    }
+
+    fun removeShortcut(s: Shortcut) { saveShortcuts(shortcuts.filter { it.id != s.id }); say("Removed ${s.name}") }
+
+    /** Moves a quick-access item one place left (-1) or right (+1). */
+    fun movePinned(s: Shortcut, by: Int) {
+        val pinned = shortcuts.filter { it.pinned }
+        val i = pinned.indexOfFirst { it.id == s.id }
+        val j = i + by
+        if (i < 0 || j !in pinned.indices) return
+        val order = pinned.toMutableList().apply { add(j, removeAt(i)) }
+        saveShortcuts(order + shortcuts.filter { !it.pinned })
     }
 
     override fun onCleared() { adapter?.close() }

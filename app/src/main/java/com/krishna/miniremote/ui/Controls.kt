@@ -7,6 +7,13 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.Text
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -184,6 +191,55 @@ private fun RowScope.PillSegment(
                 }
             }
             .pressInput(repeat, scope, { down = it; if (it) scope.ripple(rip) }, onPress),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.clearAndSetSemantics {}) { content(if (down) accent else T.Ink) }
+    }
+}
+
+/**
+ * A tall soft-touch rocker: [upIco] on top, [word] (VOL / CH) in the middle, [downIco] below.
+ * Both ends repeat while held and are separate buttons for TalkBack.
+ */
+@Composable
+fun VerticalRocker(
+    accent: Color,
+    word: String,
+    upLabel: String,
+    downLabel: String,
+    upIco: Ico,
+    downIco: Ico,
+    modifier: Modifier = Modifier,
+    onUp: () -> Unit,
+    onDown: () -> Unit,
+) {
+    Column(modifier.softFace(ROCKER).clip(androidx.compose.foundation.shape.CircleShape), horizontalAlignment = Alignment.CenterHorizontally) {
+        RockerSeg(upLabel, accent, onUp) { LineIcon(upIco, it, 20.dp, stroke = 1.9f) }
+        Text(word, color = T.Dim, fontSize = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.sp,
+            modifier = Modifier.clearAndSetSemantics {})
+        RockerSeg(downLabel, accent, onDown) { LineIcon(downIco, it, 20.dp, stroke = 1.9f) }
+    }
+}
+
+@Composable
+private fun ColumnScope.RockerSeg(label: String, accent: Color, onPress: () -> Unit, content: @Composable (Color) -> Unit) {
+    var down by remember { mutableStateOf(false) }
+    val rip = remember { Animatable(1f) }
+    val scope = rememberCoroutineScope()
+    Box(
+        Modifier.weight(1f).fillMaxWidth()
+            .semantics {
+                role = Role.Button
+                contentDescription = label
+                onClick { onPress(); true }
+            }
+            .drawBehind { if (down) drawRect(Color.Black.copy(0.28f)) }
+            .drawWithContent {
+                drawContent()
+                val v = rip.value
+                if (v < 1f) drawCircle(Color.White.copy(alpha = 0.16f * (1f - v)), size.maxDimension * 0.8f * (0.1f + 0.9f * v), center)
+            }
+            .pressInput(true, scope, { down = it; if (it) scope.ripple(rip) }, onPress),
         contentAlignment = Alignment.Center,
     ) {
         Box(Modifier.clearAndSetSemantics {}) { content(if (down) accent else T.Ink) }

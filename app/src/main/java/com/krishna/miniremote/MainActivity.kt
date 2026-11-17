@@ -10,7 +10,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
 import com.krishna.miniremote.ui.Inter
-import com.krishna.miniremote.ui.RemoteScreen
+import com.krishna.miniremote.ui.AppShell
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.text.font.FontFamily
@@ -26,7 +26,7 @@ class MainActivity : ComponentActivity() {
                 colorScheme = darkColorScheme(background = Color(0xFF242427), surface = Color(0xFF1B1B1C)),
                 typography = Typography().withFont(Inter),
             ) {
-                RemoteScreen(vm)
+                AppShell(vm)
             }
             // Window flags are a side effect, so apply them after composition rather than during it.
             val keepAwake = vm.settings.keepAwake

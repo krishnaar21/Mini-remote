@@ -11,10 +11,18 @@ enum class Brand(val label: String) {
     ANDROID_TV("Android / Google TV")
 }
 
-enum class RemoteKey(val word: String) {
+enum class RemoteKey(val word: String, val digit: Char? = null) {
     UP("Up"), DOWN("Down"), LEFT("Left"), RIGHT("Right"), OK("OK"),
     BACK("Back"), HOME("Home"), PLAY_PAUSE("Play / Pause"), POWER("Power"),
-    VOL_UP("Volume +"), VOL_DOWN("Volume -"), MUTE("Mute"), VOICE("Voice")
+    VOL_UP("Volume +"), VOL_DOWN("Volume -"), MUTE("Mute"), VOICE("Voice"),
+    REWIND("Rewind"), FAST_FORWARD("Fast forward"), CH_UP("Channel +"), CH_DOWN("Channel -"),
+    GUIDE("TV Guide"), CH_LIST("Channel list"), INFO("Info"), INPUT("Input"), MENU("Display settings"), AUDIO("Audio"),
+    N0("0", '0'), N1("1", '1'), N2("2", '2'), N3("3", '3'), N4("4", '4'),
+    N5("5", '5'), N6("6", '6'), N7("7", '7'), N8("8", '8'), N9("9", '9');
+
+    companion object {
+        fun forDigit(c: Char): RemoteKey? = entries.firstOrNull { it.digit == c }
+    }
 }
 
 data class Device(
@@ -66,7 +74,55 @@ data class Settings(
     val keepAwake: Boolean = true,
     /** Check the latest-build release on launch and download a newer APK in the background. */
     val autoUpdate: Boolean = true,
+    /** What Home opens with: "dial" or "trackpad". Swiping switches only until the app restarts. */
+    val controlStyle: String = "dial",
+    /** Shown on Home as "Hello, <first name>!". */
+    val profileName: String = "",
 )
+
+enum class ShortcutKind { APP, CHANNEL }
+
+/**
+ * Something on the Channels tab the user saved: a TV channel (value = its number) or an app.
+ * For apps, [brand] null means [value] is a [Catalog] key (works on any TV); otherwise
+ * [value] is that brand's own app id. [added] = created with "Add", not just pinned.
+ */
+data class Shortcut(
+    val id: String,
+    val kind: ShortcutKind,
+    val name: String,
+    val value: String,
+    val brand: Brand? = null,
+    val icon: String? = null,
+    val pinned: Boolean = false,
+    val added: Boolean = false,
+) {
+    fun toJson(): JSONObject = JSONObject()
+        .put("id", id).put("kind", kind.name).put("name", name).put("value", value)
+        .put("brand", brand?.name ?: JSONObject.NULL).put("icon", icon ?: JSONObject.NULL)
+        .put("pinned", pinned).put("added", added)
+
+    companion object {
+        fun fromJson(o: JSONObject): Shortcut? = runCatching {
+            Shortcut(
+                id = o.getString("id"),
+                kind = ShortcutKind.valueOf(o.getString("kind")),
+                name = o.getString("name"),
+                value = o.getString("value"),
+                brand = if (o.isNull("brand")) null else Brand.valueOf(o.getString("brand")),
+                icon = if (!o.has("icon") || o.isNull("icon")) null else o.getString("icon"),
+                pinned = o.optBoolean("pinned"),
+                added = o.optBoolean("added"),
+            )
+        }.getOrNull()
+
+        fun listToJson(l: List<Shortcut>): String = JSONArray().also { a -> l.forEach { a.put(it.toJson()) } }.toString()
+        fun listFromJson(s: String?): List<Shortcut> = runCatching {
+            val a = JSONArray(s ?: "[]")
+            (0 until a.length()).mapNotNull { fromJson(a.getJSONObject(it)) }
+        }.getOrDefault(emptyList())
+    }
+}
 
 val HAPTIC_STRENGTHS = listOf(0.6f to "Light", 1f to "Medium", 1.5f to "Strong")
 val SOUND_LEVELS = listOf(0.5f to "Soft", 1f to "Medium", 1.7f to "Loud")

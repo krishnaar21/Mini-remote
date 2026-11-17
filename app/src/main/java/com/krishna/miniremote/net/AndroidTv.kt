@@ -186,7 +186,11 @@ class AndroidTvAdapter(
         RemoteKey.PLAY_PAUSE to 85, RemoteKey.POWER to 26,
         RemoteKey.VOL_UP to 24, RemoteKey.VOL_DOWN to 25, RemoteKey.MUTE to 164,
         RemoteKey.VOICE to 84, // SEARCH: opens the TV's search, which offers voice
-    )
+        RemoteKey.REWIND to 89, RemoteKey.FAST_FORWARD to 90,
+        RemoteKey.CH_UP to 166, RemoteKey.CH_DOWN to 167,
+        RemoteKey.GUIDE to 172, RemoteKey.CH_LIST to 172, RemoteKey.INFO to 165,
+        RemoteKey.INPUT to 178, RemoteKey.MENU to 176, RemoteKey.AUDIO to 222,
+    ) + RemoteKey.entries.filter { it.digit != null }.associateWith { 7 + (it.digit!! - '0') }
 
     override suspend fun connect() {
         close()
@@ -299,7 +303,14 @@ class AndroidTvAdapter(
         f.send(Pb().apply { msg(10) { int(1, code.toLong()); int(2, 3) } }.toBytes()) // 3 = SHORT press
     }
 
-    override suspend fun send(key: RemoteKey) = key(keys.getValue(key))
+    override suspend fun send(key: RemoteKey) = key(keys[key] ?: missing(key, "this TV"))
+
+    /** Opens an app: a package name (launched through the Play Store link) or a full app link. */
+    override suspend fun launchApp(id: String) = withContext(Dispatchers.IO) {
+        val f = io ?: error("Not connected")
+        val link = if ("://" in id) id else "market://launch?id=$id"
+        f.send(Pb().apply { msg(90) { str(1, link) } }.toBytes())
+    }
 
     /** Types letters, digits and a few symbols as key presses (the TV's IME protocol is far heavier). */
     override suspend fun typeText(text: String) {

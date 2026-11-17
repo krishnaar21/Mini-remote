@@ -26,6 +26,8 @@ class Store(ctx: Context) {
             gyro = p.getBoolean("gyro", d.gyro),
             keepAwake = p.getBoolean("awake", d.keepAwake),
             autoUpdate = p.getBoolean("autoupdate", d.autoUpdate),
+            controlStyle = p.getString("control", d.controlStyle)?.takeIf { it == "dial" || it == "trackpad" } ?: d.controlStyle,
+            profileName = p.getString("profileName", d.profileName) ?: d.profileName,
         )
     }
 
@@ -34,7 +36,11 @@ class Store(ctx: Context) {
         .putBoolean("sound", s.sound).putFloat("soundLevel", s.soundLevel)
         .putString("accent", s.accentHex).putFloat("step", s.scrubStepDp)
         .putBoolean("gyro", s.gyro).putBoolean("awake", s.keepAwake)
-        .putBoolean("autoupdate", s.autoUpdate).apply()
+        .putBoolean("autoupdate", s.autoUpdate)
+        .putString("control", s.controlStyle).putString("profileName", s.profileName).apply()
+
+    fun loadShortcuts(): List<Shortcut> = Shortcut.listFromJson(p.getString("shortcuts", null))
+    fun saveShortcuts(l: List<Shortcut>) = p.edit().putString("shortcuts", Shortcut.listToJson(l)).apply()
 
     /** Whether the one-time local network explainer has been shown. */
     fun localSeen(): Boolean = p.getBoolean("localSeen", false)
