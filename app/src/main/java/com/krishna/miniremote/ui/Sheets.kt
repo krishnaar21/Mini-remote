@@ -645,6 +645,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
     val s = vm.settings
     SectionTitle("Remote")
     Group {
+    LayoutPicker(s.layout, accent) { vm.update(s.copy(layout = it)) }
     SegRow("Control", listOf("dial" to "Dial", "trackpad" to "Trackpad"), s.controlStyle) { vm.update(s.copy(controlStyle = it)) }
     ToggleRow("Volume keys", "Phone keys change TV volume", s.volumeKeys, last = true) { vm.update(s.copy(volumeKeys = it)) }
     }

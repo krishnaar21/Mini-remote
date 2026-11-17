@@ -83,7 +83,7 @@ private const val DOUBLE_TAP_MS = 260L
  * top; one big touch surface (or the dial); four round keys below.
  *
  * One finger navigates; two fingers slide for volume (up / down) and channels (sideways).
- * OK: tap = OK, double tap = mute, hold = voice. Swipe up for the volume / channel tray.
+ * OK: tap = OK, double tap = mute, hold = voice. Volume and channels depend on the layout chosen in Settings.
  */
 @Composable
 fun HomeScreen(
@@ -147,7 +147,59 @@ fun HomeScreen(
         )
     }
 
-    Column(Modifier.fillMaxSize().then(swipe), horizontalAlignment = Alignment.CenterHorizontally) {
+    val layout = HomeLayout.of(vm.settings.layout)
+    val voice = { vm.feel.fire(Feel.HEAVY); vm.press(RemoteKey.VOICE) }
+    val offlineTap = { vm.feel.fire(Feel.PRESS); openDevices() }
+    // The dial at a given size; [round] = sits inside the volume ring.
+    val dialAt: @Composable (Dp, Boolean) -> Unit = { s, round ->
+        CompositionLocalProvider(LocalK provides s.value / 780f) {
+            Clickpad(
+                size = s, accent = accent, stepDp = vm.settings.scrubStepDp,
+                toast = if (layout == HomeLayout.CARDS) null else vm.toast,
+                toastIcon = vm.toastKey?.let { keyIcon(it, vm.muted, vm.playing) },
+                onKey = onKey, onTick = onTick, onVoice = voice,
+                offline = offline, onOffline = offlineTap,
+                onTwoFinger = onTwo, onTwoFingerTap = onTwoTap, roundOnly = round,
+            )
+        }
+    }
+    // Dial, trackpad or number pad, as big as [m] allows.
+    val padArea: @Composable (Deck, Modifier) -> Unit = { d, m ->
+        BoxWithConstraints(m, contentAlignment = Alignment.Center) {
+            val w = maxWidth
+            val h = maxHeight
+            AnimatedContent(d, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "deck") { dd ->
+                when (dd) {
+                    Deck.NUMPAD -> {
+                        val s = minOf(w, h, 340.dp)
+                        CompositionLocalProvider(LocalK provides s.value / 780f) { Numpad(vm, accent, Modifier.size(s)) }
+                    }
+                    Deck.DIAL -> dialAt(minOf(w - 8.dp, h, 340.dp), false)
+                    Deck.TRACKPAD -> {
+                        // Apple-style: the full width, a little taller than wide where there's room.
+                        val th = minOf(h, w * 1.25f)
+                        CompositionLocalProvider(LocalK provides w.value / 780f) {
+                            Trackpad(
+                                size = w, height = th, accent = accent, stepDp = vm.settings.scrubStepDp, offline = offline,
+                                onKey = onKey, onTick = onTick, onVoice = voice, onOffline = offlineTap,
+                                onTwoFinger = onTwo, onTwoFingerTap = onTwoTap,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+    val a11y = Modifier.semantics {
+        customActions = listOf(
+            CustomAccessibilityAction("Mute") { vm.press(RemoteKey.MUTE); true },
+            CustomAccessibilityAction("Volume up") { vm.press(RemoteKey.VOL_UP); true },
+            CustomAccessibilityAction("Volume down") { vm.press(RemoteKey.VOL_DOWN); true },
+        )
+    }
+    val padOnly = if (deck == Deck.NUMPAD) (if (vm.settings.controlStyle == "trackpad") Deck.TRACKPAD else Deck.DIAL) else deck
+
+    Column(Modifier.fillMaxSize().then(if (layout == HomeLayout.CLASSIC) swipe else Modifier), horizontalAlignment = Alignment.CenterHorizontally) {
       Column(Modifier.weight(1f).padding(horizontal = 16.dp).padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         // Top, as on the Apple TV Remote: mute · TV picker · power, inset from the screen edges.
         Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 20.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -162,58 +214,75 @@ fun HomeScreen(
             }
         }
 
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
-            val w = maxWidth
-            val h = maxHeight
-            Box(
-                Modifier.semantics {
-                    customActions = listOf(
-                        CustomAccessibilityAction("Mute") { vm.press(RemoteKey.MUTE); true },
-                        CustomAccessibilityAction("Volume and channels") { setTray(true); true },
-                    )
-                },
-                contentAlignment = Alignment.Center,
-            ) {
-                AnimatedContent(deck, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "deck") { d ->
-                    when (d) {
-                        Deck.NUMPAD -> {
-                            val s = minOf(w, h, 340.dp)
-                            CompositionLocalProvider(LocalK provides s.value / 780f) { Numpad(vm, accent, Modifier.size(s)) }
-                        }
-                        Deck.DIAL -> {
-                            val s = minOf(w - 8.dp, h, 340.dp)
-                            CompositionLocalProvider(LocalK provides s.value / 780f) {
-                                Clickpad(
-                                    size = s, accent = accent, stepDp = vm.settings.scrubStepDp, toast = vm.toast,
-                                    toastIcon = vm.toastKey?.let { keyIcon(it, vm.muted, vm.playing) },
-                                    onKey = onKey, onTick = onTick,
-                                    onVoice = { vm.feel.fire(Feel.HEAVY); vm.press(RemoteKey.VOICE) },
-                                    offline = offline, onOffline = { vm.feel.fire(Feel.PRESS); openDevices() },
-                                    onTwoFinger = onTwo, onTwoFingerTap = onTwoTap,
-                                )
-                            }
-                        }
-                        Deck.TRACKPAD -> {
-                            // Apple-style: the full width, a little taller than wide where there's room.
-                            val tw = w
-                            val th = minOf(h, tw * 1.25f)
-                            CompositionLocalProvider(LocalK provides tw.value / 780f) {
-                                Trackpad(
-                                    size = tw, height = th, accent = accent, stepDp = vm.settings.scrubStepDp, offline = offline,
-                                    onKey = onKey, onTick = onTick,
-                                    onVoice = { vm.feel.fire(Feel.HEAVY); vm.press(RemoteKey.VOICE) },
-                                    onOffline = { vm.feel.fire(Feel.PRESS); openDevices() },
-                                    onTwoFinger = onTwo, onTwoFingerTap = onTwoTap,
-                                )
+        when (layout) {
+            HomeLayout.CLASSIC -> padArea(deck, Modifier.weight(1f).fillMaxWidth().padding(vertical = 14.dp).then(a11y))
+
+            HomeLayout.RING -> {
+                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp).then(a11y), contentAlignment = Alignment.Center) {
+                    if (deck == Deck.NUMPAD) {
+                        val s = minOf(maxWidth, maxHeight, 340.dp)
+                        CompositionLocalProvider(LocalK provides s.value / 780f) { Numpad(vm, accent, Modifier.size(s)) }
+                    } else {
+                        val s = minOf(maxWidth - 8.dp - RING_BAND * 2, maxHeight - RING_BAND * 2, 300.dp)
+                        RingDial(s, accent, onStep = { up -> vm.scrubTick(if (up) RemoteKey.VOL_UP else RemoteKey.VOL_DOWN) }) { dialAt(s, true) }
+                    }
+                }
+                FourKeys(vm, accent, openKeys, 58.dp, 18.dp)
+                Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    KeyButton(accent, "Channel down", Modifier.size(58.dp), repeat = true, pressedScale = 1f, onPress = { vm.press(RemoteKey.CH_DOWN) }) { c, _ ->
+                        Text("CH −", color = c, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    }
+                    KeyButton(accent, "Number pad", Modifier.size(58.dp), state = if (numpad) "Showing" else null, pressedScale = 1f,
+                        restColor = if (numpad) accent else T.Ink, onPress = onNumpad) { c, _ ->
+                        Text("123", color = c, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    }
+                    KeyButton(accent, "Channel up", Modifier.size(58.dp), repeat = true, pressedScale = 1f, onPress = { vm.press(RemoteKey.CH_UP) }) { c, _ ->
+                        Text("CH +", color = c, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+
+            HomeLayout.CARDS -> {
+                val cards = androidx.compose.foundation.pager.rememberPagerState { 3 }
+                androidx.compose.foundation.pager.HorizontalPager(
+                    cards, Modifier.weight(1f).fillMaxWidth().padding(top = 8.dp).then(a11y),
+                    pageSpacing = 12.dp, beyondViewportPageCount = 1,
+                ) { p ->
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        when (p) {
+                            0 -> padArea(padOnly, Modifier.fillMaxSize())
+                            1 -> Box(Modifier.fillMaxSize().clip(RoundedCornerShape(30.dp)).background(M.Container), contentAlignment = Alignment.Center) { VolChCard(vm, accent) }
+                            else -> BoxWithConstraints(Modifier.fillMaxSize().clip(RoundedCornerShape(30.dp)).background(M.Container).padding(18.dp), contentAlignment = Alignment.Center) {
+                                val s = minOf(maxWidth, maxHeight, 340.dp)
+                                CompositionLocalProvider(LocalK provides s.value / 780f) { Numpad(vm, accent, Modifier.size(s)) }
                             }
                         }
                     }
                 }
+                CardDots(3, cards.currentPage) { scope.launch { cards.animateScrollToPage(it) } }
+                Spacer(Modifier.height(6.dp))
+                FourKeys(vm, accent, openKeys)
+            }
+
+            HomeLayout.STRIP -> {
+                padArea(deck, Modifier.weight(1f).fillMaxWidth().padding(vertical = 14.dp).then(a11y))
+            }
+
+            HomeLayout.SLIDERS -> {
+                padArea(deck, Modifier.weight(1f).fillMaxWidth().padding(vertical = 12.dp).then(a11y))
+                FourKeys(vm, accent, openKeys, 58.dp, 18.dp)
+                Column(Modifier.padding(top = 20.dp).width(320.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    DragBar("Volume", accent, Modifier.fillMaxWidth(), "Volume up", "Volume down") { up -> vm.scrubTick(if (up) RemoteKey.VOL_UP else RemoteKey.VOL_DOWN) }
+                    DragBar("Channel", accent, Modifier.fillMaxWidth(), "Channel up", "Channel down") { up -> vm.scrubTick(if (up) RemoteKey.CH_UP else RemoteKey.CH_DOWN) }
+                }
             }
         }
-
       }
-        BottomPanel(vm, accent, tray, numpad, onNumpad, openKeys, setTray)
+        when (layout) {
+            HomeLayout.CLASSIC -> BottomPanel(vm, accent, tray, numpad, onNumpad, openKeys, setTray)
+            HomeLayout.STRIP -> Box(Modifier.padding(bottom = NAV_H + 30.dp)) { KeyStrip(vm, accent, numpad, onNumpad, openKeys) }
+            else -> Spacer(Modifier.height(NAV_H + 28.dp))
+        }
     }
 }
 
@@ -245,15 +314,7 @@ private fun BottomPanel(
                 .clickable(onClickLabel = if (open) "hide volume and channels" else "show volume and channels", role = Role.Button) { set(!open) },
             contentAlignment = Alignment.Center,
         ) { LineIcon(if (open) Ico.DOWN else Ico.UP, T.Dim, 22.dp, stroke = 2.4f) }
-        val k = Modifier.size(62.dp)
-        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            KeyButton(accent, "Back", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.BACK) }) { c, _ -> LineIcon(Ico.CHEVRON_L, c, 24.dp, stroke = 2.2f) }
-            KeyButton(accent, "Home", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.HOME) }) { c, _ -> LineIcon(Ico.TV, c, 22.dp) }
-            KeyButton(accent, if (vm.playing) "Pause" else "Play", k, pressedScale = 1f, onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { c, _ ->
-                LineIcon(if (vm.playing) Ico.PAUSE else Ico.PLAY_ONLY, c, if (vm.playing) 22.dp else 20.dp, stroke = if (vm.playing) 2.4f else 1.8f)
-            }
-            KeyButton(accent, "Search", k, actionLabel = "search or type on TV", pressedScale = 1f, onPress = openKeys) { c, _ -> LineIcon(Ico.SEARCH, c, 21.dp) }
-        }
+        FourKeys(vm, accent, openKeys)
         androidx.compose.animation.AnimatedVisibility(open, enter = androidx.compose.animation.expandVertically() + fadeIn(), exit = androidx.compose.animation.shrinkVertically() + fadeOut()) {
             // Same width as the four keys; each row is a pill plus one round key, like the keys above.
             Column(Modifier.padding(top = 26.dp, bottom = 6.dp).width(308.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {

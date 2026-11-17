@@ -127,6 +127,8 @@ fun AppShell(vm: RemoteVM) {
     LaunchedEffect(tray, vm.txCount) { if (tray) { kotlinx.coroutines.delay(7000); tray = false } }
     // Closing the tray puts the dial (or trackpad) back.
     LaunchedEffect(tray) { if (!tray) numpad = false }
+    val layout = vm.settings.layout
+    LaunchedEffect(layout) { numpad = false; tray = false }
     fun go(t: Tab) { scope.launch { pager.animateScrollToPage(t.ordinal) } }
     // Once a TV finishes connecting, the TV sheet has done its job: close it.
     var connecting by remember { mutableStateOf(false) }
@@ -141,7 +143,7 @@ fun AppShell(vm: RemoteVM) {
     BackHandler(enabled = !onRemote) { go(Tab.HOME) }
 
     CompositionLocalProvider(LocalTilt provides tilt) {
-        BoxWithConstraints(Modifier.fillMaxSize().background(T.Bg)) {
+        BoxWithConstraints(Modifier.fillMaxSize().background(if (layout == "strip") Color.Black else T.Bg)) {
             val k = (maxWidth.value - 32f).coerceAtMost(420f) / 920f
             CompositionLocalProvider(LocalK provides k) {
                 Box(Modifier.fillMaxSize().systemBarsPadding()) {
@@ -158,8 +160,8 @@ fun AppShell(vm: RemoteVM) {
                         }
                     }
                     // The dial shows messages in its well; everywhere else they float near the bottom.
-                    val inWell = onRemote && deck == Deck.DIAL && !tray
-                    ToastChip(if (inWell) null else vm.toast, Modifier.align(Alignment.BottomCenter).padding(bottom = if (!onRemote) 56.dp else if (tray) 300.dp else 170.dp))
+                    val inWell = onRemote && deck == Deck.DIAL && !tray && layout != "cards"
+                    ToastChip(if (inWell) null else vm.toast, Modifier.align(Alignment.BottomCenter).padding(bottom = if (!onRemote) 56.dp else if (tray) 300.dp else if (layout == "sliders") 250.dp else 170.dp))
                     when (val u = vm.update) {
                         is RemoteVM.Update.Downloading, is RemoteVM.Update.Ready, is RemoteVM.Update.Manual ->
                             Box(Modifier.align(Alignment.TopCenter).padding(top = 4.dp).height(32.dp)) {

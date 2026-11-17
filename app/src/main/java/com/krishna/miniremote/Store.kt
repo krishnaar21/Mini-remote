@@ -46,6 +46,7 @@ class Store(ctx: Context) {
             profileName = p.getString("profileName", d.profileName) ?: d.profileName,
             volumeKeys = p.getBoolean("volumeKeys", d.volumeKeys),
             logos = p.getBoolean("logos", d.logos),
+            layout = p.getString("layout", d.layout)?.takeIf { it in setOf("classic", "ring", "cards", "strip", "sliders") } ?: d.layout,
         )
     }
 
@@ -56,7 +57,7 @@ class Store(ctx: Context) {
         .putBoolean("gyro", s.gyro).putBoolean("awake", s.keepAwake)
         .putBoolean("autoupdate", s.autoUpdate)
         .putString("control", s.controlStyle).putString("profileName", s.profileName)
-        .putBoolean("volumeKeys", s.volumeKeys).putBoolean("logos", s.logos).apply()
+        .putBoolean("volumeKeys", s.volumeKeys).putBoolean("logos", s.logos).putString("layout", s.layout).apply()
 
     fun loadShortcuts(): List<Shortcut> = Shortcut.listFromJson(p.getString("shortcuts", null))
     fun saveShortcuts(l: List<Shortcut>) = p.edit().putString("shortcuts", Shortcut.listToJson(l)).apply()

@@ -82,6 +82,8 @@ data class Settings(
     val volumeKeys: Boolean = true,
     /** Download app logos from Simple Icons for Quick access and app details. */
     val logos: Boolean = true,
+    /** Home layout: classic, ring, cards, strip or sliders (see ui.Layout). */
+    val layout: String = "ring",
 )
 
 enum class ShortcutKind { APP, CHANNEL }

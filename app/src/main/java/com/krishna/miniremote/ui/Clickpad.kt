@@ -75,6 +75,8 @@ fun Clickpad(
     onTwoFinger: ((RemoteKey) -> Unit)? = null,
     /** Two fingers tapped (no slide); two of these quickly switch dial / trackpad. */
     onTwoFingerTap: () -> Unit = {},
+    /** Inside a volume ring: touches outside the round pad belong to the ring. */
+    roundOnly: Boolean = false,
 ) {
     val twoStepPx = with(LocalDensity.current) { 30.dp.toPx() }
     val twoCb = androidx.compose.runtime.rememberUpdatedState(onTwoFinger)
@@ -105,6 +107,7 @@ fun Clickpad(
             .pointerInput(stepPx) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
+                    if (roundOnly && (down.position - Offset(this.size.width / 2f, this.size.height / 2f)).getDistance() > this.size.width / 2f) return@awaitEachGesture
                     if (isOffline.value) {
                         // Only a real tap opens the TV list; a swipe doesn't.
                         if (tappedOnly(down.id, deadPx)) onOffline()
