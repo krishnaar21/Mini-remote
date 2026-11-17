@@ -53,6 +53,11 @@ object Net {
     fun pinnedTls(pin: TlsPin): OkHttpClient {
         val ctx = SSLContext.getInstance("TLS").apply { init(null, arrayOf(pin), SecureRandom()) }
         return plain.newBuilder()
+            // Long-lived TV sockets: no read timeout, and no pings (several TVs never answer them,
+            // so OkHttp would drop a healthy connection after a minute). Drops are noticed by
+            // the socket failing, and the app reconnects.
+            .readTimeout(0, TimeUnit.SECONDS)
+            .pingInterval(0, TimeUnit.SECONDS)
             .sslSocketFactory(ctx.socketFactory, pin)
             // TVs are addressed by IP and their certs don't name it; the pin replaces this check.
             .hostnameVerifier { _, _ -> true }

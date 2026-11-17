@@ -183,6 +183,8 @@ class AndroidTvAdapter(
     @Volatile private var io: Framed? = null
     private var scope: CoroutineScope? = null
     override var onVolume: ((TvVolume) -> Unit)? = null
+    override var onDropped: (() -> Unit)? = null
+    @Volatile private var closing = false
 
     private val keys = mapOf(
         RemoteKey.UP to 19, RemoteKey.DOWN to 20, RemoteKey.LEFT to 21, RemoteKey.RIGHT to 22,
@@ -295,12 +297,14 @@ class AndroidTvAdapter(
                             val max = v.long(6)?.toInt() ?: 0
                             if (max > 0) onVolume?.invoke(TvVolume((v.long(7) ?: 0L).toInt(), max, (v.long(8) ?: 0L) != 0L))
                         }
-                        m[3] != null -> error("TV reported an error")
+                        // RemoteError: the TV didn't like one message (e.g. a key it lacks). Not fatal.
+                        m[3] != null -> {}
                     }
                 }
             } catch (e: Exception) {
+                val wasUp = ready.isCompleted
                 ready.completeExceptionally(e)
-                if (io === f) io = null
+                if (io === f) { io = null; if (wasUp && !closing) onDropped?.invoke() }
             }
         }
         try { withTimeout(10_000) { ready.await() } } catch (e: Exception) { close(); throw e }
@@ -343,8 +347,10 @@ class AndroidTvAdapter(
     override suspend fun backspace() = key(67)
 
     override fun close() {
+        closing = true
         scope?.cancel(); scope = null
         io = null
         runCatching { sock?.close() }; sock = null
+        closing = false
     }
 }

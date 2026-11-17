@@ -125,8 +125,8 @@ fun RingDial(dial: Dp, accent: Color, level: Float? = null, value: String? = nul
                 val tl = Offset(center.x - r, center.y - r)
                 val sz = Size(r * 2, r * 2)
                 drawCircle(M.Highest.copy(alpha = 0.55f), r, style = Stroke(3.dp.toPx()))
-                // The TV's real volume, from the top, clockwise.
-                if (level != null) { if (shown > 0f) drawArc(accent, -90f, 360f * shown, false, tl, sz, style = Stroke(4.dp.toPx(), cap = StrokeCap.Round)) }
+                // The TV's real volume, from the bottom, clockwise.
+                if (level != null) { if (shown > 0f) drawArc(accent, 90f, 360f * shown, false, tl, sz, style = Stroke(4.dp.toPx(), cap = StrokeCap.Round)) }
                 else if (glow > 0f && sweep != 0f) drawArc(accent.copy(alpha = glow), start, sweep, false, tl, sz,
                     style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
             },
@@ -148,15 +148,15 @@ fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ic
     val scale by animateFloatAsState(if (pressed) 0.94f else 1f, if (pressed) tween(70) else androidx.compose.animation.core.spring(0.45f, 700f), label = "press")
     Box(
         Modifier.size(size).graphicsLayer { scaleX = scale; scaleY = scale }.clip(CircleShape)
-            .background(if (active) accent.copy(alpha = 0.25f) else if (pressed) Color(0xFF2A2A2D) else Color(0xFF1C1C1E))
+            .background(if (active || pressed) Color(0xFF2E2E31) else Color(0xFF1C1C1E))
             .clickable(src, androidx.compose.material3.ripple(color = Color.White), onClickLabel = label, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            val c = if (active) accent else T.Ink
-            if (ico != null) LineIcon(ico, c, if (caption != null) 16.dp else 21.dp)
-            if (word != null) Text(word, color = c, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            val c = T.Ink
+            if (ico != null) LineIcon(ico, c, if (caption != null) 18.dp else 23.dp)
+            if (word != null) Text(word, color = c, fontSize = 15.sp, fontWeight = FontWeight.Medium)
             if (caption != null) Text(caption, color = T.Dim, fontSize = 9.sp, letterSpacing = 0.8.sp, fontWeight = FontWeight.Medium,
                 lineHeight = 9.sp, modifier = Modifier.offset(y = (-1).dp))
         }
@@ -166,15 +166,15 @@ fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ic
 /** Two rows of round keys: Back, Home, Play, Search; then channel down / up, numbers and input. Volume is the ring; mute is at the top. */
 @Composable
 fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, openKeys: () -> Unit) {
-    val k = 60.dp
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+    val k = 68.dp
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             StripKey(accent, "Back", k, ico = Ico.CHEVRON_L) { vm.press(RemoteKey.BACK) }
             StripKey(accent, "Home", k, ico = Ico.TV) { vm.press(RemoteKey.HOME) }
             StripKey(accent, if (vm.playing) "Pause" else "Play", k, ico = if (vm.playing) Ico.PAUSE else Ico.PLAY_ONLY) { vm.press(RemoteKey.PLAY_PAUSE) }
             StripKey(accent, "Search", k, ico = Ico.SEARCH, onClick = openKeys)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             StripKey(accent, "Channel down", k, ico = Ico.MINUS, caption = "CH") { vm.press(RemoteKey.CH_DOWN) }
             StripKey(accent, "Channel up", k, ico = Ico.PLUS, caption = "CH") { vm.press(RemoteKey.CH_UP) }
             StripKey(accent, "Number pad", k, active = numpad, word = "123", onClick = onNumpad)
@@ -219,7 +219,7 @@ fun VolChCard(vm: RemoteVM, accent: Color) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             KeyButton(accent, "Mute", Modifier.size(56.dp), state = if (vm.muted) "Muted" else null, pressedScale = 1f, onPress = { vm.press(RemoteKey.MUTE) }) { c, _ ->
-                LineIcon(if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, if (vm.muted) accent else c, 20.dp)
+                LineIcon(if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, c, 20.dp)
             }
             KeyButton(accent, "Input", Modifier.size(56.dp), pressedScale = 1f, onPress = { vm.press(RemoteKey.INPUT) }) { c, _ -> LineIcon(Ico.INPUT, c, 20.dp) }
             KeyButton(accent, "Guide", Modifier.size(56.dp), pressedScale = 1f, onPress = { vm.press(RemoteKey.GUIDE) }) { c, _ -> LineIcon(Ico.GUIDE, c, 20.dp) }

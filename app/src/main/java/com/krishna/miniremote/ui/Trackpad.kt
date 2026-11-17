@@ -169,7 +169,7 @@ fun Trackpad(
             val dist = when (k) { RemoteKey.UP -> t.y; RemoteKey.DOWN -> hPx - t.y; RemoteKey.LEFT -> t.x; else -> wPx - t.x }
             return (1f - dist / (minOf(wPx, hPx) * 0.5f)).coerceIn(0f, 1f) * 0.85f
         }
-        fun col(k: RemoteKey) = if (lit == k) accent else Color(0xFFBDBDC2)
+        fun col(k: RemoteKey) = if (lit == k) Color.White else Color(0xFFBDBDC2)
         @Composable fun arrow(k: RemoteKey, ico: Ico, m: Modifier) {
             val a = near(k)
             if (a > 0.02f) LineIcon(ico, col(k), cs, m.graphicsLayer { alpha = a }, stroke = 2.2f)

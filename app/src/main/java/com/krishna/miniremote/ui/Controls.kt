@@ -122,7 +122,7 @@ fun KeyButton(
         contentAlignment = Alignment.Center,
     ) {
         // Hide icons/text from TalkBack; the button's own label speaks for them.
-        Box(Modifier.clearAndSetSemantics {}, contentAlignment = Alignment.Center) { content(if (down) accent else restColor, down) }
+        Box(Modifier.clearAndSetSemantics {}, contentAlignment = Alignment.Center) { content(if (down) Color.White else restColor, down) }
     }
 }
 
@@ -142,7 +142,7 @@ fun VolumePill(
     Row(modifier.softFace(ROCKER).clip(androidx.compose.foundation.shape.CircleShape), verticalAlignment = Alignment.CenterVertically) {
         PillSegment("Volume down", accent, first = true, repeat = true, onPress = onDown) { LineIcon(Ico.MINUS, it, bdp(48f), stroke = 1.9f) }
         PillSegment("Mute", accent, state = if (muted) "Muted" else null, onPress = onMute) {
-            LineIcon(if (muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, if (muted) accent else it, bdp(44f), stroke = 1.9f)
+            LineIcon(if (muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, it, bdp(44f), stroke = 1.9f)
         }
         PillSegment("Volume up", accent, last = true, repeat = true, onPress = onUp) { LineIcon(Ico.PLUS, it, bdp(48f), stroke = 1.9f) }
     }
@@ -193,7 +193,7 @@ private fun RowScope.PillSegment(
             .pressInput(repeat, scope, { down = it; if (it) scope.ripple(rip) }, onPress),
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.clearAndSetSemantics {}) { content(if (down) accent else T.Ink) }
+        Box(Modifier.clearAndSetSemantics {}) { content(if (down) Color.White else T.Ink) }
     }
 }
 
@@ -242,7 +242,7 @@ private fun ColumnScope.RockerSeg(label: String, accent: Color, onPress: () -> U
             .pressInput(true, scope, { down = it; if (it) scope.ripple(rip) }, onPress),
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.clearAndSetSemantics {}) { content(if (down) accent else T.Ink) }
+        Box(Modifier.clearAndSetSemantics {}) { content(if (down) Color.White else T.Ink) }
     }
 }
 

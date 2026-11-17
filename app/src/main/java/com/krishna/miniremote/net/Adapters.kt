@@ -42,6 +42,11 @@ interface RemoteAdapter {
         get() = null
         set(_) {}
 
+    /** Called when an open connection breaks by itself (not after [close]). */
+    var onDropped: (() -> Unit)?
+        get() = null
+        set(_) {}
+
     /** Asks the TV for its volume; null when this TV can't tell. */
     suspend fun readVolume(): TvVolume? = null
 
@@ -215,6 +220,9 @@ class SamsungAdapter(
         TvVolume(v, 100, m == "1" || m.equals("true", true))
     }
 
+    override var onDropped: (() -> Unit)? = null
+    @Volatile private var closing = false
+
     /** Waiting for the TV's answer to "which apps are installed". */
     @Volatile private var appsReply: CompletableDeferred<JSONArray>? = null
 
@@ -239,7 +247,11 @@ class SamsungAdapter(
                 }
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                if (ready.isCompleted && !closing && ws === webSocket) { ws = null; onDropped?.invoke() }
                 ready.completeExceptionally(t)
+            }
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                if (ready.isCompleted && !closing && ws === webSocket) { ws = null; onDropped?.invoke() }
             }
         })
         // The TV may show an "Allow" prompt the first time, so wait longer.
@@ -295,7 +307,7 @@ class SamsungAdapter(
     // KEY_VOICE starts Bixby listening rather than a search box, so don't press it here.
     override suspend fun openSearch() {}
 
-    override fun close() { ws?.close(1000, null); ws = null }
+    override fun close() { closing = true; ws?.close(1000, null); ws = null; closing = false }
 }
 
 /* --------------------------------------------------------------- LG (webOS) */
@@ -329,6 +341,8 @@ class LgAdapter(
     )
 
     override var onVolume: ((TvVolume) -> Unit)? = null
+    override var onDropped: (() -> Unit)? = null
+    @Volatile private var closing = false
 
     private fun parseVolume(p: JSONObject?): TvVolume? {
         if (p == null) return null
@@ -356,7 +370,11 @@ class LgAdapter(
             pending.remove(j.optString("id"))?.complete(j)
         }
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            if (registered.isCompleted && !closing && ws === webSocket) { ws = null; pointer = null; onDropped?.invoke() }
             registered.completeExceptionally(t)
+        }
+        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            if (registered.isCompleted && !closing && ws === webSocket) { ws = null; pointer = null; onDropped?.invoke() }
         }
     }
 
@@ -494,8 +512,10 @@ class LgAdapter(
     }
 
     override fun close() {
+        closing = true
         pointer?.close(1000, null); pointer = null
         ws?.close(1000, null); ws = null
         pending.clear()
+        closing = false
     }
 }

@@ -64,13 +64,14 @@ internal fun TwoFingerHint(key: RemoteKey?, accent: androidx.compose.ui.graphics
             // Fingers down, no step yet: show both directions.
             androidx.compose.material3.Text("↕ Volume   ↔ Channel", color = T.Ink, fontSize = text)
         } else {
+            // What the slide does, not where it goes: louder / quieter speaker, + / − channel.
             val (ico, word) = when (key) {
-                RemoteKey.VOL_UP -> Ico.UP to "Volume +"
-                RemoteKey.VOL_DOWN -> Ico.DOWN to "Volume −"
-                RemoteKey.CH_UP -> Ico.RIGHT to "Channel +"
-                else -> Ico.LEFT to "Channel −"
+                RemoteKey.VOL_UP -> Ico.SPEAKER_UP to "Vol"
+                RemoteKey.VOL_DOWN -> Ico.SPEAKER_DOWN to "Vol"
+                RemoteKey.CH_UP -> Ico.PLUS to "Channel"
+                else -> Ico.MINUS to "Channel"
             }
-            LineIcon(ico, accent, icon, stroke = 2.4f)
+            LineIcon(ico, androidx.compose.ui.graphics.Color.White, icon, stroke = 2.2f)
             androidx.compose.material3.Text(word, color = T.Ink, fontSize = text,
                 fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
         }

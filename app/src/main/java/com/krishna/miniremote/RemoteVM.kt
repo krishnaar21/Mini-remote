@@ -24,6 +24,7 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 class RemoteVM(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
@@ -195,9 +196,16 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 try { a.send(k); txCount++ } catch (e: TimeoutCancellationException) {
                     feel.fire(Feel.ERROR); say("The TV didn't answer")
                 } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                    feel.fire(Feel.ERROR)
-                    say(if (e is Unsupported) e.message ?: "Not supported" else "Lost connection")
-                    if (e !is Unsupported) { link = Link.ERROR }
+                    if (e is Unsupported) { feel.fire(Feel.ERROR); say(e.message ?: "Not supported") }
+                    else active?.let { d ->
+                        // The socket died under us: reconnect quietly, then send this key again.
+                        adapter = null; redials = 0
+                        connect(d, quiet = true)
+                        val ok = withTimeoutOrNull(12_000) { while (link != Link.READY) delay(100); true }
+                        val b = adapter
+                        if (ok == true && b != null) runCatching { b.send(k); txCount++ }
+                        else { feel.fire(Feel.ERROR); say("Lost connection") }
+                    }
                 }
             }
         }
@@ -303,7 +311,23 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         toastJob = viewModelScope.launch { delay(1100L + 45L * t.length.coerceAtMost(80)); toast = null; toastKey = null }
     }
 
-    fun connect(d: Device) {
+    private var redials = 0
+
+    /** The link broke by itself: reconnect quietly (a few tries, waiting longer each time). */
+    private fun dropped(d: Device, a: com.krishna.miniremote.net.RemoteAdapter) {
+        viewModelScope.launch {
+            if (adapter !== a || activeId != d.id) return@launch
+            adapter = null
+            if (redials >= 4) { link = Link.ERROR; say("Lost connection to ${d.name}"); return@launch }
+            delay(listOf(300L, 1500L, 4000L, 8000L)[redials])
+            redials++
+            if (activeId == d.id && adapter == null) connect(d, quiet = true)
+        }
+    }
+
+    fun connect(d: Device) = connect(d, quiet = false)
+
+    private fun connect(d: Device, quiet: Boolean) {
         if (d.id != appsFor) { tvApps = emptyList(); appsFor = null }
         if (d.id != nowFor) { nowOn = null; watchChoice = null; nowFor = d.id }
         connectJob?.cancel()
@@ -319,11 +343,13 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 )
                 tvVolume = null
                 a.onVolume = { v -> viewModelScope.launch { tvVolume = v; muted = v.muted } }
+                a.onDropped = { dropped(d, a) }
                 a.connect()
                 adapter = a
                 refreshVolume(0)
                 link = Link.READY
-                feel.fire(Feel.SUCCESS)
+                redials = 0
+                if (!quiet) feel.fire(Feel.SUCCESS)
             } catch (e: CancellationException) {
                 // A timeout inside connect is a failure to show, not this job being cancelled.
                 if (e !is TimeoutCancellationException) throw e
@@ -333,6 +359,10 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 say(msg)
                 feel.fire(Feel.ERROR)
             } catch (e: Exception) {
+                if (quiet && redials < 4 && !e.isCertChanged() && e !is UserFacing) {
+                    delay(listOf(300L, 1500L, 4000L, 8000L)[redials]); redials++
+                    if (activeId == d.id) { connect(d, quiet = true); return@launch }
+                }
                 link = Link.ERROR
                 val msg = when {
                     e is UserFacing -> e.message ?: "Not supported"

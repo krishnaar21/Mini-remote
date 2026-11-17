@@ -217,7 +217,7 @@ fun Clickpad(
             val cs = 76f * u
             val e = 52f * u
             fun chev(dir: RemoteKey, ico: Ico, x: Float, y: Float) {
-                val col = if (litDir == dir) accent else T.Dim
+                val col = if (litDir == dir) Color.White else T.Dim
                 translate(x, y) {
                     scale(cs / 24f, cs / 24f, pivot = Offset.Zero) {
                         drawPath(ico.path, col, style = Stroke(2.3f, cap = StrokeCap.Round, join = StrokeJoin.Round))
@@ -260,7 +260,7 @@ fun Clickpad(
             if (twoMode) {
                 TwoFingerHint(twoKey, accent, bdp(64f), bsp(24f))
             } else if (toast == null) {
-                Text("OK", Modifier.clearAndSetSemantics {}, color = if (wellDown) accent else Color(0xFFA1A1A6),
+                Text("OK", Modifier.clearAndSetSemantics {}, color = if (wellDown) Color.White else Color(0xFFA1A1A6),
                     fontSize = bsp(40f), fontWeight = FontWeight.SemiBold, letterSpacing = bsp(40f * 0.06f))
             } else {
                 // .toast: accent icon (84px) over the key name, 500 28px #d4d4d9; longer messages wrap.
@@ -271,7 +271,7 @@ fun Clickpad(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(bdp(8f)),
                 ) {
-                    if (toastIcon != null) LineIcon(toastIcon, accent, bdp(56f), stroke = 2f)
+                    if (toastIcon != null) LineIcon(toastIcon, Color.White, bdp(56f), stroke = 2f)
                     Text(toast, color = Color(0xFFD4D4D9), fontSize = bsp(23f), fontWeight = FontWeight.Medium,
                         lineHeight = bsp(29f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }

@@ -348,7 +348,7 @@ internal fun TvIllustration(accent: Color) {
         Box(Modifier.size(150.dp).clip(CircleShape).background(accent.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
             Box(Modifier.size(112.dp).clip(CircleShape).background(accent.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    LineIcon(Ico.WIFI, accent, 26.dp, stroke = 2f)
+                    LineIcon(Ico.WIFI, T.Ink, 26.dp, stroke = 2f)
                     LineIcon(Ico.TV, T.Ink, 46.dp, stroke = 1.6f)
                 }
             }
