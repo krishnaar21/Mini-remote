@@ -571,11 +571,11 @@ internal fun Modifier.matchParentSizeCompat(): Modifier = this.fillMaxWidth().he
 /* ---------------------------------------------------------------- settings */
 
 @Composable
-internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: () -> Unit) {
+internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?) {
     val s = vm.settings
     SectionTitle("Remote")
     SegRow("Home opens with", listOf("dial" to "Dial", "trackpad" to "Trackpad"), s.controlStyle) { vm.update(s.copy(controlStyle = it)) }
-    Hint("Swipe beside the dial or trackpad on Home, or on its switcher, to change it for now. This picks the one Home always starts with.", top = 6)
+    Hint("Swipe left or right beside the control on Home to change it for now. This picks the one Home always starts with.", top = 6)
 
     SectionTitle("Accent colour")
     Row(Modifier.selectableGroup().padding(top = 8.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -620,6 +620,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: () -> Unit) {
     ToggleRow("Gyroscope lighting", "Highlights shift as you tilt the phone", s.gyro) { vm.update(s.copy(gyro = it)) }
     ToggleRow("Keep screen on", "While the remote is open", s.keepAwake) { vm.update(s.copy(keepAwake = it)) }
 
+    if (manage != null) {
     SectionTitle("Devices")
     Row(
         Modifier.fillMaxWidth().heightIn(min = 68.dp).clickable(role = Role.Button, onClick = manage).padding(vertical = 16.dp, horizontal = 2.dp),
@@ -632,6 +633,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: () -> Unit) {
         Chevron()
     }
     Divider()
+    }
     SectionTitle("Updates")
     ToggleRow("Automatic updates", "Download new builds in the background, then ask to install", s.autoUpdate) {
         vm.update(s.copy(autoUpdate = it)); if (it) vm.checkForUpdate()

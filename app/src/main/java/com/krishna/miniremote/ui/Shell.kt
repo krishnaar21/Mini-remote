@@ -63,11 +63,11 @@ import kotlin.random.Random
 
 /** The four places in the floating pill at the bottom. */
 enum class Tab(val label: String, val ico: Ico) {
-    HOME("Home", Ico.HOME), CHANNELS("Channels", Ico.GRID), SETTINGS("Settings", Ico.GEAR), PROFILE("Profile", Ico.USER)
+    HOME("Home", Ico.HOME), CHANNELS("Channels", Ico.GRID), PROFILE("Profile and settings", Ico.USER)
 }
 
 /** Height of the floating tab pill; screens leave this much room (plus a gap) at the bottom. */
-val NAV_H = 64.dp
+val NAV_H = 58.dp
 
 /** Raised capsule the tab pill and the control switcher sit on. */
 val NAV_FACE = Face(listOf(Color(0xFF303033), Color(0xFF1E1E21)), listOf(
@@ -121,10 +121,8 @@ fun AppShell(vm: RemoteVM) {
                                 vm, accent, deck, onDeck = { deck = it },
                                 openDevices = { sheet = Page.Devices },
                                 openKeys = { keys = false }, openSearch = { keys = true },
-                                openApps = { tab = Tab.CHANNELS },
                             )
                             Tab.CHANNELS -> ChannelsScreen(vm, accent, openDevices = { sheet = Page.Devices })
-                            Tab.SETTINGS -> SettingsScreen(vm, accent, manage = { sheet = Page.Devices })
                             Tab.PROFILE -> ProfileScreen(vm, accent, open = { sheet = it })
                         }
                     }
@@ -151,28 +149,26 @@ fun AppShell(vm: RemoteVM) {
     }
 }
 
-/** One floating, fully round pill: icon over label, the current tab sits in a recessed well. */
+/** One floating, fully round pill of icons; the current tab sits in a recessed well. */
 @Composable
 fun NavPill(tab: Tab, accent: Color, initial: String, modifier: Modifier = Modifier, onPick: (Tab) -> Unit) {
     Row(
         modifier.height(NAV_H).softFace(NAV_FACE, dpUnits = true).padding(6.dp).selectableGroup(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Tab.entries.forEach { t ->
             val sel = t == tab
-            Column(
-                Modifier.width(74.dp).fillMaxHeight()
+            Box(
+                Modifier.width(66.dp).fillMaxHeight()
                     .then(if (sel) Modifier.softFace(HOLLOW, sheen = false, dpUnits = true) else Modifier)
                     .clip(CircleShape)
-                    .selectable(sel, role = Role.Tab) { onPick(t) },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
+                    .selectable(sel, role = Role.Tab) { onPick(t) }
+                    .semantics { contentDescription = t.label },
+                contentAlignment = Alignment.Center,
             ) {
-                if (t == Tab.PROFILE) Avatar(initial, accent, 22.dp, dim = !sel)
-                else LineIcon(t.ico, if (sel) accent else T.Dim, 21.dp)
-                Text(t.label, color = if (sel) T.Ink else T.Dim, fontSize = 10.5.sp, fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(top = 3.dp))
+                if (t == Tab.PROFILE) Avatar(initial, accent, 26.dp, dim = !sel)
+                else LineIcon(t.ico, if (sel) accent else T.Dim, 23.dp)
             }
         }
     }

@@ -30,32 +30,18 @@ import com.krishna.miniremote.Link
 import com.krishna.miniremote.RemoteVM
 import com.krishna.miniremote.ShortcutKind
 
-/** Settings as a full page (same controls the sheet used to hold). */
-@Composable
-fun SettingsScreen(vm: RemoteVM, accent: Color, manage: () -> Unit) {
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp).padding(bottom = NAV_H + 40.dp),
-    ) {
-        PageTitle("Settings")
-        SettingsPage(vm, accent, manage)
-    }
-}
-
-/** Who's using the remote, their TVs, and the app's version. */
+/** Profile and settings on one page: who you are, your TVs, then every setting. */
 @Composable
 fun ProfileScreen(vm: RemoteVM, accent: Color, open: (Page) -> Unit) {
     val s = vm.settings
     var name by remember(s.profileName) { mutableStateOf(s.profileName) }
     fun save() { vm.update(s.copy(profileName = name.trim())); vm.say("Saved") }
-    val ctx = LocalContext.current
-    val version = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "dev" }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp).padding(bottom = NAV_H + 40.dp),
     ) {
-        PageTitle("Profile")
+        PageTitle("Profile & settings")
         Column(
             Modifier.fillMaxWidth().softFace(CARD, corner = 24.dp, dpUnits = true).padding(vertical = 24.dp, horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -98,9 +84,7 @@ fun ProfileScreen(vm: RemoteVM, accent: Color, open: (Page) -> Unit) {
         }
         Btn("Add a TV") { open(if (vm.localSeen) Page.Scan else Page.Local) }
 
-        SectionTitle("About")
-        Hint("Mini Remote talks only to TVs on your home network. No account and no tracking; pairing keys stay on this phone.", top = 4)
-        Text("Version $version", color = Muted, fontSize = 12.5.sp, fontFamily = Mono, modifier = Modifier.padding(top = 10.dp))
+        SettingsPage(vm, accent, manage = null)
     }
 }
 
