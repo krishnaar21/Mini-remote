@@ -127,6 +127,7 @@ sealed interface Page {
     data object Settings : Page
     data object Licenses : Page
     data object Privacy : Page
+    data object Gestures : Page
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -180,13 +181,17 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
                     Header("Privacy & data", onClose, back = ::back)
                     Body { PrivacyPage(vm) }
                 }
+                Page.Gestures -> {
+                    Header("Gestures", onClose, back = ::back)
+                    Body { GesturesPage(accent) }
+                }
                 Page.Licenses -> {
                     Header("Licences", onClose, back = ::back)
                     Body { LicensesPage() }
                 }
                 Page.Settings -> {
                     Header("Settings", onClose, back = if (canBack) ::back else null)
-                    Body { SettingsPage(vm, accent, manage = null, openLicenses = { go(Page.Licenses) }, openPrivacy = { go(Page.Privacy) }) }
+                    Body { SettingsPage(vm, accent, manage = null, openLicenses = { go(Page.Licenses) }, openPrivacy = { go(Page.Privacy) }, openGestures = { go(Page.Gestures) }) }
                 }
             }
         }
@@ -641,7 +646,7 @@ internal fun Modifier.matchParentSizeCompat(): Modifier = this.fillMaxWidth().he
 /* ---------------------------------------------------------------- settings */
 
 @Composable
-internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, openLicenses: (() -> Unit)? = null, openPrivacy: (() -> Unit)? = null) {
+internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, openLicenses: (() -> Unit)? = null, openPrivacy: (() -> Unit)? = null, openGestures: (() -> Unit)? = null) {
     val s = vm.settings
     SectionTitle("Remote")
     Group {
@@ -649,7 +654,20 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
     SegRow("Control", listOf("dial" to "Dial", "trackpad" to "Trackpad"), s.controlStyle) { vm.update(s.copy(controlStyle = it)) }
     ToggleRow("Volume keys", "Phone keys change TV volume", s.volumeKeys, last = true) { vm.update(s.copy(volumeKeys = it)) }
     }
-    Hint("Two fingers: volume ↕, channels ↔. Double-tap OK: mute. Hold OK: voice.", top = 8)
+    if (openGestures != null) {
+        Group {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable(role = Role.Button, onClick = openGestures).padding(vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Gestures", color = T.Ink, fontSize = 15.sp)
+                    Text("Swipes and taps, with demos", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
+                }
+                Chevron()
+            }
+        }
+    }
 
     SectionTitle("Accent colour")
     Group {

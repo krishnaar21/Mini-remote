@@ -213,7 +213,7 @@ fun HomeScreen(
     }
     val padOnly = if (deck == Deck.NUMPAD) (if (vm.settings.controlStyle == "trackpad") Deck.TRACKPAD else Deck.DIAL) else deck
 
-    Column(Modifier.fillMaxSize().then(if (layout == HomeLayout.CLASSIC) swipe else Modifier), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
       Column(Modifier.weight(1f).padding(horizontal = 16.dp).padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         // Top, as on the Apple TV Remote: mute · TV picker · power, inset from the screen edges.
         Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 20.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -229,25 +229,6 @@ fun HomeScreen(
         }
 
         when (layout) {
-            HomeLayout.CLASSIC -> padArea(deck, Modifier.weight(1f).fillMaxWidth().padding(vertical = 14.dp).then(a11y))
-
-            HomeLayout.RING -> {
-                ringArea(Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp).then(a11y))
-                FourKeys(vm, accent, openKeys, 58.dp, 18.dp)
-                Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                    KeyButton(accent, "Channel down", Modifier.size(58.dp), repeat = true, pressedScale = 1f, onPress = { vm.press(RemoteKey.CH_DOWN) }) { c, _ ->
-                        Text("CH −", color = c, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    }
-                    KeyButton(accent, "Number pad", Modifier.size(58.dp), state = if (numpad) "Showing" else null, pressedScale = 1f,
-                        restColor = if (numpad) accent else T.Ink, onPress = onNumpad) { c, _ ->
-                        Text("123", color = c, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                    }
-                    KeyButton(accent, "Channel up", Modifier.size(58.dp), repeat = true, pressedScale = 1f, onPress = { vm.press(RemoteKey.CH_UP) }) { c, _ ->
-                        Text("CH +", color = c, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    }
-                }
-            }
-
             HomeLayout.CARDS -> {
                 val cards = androidx.compose.foundation.pager.rememberPagerState { 3 }
                 androidx.compose.foundation.pager.HorizontalPager(
@@ -275,74 +256,9 @@ fun HomeScreen(
                 Box(Modifier.padding(top = 10.dp)) { KeyRows(vm, accent, numpad, onNumpad, openKeys) }
             }
 
-            HomeLayout.SLIDERS -> {
-                padArea(deck, Modifier.weight(1f).fillMaxWidth().padding(vertical = 12.dp).then(a11y))
-                FourKeys(vm, accent, openKeys, 58.dp, 18.dp)
-                Column(Modifier.padding(top = 20.dp).width(320.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    DragBar("Volume", accent, Modifier.fillMaxWidth(), "Volume up", "Volume down",
-                        level = vm.tvVolume?.let { it.level.toFloat() / it.max }, value = vm.tvVolume?.let { if (it.muted) "Muted" else "${it.level}" }) { up -> vm.scrubTick(if (up) RemoteKey.VOL_UP else RemoteKey.VOL_DOWN) }
-                    DragBar("Channel", accent, Modifier.fillMaxWidth(), "Channel up", "Channel down") { up -> vm.scrubTick(if (up) RemoteKey.CH_UP else RemoteKey.CH_DOWN) }
-                }
-            }
         }
       }
-        when (layout) {
-            HomeLayout.CLASSIC -> BottomPanel(vm, accent, tray, numpad, onNumpad, openKeys, setTray)
-            else -> Spacer(Modifier.height(NAV_H + 28.dp))
-        }
-    }
-}
-
-/**
- * The bottom of the remote, full width. Collapsed: a small chevron and the four keys
- * (Back, Home, Play / pause, Search). Swipe up (or tap the chevron) and it grows into a
- * sheet with volume, channels and the number pad key under those four. Swipe down to fold.
- */
-@Composable
-private fun BottomPanel(
-    vm: RemoteVM, accent: Color, open: Boolean, numpad: Boolean,
-    onNumpad: () -> Unit, openKeys: () -> Unit, onTray: (Boolean) -> Unit,
-) {
-    val set by rememberUpdatedState(onTray)
-    Column(
-        Modifier.fillMaxWidth()
-            .background(if (open) M.Container else Color.Transparent, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-            .pointerInput(Unit) {
-                var total = 0f
-                detectVerticalDragGestures(onDragStart = { total = 0f }, onDragEnd = {
-                    if (total < -24.dp.toPx()) set(true) else if (total > 24.dp.toPx()) set(false)
-                }) { c, dy -> c.consume(); total += dy }
-            }
-            .padding(start = 16.dp, end = 16.dp, top = if (open) 6.dp else 0.dp, bottom = if (open) NAV_H + 26.dp else NAV_H + 40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            Modifier.padding(bottom = 12.dp).size(72.dp, 30.dp).clip(CircleShape)
-                .clickable(onClickLabel = if (open) "hide volume and channels" else "show volume and channels", role = Role.Button) { set(!open) },
-            contentAlignment = Alignment.Center,
-        ) { LineIcon(if (open) Ico.DOWN else Ico.UP, T.Dim, 22.dp, stroke = 2.4f) }
-        FourKeys(vm, accent, openKeys)
-        androidx.compose.animation.AnimatedVisibility(open, enter = androidx.compose.animation.expandVertically() + fadeIn(), exit = androidx.compose.animation.shrinkVertically() + fadeOut()) {
-            // Same width as the four keys; each row is a pill plus one round key, like the keys above.
-            Column(Modifier.padding(top = 26.dp, bottom = 6.dp).width(308.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Row(Modifier.fillMaxWidth().height(56.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    ChannelPill(accent, Modifier.weight(1f).fillMaxHeight(), word = "VOL", downLabel = "Volume down", upLabel = "Volume up",
-                        onDown = { vm.press(RemoteKey.VOL_DOWN, quiet = true) }, onUp = { vm.press(RemoteKey.VOL_UP, quiet = true) })
-                    KeyButton(accent, "Mute", Modifier.size(56.dp), state = if (vm.muted) "Muted" else null, pressedScale = 1f,
-                        onPress = { vm.press(RemoteKey.MUTE) }) { c, _ ->
-                        LineIcon(if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, if (vm.muted) accent else c, 20.dp)
-                    }
-                }
-                Row(Modifier.fillMaxWidth().height(56.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    ChannelPill(accent, Modifier.weight(1f).fillMaxHeight(),
-                        onDown = { vm.press(RemoteKey.CH_DOWN) }, onUp = { vm.press(RemoteKey.CH_UP) })
-                    KeyButton(accent, "Number pad", Modifier.size(56.dp), state = if (numpad) "Showing" else null, pressedScale = 1f,
-                        restColor = if (numpad) accent else T.Ink, onPress = onNumpad) { c, _ ->
-                        Text("123", color = c, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    }
-                }
-            }
-        }
+        Spacer(Modifier.height(NAV_H + 28.dp))
     }
 }
 

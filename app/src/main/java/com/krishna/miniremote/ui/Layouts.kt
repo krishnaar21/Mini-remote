@@ -63,12 +63,9 @@ import kotlin.math.atan2
 
 /** The Home layouts you can pick in Settings. */
 enum class HomeLayout(val key: String, val label: String, val about: String) {
-    CLASSIC("classic", "Swipe", "Swipe up under the keys for volume and channels."),
-    RING("ring", "Ring", "Turn your finger around the ring for volume."),
-    CARDS("cards", "Cards", "Swipe the dots for the volume, channel and number cards."),
     STRIP("strip", "Black", "Black screen, volume ring, two rows of keys."),
-    SLIDERS("sliders", "Sliders", "Drag along the volume and channel bars.");
-    companion object { fun of(k: String) = entries.firstOrNull { it.key == k } ?: RING }
+    CARDS("cards", "Cards", "Swipe the dots for the volume, channel and number cards.");
+    companion object { fun of(k: String) = entries.firstOrNull { it.key == k } ?: STRIP }
 }
 
 /** Width of the volume ring around the dial. */
@@ -182,69 +179,6 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
             StripKey(accent, "Channel up", k, ico = Ico.PLUS, caption = "CH") { vm.press(RemoteKey.CH_UP) }
             StripKey(accent, "Number pad", k, active = numpad, word = "123", onClick = onNumpad)
             StripKey(accent, "Input", k, ico = Ico.INPUT) { vm.press(RemoteKey.INPUT) }
-        }
-    }
-}
-
-/**
- * A wide bar you drag along: each [stepDp] is one step (right = up). A tap on the left or
- * right half is one step down or up. Shows how many steps you've moved while dragging.
- */
-@Composable
-fun DragBar(label: String, accent: Color, modifier: Modifier = Modifier, upLabel: String, downLabel: String, level: Float? = null, value: String? = null, onStep: (up: Boolean) -> Unit) {
-    val shown by animateFloatAsState(level ?: 0f, tween(160), label = "lvl")
-    val step by rememberUpdatedState(onStep)
-    var x by remember { mutableStateOf<Float?>(null) }
-    var lastX by remember { mutableFloatStateOf(0f) }
-    var count by remember { mutableIntStateOf(0) }
-    val fill by animateFloatAsState(if (x != null) 1f else 0f, tween(if (x != null) 80 else 500), label = "bar")
-    LaunchedEffect(x, count) { if (x == null && count != 0) { kotlinx.coroutines.delay(1200); count = 0 } }
-    Box(
-        modifier.height(56.dp).clip(CircleShape).background(M.High)
-            .semantics {
-                contentDescription = label
-                customActions = listOf(
-                    CustomAccessibilityAction(upLabel) { step(true); true },
-                    CustomAccessibilityAction(downLabel) { step(false); true },
-                )
-            }
-            .pointerInput(Unit) {
-                val stepPx = 22.dp.toPx()
-                awaitEachGesture {
-                    val down = awaitFirstDown()
-                    down.consume()
-                    x = down.position.x; lastX = down.position.x; count = 0
-                    var acc = 0f
-                    var last = down.position.x
-                    var moved = false
-                    while (true) {
-                        val ev = awaitPointerEvent()
-                        val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
-                        if (!ch.pressed) { ch.consume(); break }
-                        val p = ch.position.x
-                        acc += p - last; last = p
-                        if (abs(p - down.position.x) > viewConfiguration.touchSlop) moved = true
-                        while (acc >= stepPx) { acc -= stepPx; count++; step(true) }
-                        while (acc <= -stepPx) { acc += stepPx; count--; step(false) }
-                        x = p.coerceIn(0f, size.width.toFloat()); lastX = x!!
-                        ch.consume()
-                    }
-                    if (!moved) { val up = down.position.x > size.width / 2f; count += if (up) 1 else -1; step(up) }
-                    x = null
-                }
-            }
-            .drawBehind {
-                if (level != null) drawRect(M.Highest, size = Size(size.width * shown, size.height))
-                else if (fill > 0f) drawRect(M.Highest.copy(alpha = fill), size = Size(lastX, size.height))
-            },
-    ) {
-        Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(label, color = T.Ink, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-            if (value != null) Text(value, color = if (x != null) accent else T.Ink, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            else if (count != 0) Text(if (count > 0) "+$count" else "−${-count}", color = accent, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            else Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                LineIcon(Ico.LEFT, T.Dim, 14.dp, stroke = 2.2f); LineIcon(Ico.RIGHT, T.Dim, 14.dp, stroke = 2.2f)
-            }
         }
     }
 }

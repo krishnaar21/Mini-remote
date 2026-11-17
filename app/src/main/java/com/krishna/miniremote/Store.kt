@@ -46,7 +46,7 @@ class Store(ctx: Context) {
             profileName = p.getString("profileName", d.profileName) ?: d.profileName,
             volumeKeys = p.getBoolean("volumeKeys", d.volumeKeys),
             logos = p.getBoolean("logos", d.logos),
-            layout = p.getString("layout", d.layout)?.takeIf { it in setOf("classic", "ring", "cards", "strip", "sliders") } ?: d.layout,
+            layout = p.getString("layout", d.layout)?.takeIf { it in setOf("cards", "strip") } ?: d.layout,
         )
     }
 

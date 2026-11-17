@@ -161,7 +161,7 @@ fun AppShell(vm: RemoteVM) {
                     }
                     // The dial shows messages in its well; everywhere else they float near the bottom.
                     val inWell = onRemote && deck == Deck.DIAL && !tray && layout != "cards"
-                    ToastChip(if (inWell) null else vm.toast, Modifier.align(Alignment.BottomCenter).padding(bottom = if (!onRemote) 56.dp else if (tray) 300.dp else if (layout == "sliders") 250.dp else 170.dp))
+                    ToastChip(if (inWell) null else vm.toast, Modifier.align(Alignment.BottomCenter).padding(bottom = if (!onRemote) 56.dp else if (tray) 300.dp else 170.dp))
                     when (val u = vm.update) {
                         is RemoteVM.Update.Downloading, is RemoteVM.Update.Ready, is RemoteVM.Update.Manual ->
                             Box(Modifier.align(Alignment.TopCenter).padding(top = 4.dp).height(32.dp)) {
