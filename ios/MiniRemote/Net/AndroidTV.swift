@@ -514,7 +514,9 @@ final class AndroidTvAdapter: RemoteAdapter {
     private func isLive(_ pkg: String) -> Bool {
         let p = pkg.lowercased()
         return p == "com.google.android.tv" || p == "com.android.tv" || p.hasSuffix(".tvinput") || p.contains("tvcenter") ||
-            p.contains("livetv") || p.contains("live_tv") || p.contains(".dtv") || p.contains("tvplayer") || p.contains(".tuner") || p.contains("channels")
+            p.contains("livetv") || p.contains("live_tv") || p.contains(".dtv") || p.contains("tvplayer") || p.contains(".tuner") || p.contains("channels") ||
+            // India's TV services on Android TV: Tata Play, Airtel Xstream, Dish TV / d2h (Watcho), JioTV, Sun Direct.
+            ["tatasky", "tataplay", "airtel", "dishtv", "d2h", "watcho", "jiotv", "jioplay", "sundirect"].contains { p.contains($0) }
     }
 
     func nowOn() async throws -> NowOn {

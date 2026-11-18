@@ -290,9 +290,11 @@ struct KeyPages: View {
         GlassEffectContainer(spacing: 14) {
             VStack(spacing: 14) {
                 HStack(spacing: 14) {
-                    k("chevron.left", "Back", .back, icon: 23)
-                    k("house", "Home", .home, icon: 22)
-                    k(vm.playing ? "pause.fill" : "play.fill", vm.playing ? "Pause" : "Play", .playPause)
+                    k("arrow.uturn.backward", "Back", .back, icon: 21)
+                    k("homekit", "Home", .home, icon: 22)
+                    // Live TV (a set-top box: Tata Play, Airtel, Dish TV…): Mute where Play / Pause would be.
+                    if vm.nowOn?.live == true { k(vm.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", vm.muted ? "Unmute" : "Mute", .mute, icon: 19) }
+                    else { k(vm.playing ? "pause.fill" : "play.fill", vm.playing ? "Pause" : "Play", .playPause) }
                     GlassKey(symbol: "magnifyingglass", label: "Search", size: KEY, icon: 22, enabled: vm.can(.home), onDisabled: { vm.explain(.home) }, action: openKeys)
                 }
                 HStack(spacing: 14) {
@@ -316,8 +318,8 @@ struct KeyPages: View {
         GlassEffectContainer(spacing: 14) {
             VStack(spacing: 14) {
                 HStack(spacing: 14) {
-                    k("backward.fill", "Rewind", .rewind, icon: 19)
-                    k("forward.fill", "Fast forward", .fastForward, icon: 19)
+                    k("gobackward.10", "Rewind", .rewind, icon: 21)
+                    k("goforward.10", "Fast forward", .fastForward, icon: 21)
                     k(vm.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", vm.muted ? "Unmute" : "Mute", .mute, icon: 19)
                     // Sleep: the minutes left while it counts down.
                     TimelineView(.periodic(from: .now, by: 15)) { t in
