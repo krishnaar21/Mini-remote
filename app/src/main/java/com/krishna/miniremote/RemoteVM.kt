@@ -310,8 +310,18 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         if (key == RemoteKey.VOL_UP) muted = false
         nudgeVolume(key)
         if (!quiet) say(if (key == RemoteKey.PLAY_PAUSE) (if (playing) "Play" else "Pause") else key.word, key)
+        // Android TV players hold a rewind / fast-forward in a seek preview until it's confirmed
+        // (they ignore Play / Pause meanwhile). Within 10 s of seeking, Play / Pause sends OK,
+        // which confirms the new position and plays from it.
+        val now = System.currentTimeMillis()
+        if (key == RemoteKey.REWIND || key == RemoteKey.FAST_FORWARD) seekAt = now
+        if (key == RemoteKey.PLAY_PAUSE && active?.brand == Brand.ANDROID_TV && now - seekAt < 10_000) {
+            seekAt = 0L; playing = true; queue.trySend(RemoteKey.OK); return
+        }
         queue.trySend(key)
     }
+
+    private var seekAt = 0L
 
     fun scrubTick(key: RemoteKey) { feel.fire(Feel.TICK); nudgeVolume(key); queue.trySend(key) }
 

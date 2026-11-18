@@ -224,13 +224,13 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
 }
 
 /**
- * Quick access cells, page by page: the first apps page holds seven apps and All apps, the
- * second eight more (fifteen in all). Empty places are faint rings; the first one shows a +.
+ * Quick access cells, page by page: eight apps on the first apps page, seven more and All apps
+ * (always the very last place) on the second: fifteen in all. Empty places are faint rings; the first one shows a +.
  * [part] is the page (0 or 1).
  */
 internal fun appCells(count: Int, part: Int): List<Int?> =
-    if (part == 0) (0 until 7).map { if (it < count) it else null } + listOf(-1)
-    else (7 until 15).map { if (it < count) it else null }
+    if (part == 0) (0 until 8).map { if (it < count) it else null }
+    else (8 until 15).map { if (it < count) it else null } + listOf(-1)
 
 /**
  * A page of quick access circles. Long-press an app and drag it to another place on the page

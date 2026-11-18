@@ -110,10 +110,11 @@ import kotlin.math.roundToInt
 
 /** Left-aligned sheet title with its line of explanation close under it. */
 @Composable
-internal fun SheetTitle(title: String, sub: String? = null, modifier: Modifier = Modifier) {
-    Column(modifier.padding(horizontal = 2.dp).semantics(mergeDescendants = true) { heading() }) {
-        Text(title, color = T.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-        sub?.let { Text(it, color = Muted, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 2.dp)) }
+internal fun SheetTitle(title: String, sub: String? = null, modifier: Modifier = Modifier, center: Boolean = false) {
+    Column(modifier.fillMaxWidth().padding(horizontal = 2.dp).semantics(mergeDescendants = true) { heading() },
+        horizontalAlignment = if (center) Alignment.CenterHorizontally else Alignment.Start) {
+        Text(title, color = T.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, textAlign = if (center) TextAlign.Center else TextAlign.Start)
+        sub?.let { Text(it, color = SubInk, fontSize = 13.sp, lineHeight = 16.sp, textAlign = if (center) TextAlign.Center else TextAlign.Start, modifier = Modifier.padding(top = 1.dp)) }
     }
 }
 
@@ -133,6 +134,15 @@ internal fun SetSheet(title: String, sub: String?, onClose: () -> Unit, content:
     }
 }
 
+/** Secondary text: quieter than the titles. */
+internal val SubInk = Color(0xFF8E8E93)
+
+/** A settings icon on its own rounded square, in the row's colour. */
+@Composable
+internal fun IconTile(ico: Ico, tint: Color) {
+    Box(Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(tint), contentAlignment = Alignment.Center) { LineIcon(ico, Color.White, 18.dp) }
+}
+
 /** A rounded group of rows. */
 @Composable
 internal fun SetCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
@@ -141,7 +151,7 @@ internal fun SetCard(modifier: Modifier = Modifier, content: @Composable ColumnS
 
 /** The thin line between rows, starting after the icon. */
 @Composable
-internal fun SetLine() = Box(Modifier.fillMaxWidth().padding(start = 56.dp).height(1.dp).background(Color.White.copy(alpha = 0.07f)))
+internal fun SetLine() = Box(Modifier.fillMaxWidth().padding(start = 62.dp).height(1.dp).background(Color.White.copy(alpha = 0.07f)))
 
 /** One row: icon, title (and a smaller line), what's set, and a chevron when it opens something. */
 @Composable
@@ -150,10 +160,10 @@ internal fun SetRow(ico: Ico, tint: Color, title: String, value: String? = null,
         Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable(role = Role.Button, onClick = onClick).padding(start = 16.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LineIcon(ico, tint, 22.dp)
-        Column(Modifier.weight(1f).padding(start = 18.dp)) {
-            Text(title, color = T.Ink, fontSize = 16.sp)
-            sub?.let { Text(it, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp)) }
+        IconTile(ico, tint)
+        Column(Modifier.weight(1f).padding(start = 14.dp)) {
+            Text(title, color = T.Ink, fontSize = 16.sp, lineHeight = 19.sp)
+            sub?.let { Text(it, color = SubInk, fontSize = 12.5.sp, lineHeight = 15.sp) }
         }
         value?.let { Text(it, color = Muted, fontSize = 14.sp, maxLines = 1, modifier = Modifier.padding(start = 8.dp, end = 6.dp)) }
         if (chevron) Chevron()
@@ -167,10 +177,10 @@ internal fun SetToggle(ico: Ico, tint: Color, title: String, sub: String?, check
         Modifier.fillMaxWidth().heightIn(min = 60.dp).toggleable(checked, role = Role.Switch, onValueChange = onChange).padding(start = 16.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LineIcon(ico, tint, 22.dp)
-        Column(Modifier.weight(1f).padding(start = 18.dp, end = 12.dp)) {
-            Text(title, color = T.Ink, fontSize = 16.sp)
-            sub?.let { Text(it, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp)) }
+        IconTile(ico, tint)
+        Column(Modifier.weight(1f).padding(start = 14.dp, end = 12.dp)) {
+            Text(title, color = T.Ink, fontSize = 16.sp, lineHeight = 19.sp)
+            sub?.let { Text(it, color = SubInk, fontSize = 12.5.sp, lineHeight = 15.sp) }
         }
         Toggle(checked)
     }
@@ -184,8 +194,8 @@ private fun Choice(label: String, sub: String?, sel: Boolean, accent: Color, onP
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(label, color = T.Ink, fontSize = 16.sp)
-            sub?.let { Text(it, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp)) }
+            Text(label, color = T.Ink, fontSize = 16.sp, lineHeight = 19.sp)
+            sub?.let { Text(it, color = SubInk, fontSize = 12.5.sp, lineHeight = 15.sp) }
         }
         if (sel) LineIcon(Ico.CHECK, accent, 20.dp)
     }

@@ -180,20 +180,21 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
                     PairPage(vm, d, accent, onClose, back = ::back)
                 }
                 Page.Privacy -> {
-                    Header("Privacy & data", onClose, back = ::back)
+                    // From Settings: closing goes back to Settings, not out of it.
+                    Header("Privacy & data", ::back, back = ::back)
                     Body { PrivacyPage(vm) }
                 }
                 Page.Gestures -> {
-                    Header("Gestures", onClose, back = ::back)
+                    Header("Gestures", ::back, back = ::back)
                     Body { GesturesPage(accent) }
                 }
                 Page.Licenses -> {
-                    Header("Licences", onClose, back = ::back)
+                    Header("Licences", ::back, back = ::back)
                     Body { LicensesPage() }
                 }
                 Page.Settings -> {
                     Header("Settings", onClose, back = if (canBack) ::back else null)
-                    Body { SettingsPage(vm, accent, manage = null, openLicenses = { go(Page.Licenses) }, openPrivacy = { go(Page.Privacy) }, openGestures = { go(Page.Gestures) }) }
+                    Body(side = 12.dp) { SettingsPage(vm, accent, manage = null, openLicenses = { go(Page.Licenses) }, openPrivacy = { go(Page.Privacy) }, openGestures = { go(Page.Gestures) }) }
                 }
             }
         }
@@ -304,8 +305,8 @@ internal fun Modifier.pressable(
 }
 
 @Composable
-internal fun Body(content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp), content = content)
+internal fun Body(side: androidx.compose.ui.unit.Dp = 24.dp, content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = side).padding(bottom = 32.dp), content = content)
 }
 
 @Composable

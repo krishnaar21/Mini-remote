@@ -286,8 +286,8 @@ fun SleepSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
         shape = SheetShape, scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
-            SleepArt(accent, Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp).height(120.dp))
-            SheetTitle("Sleep timer", "The TV turns itself off when the time's up.")
+            SleepArt(accent, Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 20.dp).height(120.dp))
+            SheetTitle("Sleep timer", "The TV turns itself off when the time's up.", Modifier.padding(bottom = 12.dp), center = true)
             SleepCard(vm, accent, card = false)
         }
     }

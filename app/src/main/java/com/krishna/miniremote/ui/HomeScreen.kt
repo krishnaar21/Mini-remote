@@ -308,26 +308,31 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
     }
     Box(modifier.padding(end = 12.dp), contentAlignment = Alignment.CenterStart) {
         Row(
-            Modifier.heightIn(min = 44.dp).clip(CircleShape).background(M.High)
+            Modifier.heightIn(min = 54.dp).widthIn(min = 180.dp).clip(CircleShape).background(M.High)
                 .clickable(onClickLabel = "choose a TV", role = Role.Button, onClick = openDevices)
                 .semantics(mergeDescendants = true) {
                     contentDescription = d?.let { "TV: ${it.name}" } ?: "Choose a TV"
                     if (d != null) stateDescription = linkWord(vm.link)
                 }
-                .padding(start = 16.dp, end = 12.dp),
+                .padding(start = 8.dp, end = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            dot?.let { Box(Modifier.size(7.dp).clip(CircleShape).background(it)) }
+            // A TV in a circle, with the connection colour as a small badge on its corner.
+            Box(Modifier.size(40.dp)) {
+                Box(Modifier.fillMaxSize().clip(CircleShape).background(Color.White.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) { LineIcon(Ico.TV, T.Ink, 20.dp) }
+                dot?.let { Box(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp).size(10.dp).clip(CircleShape).background(M.High).padding(1.5.dp).clip(CircleShape).background(it)) }
+            }
             // The TV's name, and what's on it underneath when the TV says (app, time played).
             val playing = nowLine(vm)
             Column(Modifier.weight(1f, fill = false)) {
-                Text(d?.let { shortName(it.name, it.brand.label) } ?: "Choose a TV", color = T.Ink, fontSize = if (playing != null) 14.sp else 15.sp,
-                    lineHeight = 17.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (playing != null) Text(playing, color = T.Dim, fontSize = 11.5.sp, lineHeight = 14.sp, maxLines = 1, softWrap = false,
+                Text(d?.let { shortName(it.name, it.brand.label) } ?: "Choose a TV", color = T.Ink, fontSize = if (playing != null) 15.sp else 16.sp,
+                    lineHeight = 18.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (playing != null) Text(playing, color = T.Dim, fontSize = 12.sp, lineHeight = 14.sp, maxLines = 1, softWrap = false,
                     modifier = Modifier.widthIn(max = 200.dp).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 1500)
                         .semantics { contentDescription = "On the TV: $playing" })
             }
+            Spacer(Modifier.weight(1f, fill = false))
             LineIcon(Ico.DOWN, T.Dim, 15.dp, stroke = 2.2f)
         }
     }
