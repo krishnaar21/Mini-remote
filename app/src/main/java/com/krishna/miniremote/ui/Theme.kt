@@ -38,7 +38,11 @@ object Palettes {
 }
 
 /** The palette in use (Settings › Appearance › Theme). Reading it recomposes on change. */
-object Look { var p by mutableStateOf(Palettes.DARK) }
+object Look {
+    var p by mutableStateOf(Palettes.DARK)
+    /** Depth (Settings › Appearance): keys, dial and trackpad raised with light and shadow instead of flat. */
+    var depth by mutableStateOf(false)
+}
 
 /** Text and surface colours, from the current palette. */
 object T {

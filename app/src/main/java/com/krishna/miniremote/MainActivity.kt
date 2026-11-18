@@ -92,6 +92,7 @@ class MainActivity : ComponentActivity() {
             // The theme: every colour in the app reads from it.
             val pal = com.krishna.miniremote.ui.Palettes.resolve(vm.settings.theme, androidx.compose.foundation.isSystemInDarkTheme())
             if (com.krishna.miniremote.ui.Look.p != pal) com.krishna.miniremote.ui.Look.p = pal
+            if (com.krishna.miniremote.ui.Look.depth != vm.settings.depth) com.krishna.miniremote.ui.Look.depth = vm.settings.depth
             androidx.compose.runtime.LaunchedEffect(pal) {
                 androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
                     isAppearanceLightStatusBars = pal.light; isAppearanceLightNavigationBars = pal.light

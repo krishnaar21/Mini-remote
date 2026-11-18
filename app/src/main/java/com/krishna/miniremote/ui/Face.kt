@@ -1,5 +1,9 @@
 package com.krishna.miniremote.ui
 
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import android.graphics.Bitmap
 import android.graphics.BlurMaskFilter
 import android.graphics.LinearGradient
@@ -119,8 +123,32 @@ fun Modifier.softFace(face: Face, sheen: Boolean = true, corner: Dp? = null, dpU
     val fill = flatColor(face)
     drawBehind {
         val r = cr ?: (min(size.width, size.height) / 2f)
-        drawRoundRect(fill, cornerRadius = CornerRadius(r))
+        if (Look.depth && sheen) depthShape(fill, r) else drawRoundRect(fill, cornerRadius = CornerRadius(r))
     }
+}
+
+/**
+ * A raised surface: a soft drop shadow under it, light from above (a gentle top-to-bottom
+ * gradient) and a thin highlight on its upper rim. [pressed] sinks it (smaller, closer shadow).
+ */
+fun DrawScope.depthShape(fill: Color, radius: Float, pressed: Boolean = false) {
+    val dark = !Look.p.light
+    drawIntoCanvas { c ->
+        val p = Paint().asFrameworkPaint().apply {
+            isAntiAlias = true
+            color = fill.toArgb()
+            setShadowLayer(if (pressed) 3.dp.toPx() else 12.dp.toPx(), 0f, if (pressed) 1.dp.toPx() else 6.dp.toPx(),
+                Color.Black.copy(alpha = if (dark) 0.65f else 0.22f).toArgb())
+        }
+        c.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height, radius, radius, p)
+    }
+    val top = androidx.compose.ui.graphics.lerp(fill, Color.White, if (pressed) 0.02f else if (dark) 0.10f else 0.35f)
+    val bottom = androidx.compose.ui.graphics.lerp(fill, Color.Black, if (pressed) 0.02f else if (dark) 0.18f else 0.06f)
+    drawRoundRect(Brush.verticalGradient(if (pressed) listOf(bottom, top) else listOf(top, bottom)), cornerRadius = CornerRadius(radius))
+    if (!pressed) drawRoundRect(
+        Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) 0.16f else 0.7f), Color.Transparent), endY = size.height * 0.45f),
+        cornerRadius = CornerRadius(radius), style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()),
+    )
 }
 
 /* ---- Sheet faces: the remote's charcoal soft-touch language at sheet scale (lengths in dp). ---- */

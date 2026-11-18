@@ -320,6 +320,9 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
         }
         "look" -> SetSheet("Appearance", "Theme, colour and the app's icon.", { open = null }) {
             SetCard {
+                SetToggle(Ico.DIAL, SetTint.grey, "Depth", "Raised keys, dial and trackpad, with light and shadow", s.depth) { vm.update(s.copy(depth = it)) }
+            }
+            SetCard {
                 Text("Theme", color = T.Ink, fontSize = 16.sp, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
                 Row(Modifier.fillMaxWidth().selectableGroup().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Palettes.all.forEach { p ->

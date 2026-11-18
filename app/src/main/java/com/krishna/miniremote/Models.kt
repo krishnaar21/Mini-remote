@@ -104,6 +104,8 @@ data class Settings(
     /** The welcome pages and the guided tour have been seen. */
     val onboarded: Boolean = false,
     val toured: Boolean = false,
+    /** Keys, dial and trackpad drawn raised (light and shadow) instead of flat. */
+    val depth: Boolean = false,
     /** Home layout: "strip" (Black) or "cards" (see ui.HomeLayout). */
     val layout: String = "strip",
     /** Where quick access apps live: "home" (a third page of circles) or "more" (top of the More sheet). */

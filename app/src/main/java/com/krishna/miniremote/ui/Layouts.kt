@@ -158,8 +158,10 @@ fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ic
     val pressed by src.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.94f else 1f, if (pressed) tween(70) else androidx.compose.animation.core.spring(0.45f, 700f), label = "press")
     Box(
-        Modifier.size(size).graphicsLayer { scaleX = scale; scaleY = scale; alpha = if (enabled) 1f else 0.32f }.clip(CircleShape)
-            .background(if (active || pressed) M.Container else T.Key)
+        Modifier.size(size).graphicsLayer { scaleX = scale; scaleY = scale; alpha = if (enabled) 1f else 0.32f }
+            .then(if (Look.depth) Modifier.drawBehind { depthShape(if (active || pressed) M.Container else M.High, this.size.minDimension / 2f, pressed) } else Modifier)
+            .clip(CircleShape)
+            .then(if (Look.depth) Modifier else Modifier.background(if (active || pressed) M.Container else T.Key))
             .clickable(src, androidx.compose.material3.ripple(color = Color.White), onClickLabel = label, role = Role.Button) { if (enabled) onClick() else onDisabled?.invoke() }
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
@@ -335,8 +337,10 @@ fun VoiceKey(vm: RemoteVM, size: Dp) {
     var down by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (down) 0.94f else 1f, tween(90), label = "voice")
     Box(
-        Modifier.size(size).graphicsLayer { scaleX = scale; scaleY = scale; alpha = if (vm.can(RemoteKey.HOME)) 1f else 0.32f }.clip(CircleShape)
-            .background(if (down || vm.listening) M.High else T.Key)
+        Modifier.size(size).graphicsLayer { scaleX = scale; scaleY = scale; alpha = if (vm.can(RemoteKey.HOME)) 1f else 0.32f }
+            .then(if (Look.depth) Modifier.drawBehind { depthShape(if (down || vm.listening) M.Container else M.High, this.size.minDimension / 2f, down) } else Modifier)
+            .clip(CircleShape)
+            .then(if (Look.depth) Modifier else Modifier.background(if (down || vm.listening) M.High else T.Key))
             .semantics {
                 contentDescription = "Voice assistant"
                 role = Role.Button

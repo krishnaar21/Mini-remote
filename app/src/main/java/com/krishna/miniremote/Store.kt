@@ -53,6 +53,7 @@ class Store(ctx: Context) {
             autoClose = p.getBoolean("autoClose", d.autoClose),
             onboarded = p.getBoolean("onboarded", d.onboarded),
             toured = p.getBoolean("toured", d.toured),
+            depth = p.getBoolean("depth", d.depth),
             layout = p.getString("layout", d.layout)?.takeIf { it in setOf("cards", "strip") } ?: d.layout,
             appsIn = p.getString("appsIn", d.appsIn)?.takeIf { it == "home" || it == "more" } ?: d.appsIn,
         )
@@ -66,7 +67,7 @@ class Store(ctx: Context) {
         .putBoolean("autoupdate", s.autoUpdate)
         .putString("control", s.controlStyle).putString("profileName", s.profileName).putString("profileEmail", s.profileEmail)
         .putBoolean("volumeKeys", s.volumeKeys).putBoolean("logos", s.logos).putString("layout", s.layout).putString("appsIn", s.appsIn)
-        .putBoolean("autoKeyboard", s.autoKeyboard).putBoolean("notifRemote", s.notifRemote).putBoolean("autoClose", s.autoClose).putBoolean("onboarded", s.onboarded).putBoolean("toured", s.toured).putString("theme", s.theme).apply()
+        .putBoolean("autoKeyboard", s.autoKeyboard).putBoolean("notifRemote", s.notifRemote).putBoolean("autoClose", s.autoClose).putBoolean("onboarded", s.onboarded).putBoolean("toured", s.toured).putBoolean("depth", s.depth).putString("theme", s.theme).apply()
 
     fun loadShortcuts(): List<Shortcut> = Shortcut.listFromJson(p.getString("shortcuts", null))
     fun saveShortcuts(l: List<Shortcut>) = p.edit().putString("shortcuts", Shortcut.listToJson(l)).apply()
