@@ -986,7 +986,7 @@ fun linkWord(l: Link) = when (l) { Link.READY -> "Connected"; Link.CONNECTING ->
  * the phone keyboard never covers it. The text box takes focus as soon as it opens.
  */
 @Composable
-fun KeyboardSheet(vm: RemoteVM, accent: Color, openSearch: Boolean = true, onClose: () -> Unit) {
+fun KeyboardSheet(vm: RemoteVM, accent: Color, openSearch: Boolean = true, startVoice: Boolean = false, onClose: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var text by remember { mutableStateOf("") }
     val shown = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
@@ -1012,7 +1012,7 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, openSearch: Boolean = true, onClo
     }
     BackHandler { onClose() }
     // Open the TV's search screen right away, then focus the box.
-    LaunchedEffect(Unit) { if (openSearch) vm.openTvSearch(); kotlinx.coroutines.delay(250); runCatching { focus.requestFocus() } }
+    LaunchedEffect(Unit) { if (openSearch) vm.openTvSearch(); kotlinx.coroutines.delay(250); if (startVoice) mic() else runCatching { focus.requestFocus() } }
     Box(Modifier.fillMaxSize()) {
         androidx.compose.animation.AnimatedVisibility(shown, enter = androidx.compose.animation.fadeIn()) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(0.55f)).pointerInput(Unit) { detectTapGestures { onClose() } })

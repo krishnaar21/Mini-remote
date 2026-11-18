@@ -118,6 +118,14 @@ fun AppShell(vm: RemoteVM) {
     var sheet by remember { mutableStateOf<Page?>(null) }
     var keys by remember { mutableStateOf(false) }
     var keysFromTv by remember { mutableStateOf(false) }
+    var keysVoice by remember { mutableStateOf(false) }
+    // Voice: ask for the microphone when it's needed, then start listening.
+    val askMic = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) vm.voiceStart() else vm.say("Microphone is off for Mini Remote. Turn it on in Android Settings › Apps › Mini Remote › Permissions.")
+    }
+    LaunchedEffect(vm.micAsk) { if (vm.micAsk > 0) askMic.launch(android.Manifest.permission.RECORD_AUDIO) }
+    // The TV didn't take the phone's voice: open Search in Voice mode (speech typed on the TV).
+    LaunchedEffect(vm.voiceTyping) { if (vm.voiceTyping > 0) { keysVoice = true; keysFromTv = false; keys = true } }
     var more by remember { mutableStateOf(false) }
     // The TV focused a text box (login, search): open the typing sheet, without pressing Search again.
     LaunchedEffect(vm.keyboardAsk) { if (vm.keyboardAsk > 0 && !keys) { keysFromTv = true; keys = true } }
@@ -167,7 +175,8 @@ fun AppShell(vm: RemoteVM) {
                         }
                     }
                     // The dial shows messages in its well; everywhere else they float near the bottom.
-                    val inWell = onRemote && deck == Deck.DIAL && !tray && layout != "cards"
+                    // Only quick key feedback sits in the dial; messages and errors go to the toast.
+                    val inWell = onRemote && deck == Deck.DIAL && !tray && layout != "cards" && vm.toastKey != null
                     ToastChip(if (inWell) null else vm.toast, Modifier.align(Alignment.BottomCenter).padding(bottom = if (!onRemote) 56.dp else if (tray) 300.dp else 170.dp))
                     when (val u = vm.update) {
                         is RemoteVM.Update.Downloading, is RemoteVM.Update.Ready, is RemoteVM.Update.Manual ->
@@ -184,7 +193,7 @@ fun AppShell(vm: RemoteVM) {
             }
         }
         sheet?.let { start -> RemoteSheet(vm, accent, start) { sheet = null } }
-        if (keys) KeyboardSheet(vm, accent, openSearch = !keysFromTv) { keys = false; keysFromTv = false }
+        if (keys) KeyboardSheet(vm, accent, openSearch = !keysFromTv && !keysVoice, startVoice = keysVoice) { keys = false; keysFromTv = false; keysVoice = false }
         if (more) MoreSheet(vm, accent) { more = false }
         if (sheet == null) vm.pairPrompt?.let { PairCodeDialog(vm, it, accent) }
     }

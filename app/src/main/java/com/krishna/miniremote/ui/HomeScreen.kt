@@ -159,7 +159,7 @@ fun HomeScreen(
         CompositionLocalProvider(LocalK provides s.value / 780f) {
             Clickpad(
                 size = s, accent = accent, stepDp = vm.settings.scrubStepDp,
-                toast = center ?: if (layout == HomeLayout.CARDS) null else vm.toast,
+                toast = center ?: if (layout == HomeLayout.CARDS || vm.toastKey == null) null else vm.toast,
                 toastIcon = if (center != null) (if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER) else vm.toastKey?.let { keyIcon(it, vm.muted, vm.playing) },
                 onKey = onKey, onTick = onTick, onVoice = voice,
                 offline = offline, onOffline = offlineTap,

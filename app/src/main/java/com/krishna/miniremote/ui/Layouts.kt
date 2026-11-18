@@ -187,8 +187,8 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
                 StripKey(accent, "Channel up", k, ico = Ico.PLUS, caption = "CH", enabled = vm.can(RemoteKey.CH_UP)) { vm.press(RemoteKey.CH_UP) }
                 StripKey(accent, "Number pad", k, active = numpad, word = "123", onClick = onNumpad)
             } else {
-                StripKey(accent, "Volume down", k, ico = Ico.MINUS, caption = "VOL") { vm.press(RemoteKey.VOL_DOWN, quiet = true) }
-                StripKey(accent, "Volume up", k, ico = Ico.PLUS, caption = "VOL") { vm.press(RemoteKey.VOL_UP, quiet = true) }
+                StripKey(accent, "Volume down", k, ico = Ico.SPEAKER_DOWN) { vm.press(RemoteKey.VOL_DOWN, quiet = true) }
+                StripKey(accent, "Volume up", k, ico = Ico.SPEAKER_UP) { vm.press(RemoteKey.VOL_UP, quiet = true) }
                 VoiceKey(vm, k)
             }
             StripKey(accent, "More: keys, inputs, sleep timer", k, ico = Ico.MORE, onClick = openMore)
@@ -206,7 +206,7 @@ fun VoiceKey(vm: RemoteVM, size: Dp) {
     val scale by animateFloatAsState(if (down) 0.94f else 1f, tween(90), label = "voice")
     Box(
         Modifier.size(size).graphicsLayer { scaleX = scale; scaleY = scale }.clip(CircleShape)
-            .background(if (down) Color(0xFF2E2E31) else Color(0xFF1C1C1E))
+            .background(if (down || vm.listening) Color(0xFF3A3A3E) else Color(0xFF1C1C1E))
             .semantics {
                 contentDescription = "Voice assistant"
                 role = Role.Button
@@ -214,12 +214,15 @@ fun VoiceKey(vm: RemoteVM, size: Dp) {
             }
             .pointerInput(Unit) {
                 detectTapGestures(onPress = {
+                    // Tap: listen until you stop talking (or tap again). Hold: listen until you let go.
+                    if (vm.listening) { vm.voiceStop(); return@detectTapGestures }
                     down = true
                     vm.feel.fire(com.krishna.miniremote.Feel.HEAVY)
+                    val t0 = System.currentTimeMillis()
                     val streaming = vm.voiceStart()
                     tryAwaitRelease()
                     down = false
-                    if (streaming) vm.voiceStop()
+                    if (streaming && System.currentTimeMillis() - t0 > 450) vm.voiceStop()
                 })
             },
         contentAlignment = Alignment.Center,
