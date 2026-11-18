@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -274,7 +275,7 @@ fun HomeScreen(
             Row(Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(bottom = NAV_H + 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
                     topBar()
-                    NowPlaying(vm)
+                    Spacer(Modifier.height(14.dp))
                     middle(Modifier.weight(1f).fillMaxWidth())
                 }
                 Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) { keysBlock() }
@@ -284,7 +285,7 @@ fun HomeScreen(
             Column(Modifier.fillMaxHeight().widthIn(max = 480.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Column(Modifier.weight(1f).padding(horizontal = 16.dp).padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     topBar()
-                    NowPlaying(vm)
+                    Spacer(Modifier.height(14.dp))
                     middle(Modifier.weight(1f).fillMaxWidth())
                     Box(Modifier.padding(top = if (layout == HomeLayout.CARDS) 8.dp else 10.dp, bottom = if (layout == HomeLayout.STRIP) 26.dp else 0.dp)) { keysBlock() }
                 }
@@ -307,7 +308,7 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
     }
     Box(modifier.padding(end = 12.dp), contentAlignment = Alignment.CenterStart) {
         Row(
-            Modifier.height(44.dp).clip(CircleShape).background(M.High)
+            Modifier.heightIn(min = 44.dp).clip(CircleShape).background(M.High)
                 .clickable(onClickLabel = "choose a TV", role = Role.Button, onClick = openDevices)
                 .semantics(mergeDescendants = true) {
                     contentDescription = d?.let { "TV: ${it.name}" } ?: "Choose a TV"
@@ -318,8 +319,15 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             dot?.let { Box(Modifier.size(7.dp).clip(CircleShape).background(it)) }
-            Text(d?.let { shortName(it.name, it.brand.label) } ?: "Choose a TV", color = T.Ink, fontSize = 15.sp,
-                fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            // The TV's name, and what's on it underneath when the TV says (app, time played).
+            val playing = nowLine(vm)
+            Column(Modifier.weight(1f, fill = false)) {
+                Text(d?.let { shortName(it.name, it.brand.label) } ?: "Choose a TV", color = T.Ink, fontSize = if (playing != null) 14.sp else 15.sp,
+                    lineHeight = 17.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (playing != null) Text(playing, color = T.Dim, fontSize = 11.5.sp, lineHeight = 14.sp, maxLines = 1, softWrap = false,
+                    modifier = Modifier.widthIn(max = 200.dp).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 1500)
+                        .semantics { contentDescription = "On the TV: $playing" })
+            }
             LineIcon(Ico.DOWN, T.Dim, 15.dp, stroke = 2.2f)
         }
     }
@@ -332,6 +340,22 @@ fun shortName(name: String, fallback: String): String {
 }
 
 /** What's on the TV, in one quiet line under the top bar; with a thin progress line when the TV says how far in it is (Roku). */
+@Composable
+/** What's on the TV, for the pill: "YouTube · 1:23 / 4:56", or null when nothing (or Home). */
+private fun nowLine(vm: RemoteVM): String? {
+    if (vm.link != Link.READY) return null
+    val n = vm.nowOn ?: return null
+    val name = n.name.let { raw ->
+        if ('.' in raw && ' ' !in raw) com.krishna.miniremote.Catalog.apps.firstOrNull { it.ids.values.contains(raw) }?.name
+            ?: vm.tvApps.firstOrNull { it.id == raw }?.name
+        else raw
+    }?.takeIf { it.isNotBlank() && it != "Home" } ?: return null
+    val pos = n.positionMs; val dur = n.durationMs
+    fun t(ms: Long) = (ms / 1000).let { s -> if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60) }
+    return if (pos != null && dur != null && dur > 0) "$name · ${t(pos)} / ${t(dur)}" else name
+}
+
+@Suppress("unused")
 @Composable
 private fun NowPlaying(vm: RemoteVM) {
     val n = vm.nowOn
