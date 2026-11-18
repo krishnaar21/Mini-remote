@@ -76,7 +76,7 @@ struct Settings: Codable, Equatable {
     var appsIn = "home"
     /** Close TV menus opened from here with Back after 10 s without use. */
     var autoClose = true
-    /** "dark", "light", "navy" or "retro". */
+    /** "auto" (follows the iPhone), "dark", "light" or "navy". */
     var theme = "dark"
     var profileName = ""
     var profileEmail = ""

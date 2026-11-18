@@ -21,10 +21,13 @@ enum Palettes {
         high: 0xE6E6EB, highest: 0xD5D5DB, pressed: 0xC7C7CD, keyFill: 0xFFFFFF, ink: 0x1C1C1E, dim: 0x48484D, muted: 0x5E5E63, sub: 0x8A8A8F, line: 0xD9D9DE, dotOff: 0xB8B8BE)
     static let navy = Palette(key: "navy", label: "Navy", light: false, screen: 0x070D1E, bg: 0x111A33, sheet: 0x121C37, container: 0x16213F,
         high: 0x203058, highest: 0x2B3D6B, pressed: 0x364A7D, keyFill: 0x131D39, ink: 0xEEF2FF, dim: 0xBAC4E2, muted: 0xA6B1D3, sub: 0x7F8BB2, line: 0x26355F, dotOff: 0x55618A)
-    static let retro = Palette(key: "retro", label: "Retro", light: false, screen: 0x1B1610, bg: 0x241E17, sheet: 0x28211A, container: 0x2E261D,
-        high: 0x3E3327, highest: 0x4D4033, pressed: 0x5B4C3C, keyFill: 0x2A2219, ink: 0xF4E9D2, dim: 0xD9C8A6, muted: 0xC4B293, sub: 0x9E8C6F, line: 0x3D3227, dotOff: 0x6E5F4A)
-    static let all = [dark, light, navy, retro]
+    /** Follows the iPhone: Light or Dark as the system is (see resolve). */
+    static let auto = Palette(key: "auto", label: "Auto", light: false, screen: dark.screen, bg: dark.bg, sheet: dark.sheet, container: dark.container,
+        high: dark.high, highest: dark.highest, pressed: dark.pressed, keyFill: dark.keyFill, ink: dark.ink, dim: dark.dim, muted: dark.muted, sub: dark.sub, line: dark.line, dotOff: dark.dotOff)
+    static let all = [auto, dark, light, navy]
     static func of(_ k: String) -> Palette { all.first { $0.key == k } ?? dark }
+    /** The palette to draw with: Auto becomes Light or Dark as the iPhone is. */
+    static func resolve(_ k: String, dark isDark: Bool) -> Palette { k == "auto" || k == "retro" ? (isDark ? dark : light) : of(k) }
 }
 
 /** The palette in use. The app's root view is rebuilt when it changes (see ContentView). */

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 enum Route: Hashable { case device(String), local, scan, manual, pair(String), settings, privacy, licenses, gestures }
@@ -353,6 +354,7 @@ private struct SettingsPage: View {
             Section {
                 row("externaldrive", "Backup & restore") { open = "backup" }
                 row("hand.raised", "Privacy & data") { path.append(.privacy) }
+                row("questionmark.bubble", "Help & feedback") { open = "support" }
                 row("info.circle", "About", version) { open = "about" }
             }
         }
@@ -386,6 +388,18 @@ private struct SettingsSheets: View {
     @State private var importing = false
 
     private func set(_ change: (inout Settings) -> Void) { var s = vm.settings; change(&s); vm.update(s) }
+    @Environment(\.openURL) private var openURL
+
+    /** An email to SUPPORT_EMAIL when set, else a new GitHub issue, with a few details filled in. */
+    private func contact(_ kind: String) {
+        let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+        let details = "\n\n---\nMini Remote \(v) · iOS \(UIDevice.current.systemVersion) · \(UIDevice.current.model)" + (vm.active.map { " · TV: \($0.brand.label)" } ?? "")
+        let body = (kind == "Bug report" ? "What happened:\n\nWhat you expected:\n\nSteps to see it again:\n" : kind == "Feature request" ? "What you'd like:\n\nWhy it would help:\n" : "") + details
+        func enc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "" }
+        let link = SUPPORT_EMAIL.isEmpty ? "\(SUPPORT_ISSUES)?title=\(enc(kind + ": "))&body=\(enc(body))"
+            : "mailto:\(SUPPORT_EMAIL)?subject=\(enc("Mini Remote: " + kind))&body=\(enc(body))"
+        if let u = URL(string: link) { openURL(u) }
+    }
 
     private func choice(_ sym: String, _ title: String, _ sub: String, _ sel: Bool, _ pick: @escaping () -> Void) -> some View {
         Button(action: pick) {
@@ -482,7 +496,9 @@ private struct SettingsSheets: View {
                                         Capsule().fill(accent).frame(width: 20, height: 3)
                                     }
                                     .frame(maxWidth: .infinity).frame(height: 80)
-                                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(hex: p.screen)))
+                                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(p.key == "auto"
+                                        ? AnyShapeStyle(LinearGradient(stops: [.init(color: Color(hex: Palettes.light.screen), location: 0.5), .init(color: Color(hex: Palettes.dark.screen), location: 0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                        : AnyShapeStyle(Color(hex: p.screen))))
                                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(sel ? accent : Color(hex: p.line), lineWidth: sel ? 2 : 1))
                                     Text(p.label).font(.system(size: 12.5)).foregroundStyle(sel ? T.ink : T.sub)
                                 }
@@ -506,6 +522,15 @@ private struct SettingsSheets: View {
                         }
                     }
                     .padding(.vertical, 8)
+                }
+            case "support":
+                Section { header("Help & feedback", "Ideas, problems or questions: they go straight to the developer.") }
+                Section {
+                    Button { contact("Feature request") } label: { Label("Request a feature", systemImage: "lightbulb") }
+                    Button { contact("Bug report") } label: { Label("Report a bug", systemImage: "ladybug") }
+                    Button { contact("Question") } label: { Label("Ask a question", systemImage: "questionmark.circle") }
+                } footer: {
+                    Text("Your app version, iPhone and TV type are added so it's easier to help. Nothing else is sent.")
                 }
             case "backup":
                 Section { header("Backup & restore", "Settings, quick access and channels in one file. TVs pair again on a new iPhone.") }
@@ -591,3 +616,7 @@ private struct LicensesPage: View {
         .navigationTitle("Open-source licences").navigationBarTitleDisplayMode(.inline)
     }
 }
+
+/** Where Help & feedback goes: an email address (when set), else new issues on GitHub. */
+let SUPPORT_EMAIL = ""
+let SUPPORT_ISSUES = "https://github.com/krishnaar21/mini-remote/issues/new"

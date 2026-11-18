@@ -5,7 +5,8 @@ struct MiniRemoteApp: App {
     @StateObject private var vm = RemoteModel()
     var body: some Scene {
         WindowGroup {
-            ContentView(vm: vm).preferredColorScheme(Palettes.of(vm.settings.theme).light ? .light : .dark)
+            // Auto follows the iPhone; the others set light or dark.
+            ContentView(vm: vm).preferredColorScheme(["auto", "retro"].contains(vm.settings.theme) ? nil : (Palettes.of(vm.settings.theme).light ? .light : .dark))
         }
     }
 }
@@ -16,6 +17,7 @@ struct MiniRemoteApp: App {
  */
 struct ContentView: View {
     @ObservedObject var vm: RemoteModel
+    @Environment(\.colorScheme) private var scheme
     @State private var numpad = false
     @State private var keyPage: Int? = 0
     @State private var showDevices = false
@@ -34,7 +36,7 @@ struct ContentView: View {
 
     var body: some View {
         // The theme: every colour reads from it; the whole tree is rebuilt when it changes.
-        let _ = { Look.p = Palettes.of(vm.settings.theme) }()
+        let _ = { Look.p = Palettes.resolve(vm.settings.theme, dark: scheme == .dark) }()
         ZStack(alignment: .bottom) {
             T.screen.ignoresSafeArea()
             HomeView(vm: vm, accent: accent, numpad: $numpad, keyPage: $keyPage,
@@ -66,7 +68,7 @@ struct ContentView: View {
             .frame(width: KEYROW_W)
             .padding(.bottom, 4)
         }
-        .id(vm.settings.theme)
+        .id(vm.settings.theme + (scheme == .dark ? "-d" : "-l"))
         .tint(accent)
         .sheet(isPresented: $showDevices) { DevicesSheet(vm: vm, accent: accent, start: startRoute) }
         .sheet(isPresented: $showKeys, onDismiss: { keysFromTv = false; keysVoice = false }) { KeyboardSheet(vm: vm, accent: accent, openSearch: !keysFromTv, startVoice: keysVoice) }
@@ -121,7 +123,7 @@ extension ContentView {
             case "page3": keyPage = 2
             case "light": var st = vm.settings; st.theme = "light"; vm.update(st)
             case "navy": var st = vm.settings; st.theme = "navy"; vm.update(st)
-            case "retro": var st = vm.settings; st.theme = "retro"; vm.update(st)
+            case "auto": var st = vm.settings; st.theme = "auto"; vm.update(st)
             case "gestures": startRoute = [.settings, .gestures]; showDevices = true
             case "apps": apps = false
             case "devices": showDevices = true

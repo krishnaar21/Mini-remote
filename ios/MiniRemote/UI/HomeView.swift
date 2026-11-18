@@ -118,7 +118,7 @@ struct HomeView: View {
                             }
                         }
                         Text(vm.active.map { shortName($0.name, $0.brand.label) } ?? "Choose a TV")
-                            .font(.system(size: 15, weight: .medium)).foregroundStyle(T.ink).lineLimit(1)
+                            .font(.system(size: 14, weight: .medium)).foregroundStyle(T.ink).lineLimit(1)
                         Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).foregroundStyle(T.dim)
                     }
                     .padding(.leading, 7).padding(.trailing, 16)
