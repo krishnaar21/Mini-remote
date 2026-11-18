@@ -204,9 +204,11 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
     if (page == 1) KeyPage2(vm, accent, k) { sleep = true } else
     Column(verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            StripKey(accent, "Back", k, ico = Ico.CHEVRON_L, enabled = vm.can(RemoteKey.BACK), onDisabled = { vm.explain(RemoteKey.BACK) }) { vm.press(RemoteKey.BACK) }
+            StripKey(accent, "Back", k, ico = Ico.BACK, enabled = vm.can(RemoteKey.BACK), onDisabled = { vm.explain(RemoteKey.BACK) }) { vm.press(RemoteKey.BACK) }
             StripKey(accent, "Home", k, ico = Ico.HOME, enabled = vm.can(RemoteKey.HOME), onDisabled = { vm.explain(RemoteKey.HOME) }) { vm.press(RemoteKey.HOME) }
-            StripKey(accent, if (vm.playing) "Pause" else "Play", k, ico = if (vm.playing) Ico.PAUSE else Ico.PLAY_ONLY, enabled = vm.can(RemoteKey.PLAY_PAUSE), onDisabled = { vm.explain(RemoteKey.PLAY_PAUSE) }) { vm.press(RemoteKey.PLAY_PAUSE) }
+            // Live TV (a set-top box: Tata Play, Airtel, Dish TV…): Mute where Play / Pause would be.
+            if (tv) StripKey(accent, if (vm.muted) "Unmute" else "Mute", k, ico = if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, enabled = vm.can(RemoteKey.MUTE), onDisabled = { vm.explain(RemoteKey.MUTE) }) { vm.press(RemoteKey.MUTE) }
+            else StripKey(accent, if (vm.playing) "Pause" else "Play", k, ico = if (vm.playing) Ico.PAUSE else Ico.PLAY_ONLY, enabled = vm.can(RemoteKey.PLAY_PAUSE), onDisabled = { vm.explain(RemoteKey.PLAY_PAUSE) }) { vm.press(RemoteKey.PLAY_PAUSE) }
             StripKey(accent, "Search", k, ico = Ico.SEARCH, enabled = vm.can(RemoteKey.HOME), onDisabled = { vm.explain(RemoteKey.HOME) }, onClick = openKeys)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -303,8 +305,8 @@ private fun KeyPage2(vm: RemoteVM, accent: Color, k: Dp, openSleep: () -> Unit) 
         StripKey(accent, label, k, ico = ico, enabled = vm.can(key), onDisabled = { vm.explain(key) }) { vm.press(key) }
     Column(verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            key("Rewind", Ico.REWIND, RemoteKey.REWIND)
-            key("Fast forward", Ico.FFWD, RemoteKey.FAST_FORWARD)
+            key("Rewind", Ico.SEEK_BACK, RemoteKey.REWIND)
+            key("Fast forward", Ico.SEEK_FWD, RemoteKey.FAST_FORWARD)
             key(if (vm.muted) "Unmute" else "Mute", if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, RemoteKey.MUTE)
             // Sleep: shows the minutes left while it's counting down.
             val at = vm.sleepAt
