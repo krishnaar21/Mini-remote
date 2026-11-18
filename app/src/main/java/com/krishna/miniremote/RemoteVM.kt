@@ -408,7 +408,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         autoJob?.cancel()
         disconnect()
         demo = true
-        devices = listOf(Device("demo", "Living Room TV (demo)", "192.168.1.20", Brand.ANDROID_TV))
+        devices = listOf(Device("demo", "Demo TV", "192.168.1.20", Brand.ANDROID_TV))
         activeId = "demo"
         link = Link.READY
         tvVolume = com.krishna.miniremote.net.TvVolume(24, 100, false)
