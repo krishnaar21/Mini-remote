@@ -39,7 +39,7 @@ struct ContentView: View {
 
     var body: some View {
         // The theme: every colour reads from it; the whole tree is rebuilt when it changes.
-        let _ = { Look.p = Palettes.resolve(vm.settings.theme, dark: scheme == .dark) }()
+        let _ = { Look.p = Palettes.resolve(vm.settings.theme, dark: scheme == .dark); Look.depth = vm.settings.depth }()
         ZStack(alignment: .bottom) {
             T.screen.ignoresSafeArea()
             HomeView(vm: vm, accent: accent, numpad: $numpad, keyPage: $keyPage,
@@ -87,7 +87,7 @@ struct ContentView: View {
                 }
             }
         }
-        .id(vm.settings.theme + (scheme == .dark ? "-d" : "-l"))
+        .id(vm.settings.theme + (scheme == .dark ? "-d" : "-l") + (vm.settings.depth ? "-3d" : ""))
         .fullScreenCover(isPresented: Binding(get: { !vm.settings.onboarded }, set: { _ in })) {
             OnboardingView(accent: accent) { var s = vm.settings; s.onboarded = true; vm.update(s) }
         }
@@ -143,6 +143,7 @@ extension ContentView {
             case "more": showMore = true
             case "sleep": showSleep = true
             case "homeicons": showIcons = true
+            case "depth": var st = vm.settings; st.depth = true; vm.update(st)
             case "welcome": var st = vm.settings; st.onboarded = false; vm.update(st)
             case "tour": var st = vm.settings; st.toured = false; vm.update(st)
             case "page2": keyPage = 1

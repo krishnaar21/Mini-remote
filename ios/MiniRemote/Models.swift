@@ -83,6 +83,8 @@ struct Settings: Codable, Equatable {
     /** The welcome pages and the guided tour have been seen. */
     var onboarded = false
     var toured = false
+    /** Keys, dial and trackpad drawn raised (light and shadow) instead of flat glass. */
+    var depth = false
 }
 
 extension Settings {
@@ -108,6 +110,7 @@ extension Settings {
         profileEmail = try c.decodeIfPresent(String.self, forKey: .profileEmail) ?? profileEmail
         onboarded = try c.decodeIfPresent(Bool.self, forKey: .onboarded) ?? onboarded
         toured = try c.decodeIfPresent(Bool.self, forKey: .toured) ?? toured
+        depth = try c.decodeIfPresent(Bool.self, forKey: .depth) ?? depth
     }
 }
 

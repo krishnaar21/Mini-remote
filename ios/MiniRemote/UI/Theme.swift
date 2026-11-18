@@ -31,7 +31,23 @@ enum Palettes {
 }
 
 /** The palette in use. The app's root view is rebuilt when it changes (see ContentView). */
-enum Look { static var p = Palettes.dark }
+enum Look {
+    static var p = Palettes.dark
+    /** Depth (Settings › Appearance): keys, dial and trackpad raised with light and shadow. */
+    static var depth = false
+}
+
+extension View {
+    /** Raised look when Depth is on: a soft shadow under the shape and light from above on it. */
+    @ViewBuilder func depth<S: Shape>(_ shape: S) -> some View {
+        if Look.depth {
+            self
+                .overlay(shape.fill(LinearGradient(colors: [.white.opacity(Look.p.light ? 0.35 : 0.10), .clear, .black.opacity(Look.p.light ? 0.04 : 0.18)], startPoint: .top, endPoint: .bottom)).allowsHitTesting(false))
+                .overlay(shape.stroke(LinearGradient(colors: [.white.opacity(Look.p.light ? 0.7 : 0.18), .clear], startPoint: .top, endPoint: .center), lineWidth: 1).allowsHitTesting(false))
+                .shadow(color: .black.opacity(Look.p.light ? 0.18 : 0.6), radius: 10, x: 0, y: 6)
+        } else { self }
+    }
+}
 
 enum T {
     static var screen: Color { Color(hex: Look.p.screen) }
@@ -58,7 +74,7 @@ enum T {
 func keySymbol(_ k: RemoteKey, muted: Bool, playing: Bool) -> String? {
     switch k {
     case .up: return "chevron.up"; case .down: return "chevron.down"; case .left: return "chevron.left"; case .right: return "chevron.right"
-    case .back: return "arrow.uturn.backward"; case .home: return "homekit"; case .playPause: return playing ? "play.fill" : "pause.fill"
+    case .back: return "arrow.uturn.backward"; case .home: return "tv"; case .playPause: return playing ? "play.fill" : "pause.fill"
     case .power: return "power"; case .volUp, .chUp: return "plus"; case .volDown, .chDown: return "minus"
     case .mute: return muted ? "speaker.slash.fill" : "speaker.wave.2.fill"; case .voice: return "mic.fill"
     case .rewind: return "gobackward.10"; case .fastForward: return "goforward.10"

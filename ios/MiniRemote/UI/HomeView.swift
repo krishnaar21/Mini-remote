@@ -236,6 +236,7 @@ struct GlassKey: View {
         }
         .buttonStyle(.plain)
         .glassEffect(.regular.interactive(), in: .circle)
+        .depth(Circle())
         .accessibilityLabel(label)
         .accessibilityAddTraits(active ? .isSelected : [])
         .accessibilityHint(enabled ? "" : "Not available right now")
@@ -295,7 +296,7 @@ struct KeyPages: View {
             VStack(spacing: 14) {
                 HStack(spacing: 14) {
                     k("arrow.uturn.backward", "Back", .back, icon: 21)
-                    k("homekit", "Home", .home, icon: 22)
+                    k("tv", "Home", .home, icon: 21)
                     // Live TV (a set-top box: Tata Play, Airtel, Dish TV…): Mute where Play / Pause would be.
                     if vm.nowOn?.live == true { k(vm.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", vm.muted ? "Unmute" : "Mute", .mute, icon: 19) }
                     else { k(vm.playing ? "pause.fill" : "play.fill", vm.playing ? "Pause" : "Play", .playPause) }
@@ -545,7 +546,7 @@ struct DialFace: View {
         let well = size * 0.385
         let cs = size * 0.075
         ZStack {
-            Circle().fill(.clear).glassEffect(.regular, in: .circle)
+            Circle().fill(.clear).glassEffect(.regular, in: .circle).depth(Circle())
             if offline {
                 VStack(spacing: 8) {
                     Image(systemName: "tv").font(.system(size: size * 0.13)).foregroundStyle(T.dim)
@@ -602,7 +603,7 @@ struct TrackpadFace: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 32).fill(.clear).glassEffect(.regular, in: .rect(cornerRadius: 32))
+            RoundedRectangle(cornerRadius: 32).fill(.clear).glassEffect(.regular, in: .rect(cornerRadius: 32)).depth(RoundedRectangle(cornerRadius: 32))
             if offline {
                 VStack(spacing: 6) {
                     Image(systemName: "tv").font(.system(size: 34)).foregroundStyle(T.dim)

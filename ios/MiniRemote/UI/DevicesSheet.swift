@@ -483,7 +483,12 @@ private struct SettingsSheets: View {
                     }
                 }
             case "look":
-                Section { header("Appearance", "Theme and colour.") }
+                Section { header("Appearance", "Theme, colour and depth.") }
+                Section {
+                    Toggle(isOn: Binding(get: { vm.settings.depth }, set: { v in set { $0.depth = v } })) {
+                        VStack(alignment: .leading, spacing: 0) { Text("Depth").foregroundStyle(T.ink); Text("Raised keys, dial and trackpad, with light and shadow").font(.system(size: 12.5)).foregroundStyle(T.sub) }
+                    }.tint(accent)
+                }
                 Section("Theme") {
                     HStack(spacing: 10) {
                         ForEach(Palettes.all, id: \.key) { p in
