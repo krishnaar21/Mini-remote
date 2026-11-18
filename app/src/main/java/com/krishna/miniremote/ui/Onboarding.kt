@@ -184,10 +184,10 @@ fun Modifier.coach(id: String): Modifier = onGloballyPositioned { Coach.rects[id
 private class Step(val id: String, val title: String, val text: String, val round: Boolean = false)
 
 private val STEPS = listOf(
-    Step("tv", "Your TV", "Tap here to choose a TV, add another or see how it's connected. The dot shows green when it's ready."),
+    Step("tv", "Your TV", "This is a demo TV for the tour. After it, tap here to find and pair your own TV; the dot turns green when it's connected."),
     Step("power", "Power", "Turns the TV off (it asks first). When it's off, this wakes it up again where the TV allows."),
     Step("dial", "Move and select", "Tap the arrows or swipe across the dial to move; tap OK to select. Double-tap OK to mute; hold it to talk to the TV.", round = true),
-    Step("dial", "Volume ring", "Turn your finger round the outer ring to change the volume. The number at its foot is the TV's own volume.", round = true),
+    Step("dial", "Volume ring", "The thin ring round the dial is the volume: the coloured arc is how loud the TV is (24 here). Turn your finger round it to change it. It appears once a TV is connected.", round = true),
     Step("keys", "More keys and your apps", "Swipe these circles sideways: more keys (rewind, sleep timer, inputs…), then your quick access apps."),
     Step("pills", "Pages", "Shows which page of circles you're on. Tap it to go to the next one. What's playing shows on this line too."),
 )
@@ -237,7 +237,13 @@ fun CoachTour(accent: Color, onDone: () -> Unit) {
                     .padding(20.dp)
                     .semantics { liveRegion = LiveRegionMode.Polite },
             ) {
-                Text("${steps.indexOf(step) + 1} of ${steps.size}", color = accent, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("${steps.indexOf(step) + 1} of ${steps.size}", color = accent, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.weight(1f))
+                    // The tour runs on a pretend TV: say so.
+                    Text("Demo TV · nothing is sent", color = T.Sub, fontSize = 11.5.sp,
+                        modifier = Modifier.clip(CircleShape).background(T.Ink.copy(alpha = 0.08f)).padding(horizontal = 8.dp, vertical = 3.dp))
+                }
                 Text(step.title, color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
                 Text(step.text, color = T.Dim, fontSize = 14.sp, lineHeight = 20.sp, modifier = Modifier.padding(top = 6.dp))
                 Row(Modifier.fillMaxWidth().padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {

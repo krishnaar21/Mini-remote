@@ -325,6 +325,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     }
 
     fun press(key: RemoteKey, quiet: Boolean = false) {
+        if (demo) { feel.fire(Feel.PRESS); if (key == RemoteKey.MUTE) muted = !muted; if (key == RemoteKey.PLAY_PAUSE) playing = !playing; nudgeVolume(key); if (!quiet) say(key.word, key); return }
         if (active == null) { feel.fire(Feel.ERROR); say("Choose a TV first"); return }
         if (link == Link.ERROR) active?.let { connect(it) }
         if (link != Link.READY) active?.bt?.let { a -> bt?.connect(a) }
@@ -397,7 +398,31 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     private fun menuUsed() { if (menuUntil != 0L) menuUntil = System.currentTimeMillis() + menuIdle }
 
     fun scrubTick(key: RemoteKey) {
-        userAt = System.currentTimeMillis(); menuUsed(); feel.fire(Feel.TICK); nudgeVolume(key); queue.trySend(key) }
+        userAt = System.currentTimeMillis(); menuUsed(); feel.fire(Feel.TICK); nudgeVolume(key); if (!demo) queue.trySend(key) }
+
+    /** The guided tour's pretend TV: shows the remote as it is when connected; nothing is sent or saved. */
+    var demo by mutableStateOf(false); private set
+
+    fun startDemo() {
+        if (demo) return
+        autoJob?.cancel()
+        disconnect()
+        demo = true
+        devices = listOf(Device("demo", "Living Room TV (demo)", "192.168.1.20", Brand.ANDROID_TV))
+        activeId = "demo"
+        link = Link.READY
+        tvVolume = com.krishna.miniremote.net.TvVolume(24, 100, false)
+        nowOn = NowOn("Netflix", false, 1_204_000, 2_710_000)
+    }
+
+    /** Back to the real app: your saved TVs (none if you have none yet), connecting as usual. */
+    fun endDemo() {
+        if (!demo) return
+        demo = false
+        link = Link.IDLE; tvVolume = null; nowOn = null; muted = false; playing = false
+        devices = store.loadDevices(); activeId = store.activeId()
+        autoConnect()
+    }
 
     /** Moves the shown volume right away, then asks the TV for the real value a moment later. */
     private fun nudgeVolume(key: RemoteKey) {
@@ -623,6 +648,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
 
     /** Runs [block] on the connected TV, reporting problems as a toast. */
     private fun act(fail: String, block: suspend (RemoteAdapter) -> Unit) {
+        if (demo) { say("Demo: nothing is sent to a TV"); return }
         val d = active ?: run { feel.fire(Feel.ERROR); say("Choose a TV first"); return }
         val a = adapter
         if (a == null || link != Link.READY) {

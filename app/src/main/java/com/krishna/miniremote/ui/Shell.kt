@@ -290,9 +290,15 @@ fun AppShell(vm: RemoteVM) {
         // First run: the welcome pages, then the guided tour; then choose a TV if there's none.
         val s0 = vm.settings
         if (!s0.onboarded) Onboarding(accent) { vm.update(vm.settings.copy(onboarded = true)) }
-        else if (!s0.toured && onRemote && sheet == null && !more && !keys) CoachTour(accent) {
-            vm.update(vm.settings.copy(toured = true))
-            if (vm.active == null) sheet = Page.Devices
+        else if (!s0.toured && onRemote && sheet == null && !more && !keys) {
+            // A pretend TV for the tour, so the remote shows as it does when connected
+            // (volume ring, what's playing); it's gone again as soon as the tour ends.
+            androidx.compose.runtime.DisposableEffect(Unit) { vm.startDemo(); onDispose { vm.endDemo() } }
+            CoachTour(accent) {
+                vm.update(vm.settings.copy(toured = true))
+                vm.endDemo()
+                if (vm.active == null) sheet = Page.Devices
+            }
         }
         sheet?.let { start -> RemoteSheet(vm, accent, start) { sheet = null } }
         if (keys) KeyboardSheet(vm, accent, openSearch = !keysFromTv && !keysVoice, startVoice = keysVoice) { keys = false; keysFromTv = false; keysVoice = false }
