@@ -29,12 +29,12 @@ object Palettes {
         screen = Color(0xFF070D1E), bg = Color(0xFF111A33), container = Color(0xFF16213F), high = Color(0xFF203058), highest = Color(0xFF2B3D6B), pressed = Color(0xFF364A7D),
         sheet = Color(0xFF121C37), keyFill = Color(0xFF131D39), ink = Color(0xFFEEF2FF), dim = Color(0xFFBAC4E2), muted = Color(0xFFA6B1D3), lead = Color(0xFFDCE3F7), sub = Color(0xFF7F8BB2),
         line = Color(0xFF26355F), well = Color(0xFF1A2547), dotOff = Color(0xFF55618A))
-    val RETRO = Palette("retro", "Retro", false,
-        screen = Color(0xFF1B1610), bg = Color(0xFF241E17), container = Color(0xFF2E261D), high = Color(0xFF3E3327), highest = Color(0xFF4D4033), pressed = Color(0xFF5B4C3C),
-        sheet = Color(0xFF28211A), keyFill = Color(0xFF2A2219), ink = Color(0xFFF4E9D2), dim = Color(0xFFD9C8A6), muted = Color(0xFFC4B293), lead = Color(0xFFEBDDC0), sub = Color(0xFF9E8C6F),
-        line = Color(0xFF3D3227), well = Color(0xFF332A20), dotOff = Color(0xFF6E5F4A))
-    val all = listOf(DARK, LIGHT, NAVY, RETRO)
+    /** Follows the phone: Light by day settings, Dark when the phone is dark (see [resolve]). */
+    val AUTO = DARK.copy(key = "auto", label = "Auto")
+    val all = listOf(AUTO, DARK, LIGHT, NAVY)
     fun of(k: String) = all.firstOrNull { it.key == k } ?: DARK
+    /** The palette to draw with: Auto becomes Light or Dark as the phone is. */
+    fun resolve(k: String, systemDark: Boolean): Palette = if (k == "auto" || k == "retro") (if (systemDark) DARK else LIGHT) else of(k)
 }
 
 /** The palette in use (Settings › Appearance › Theme). Reading it recomposes on change. */

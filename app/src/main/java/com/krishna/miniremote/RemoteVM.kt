@@ -186,6 +186,29 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
 
     fun dismissUpdate() { if (update !is Update.Downloading) update = Update.Idle }
 
+    /**
+     * Help & feedback: an email to [SUPPORT_EMAIL] when one is set, otherwise a new issue on the
+     * app's GitHub page, with the subject and a few details (app version, phone, TV type) filled in.
+     */
+    fun contact(kind: String) {
+        val ctx = getApplication<Application>()
+        val version = runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "dev"
+        val details = "\n\n---\nMini Remote $version · Android ${android.os.Build.VERSION.RELEASE} · ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}" +
+            (active?.let { " · TV: ${it.brand.label}" } ?: "")
+        val body = when (kind) {
+            "Bug report" -> "What happened:\n\nWhat you expected:\n\nSteps to see it again:\n"
+            "Feature request" -> "What you'd like:\n\nWhy it would help:\n"
+            else -> ""
+        } + details
+        val enc = { s: String -> java.net.URLEncoder.encode(s, "UTF-8").replace("+", "%20") }
+        val uri = if (SUPPORT_EMAIL.isNotBlank()) "mailto:$SUPPORT_EMAIL?subject=${enc("Mini Remote: $kind")}&body=${enc(body)}"
+            else "$SUPPORT_ISSUES?title=${enc("$kind: ")}&body=${enc(body)}"
+        runCatching {
+            ctx.startActivity(android.content.Intent(if (uri.startsWith("mailto:")) android.content.Intent.ACTION_SENDTO else android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse(uri)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.onFailure { say("No email or browser app to send it with") }
+    }
+
     /** Opens the GitHub release page (for builds that can't install over this one). */
     fun openReleasePage() {
         val ctx = getApplication<Application>()
@@ -1095,7 +1118,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
             autoKeyboard = j.optBoolean("autoKeyboard", d.autoKeyboard),
             notifRemote = j.optBoolean("notifRemote", d.notifRemote),
             autoClose = j.optBoolean("autoClose", d.autoClose),
-            theme = j.optString("theme", d.theme).takeIf { it in setOf("dark", "light", "navy", "retro") } ?: d.theme,
+            theme = j.optString("theme", d.theme).takeIf { it in setOf("auto", "dark", "light", "navy") } ?: d.theme,
         )
         update(next)
         o.optJSONArray("shortcuts")?.let { saveShortcuts(Shortcut.listFromJson(it.toString()).take(60)) }
@@ -1167,3 +1190,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     fun btForget(d: Device) { updateDevice(d.id) { it.copy(bt = null) }; say("Bluetooth forgotten. Remove Mini Remote on the TV too.") }
 
 }
+
+/** Where Help & feedback goes: an email address (when set), else new issues on GitHub. */
+const val SUPPORT_EMAIL = ""
+const val SUPPORT_ISSUES = "https://github.com/krishnaar21/mini-remote/issues/new"

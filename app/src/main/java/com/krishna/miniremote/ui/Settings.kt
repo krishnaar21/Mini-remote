@@ -260,6 +260,8 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
         SetRow(Ico.REFRESH, SetTint.orange, "Updates", when (vm.update) { is RemoteVM.Update.Ready, is RemoteVM.Update.Manual -> "Ready"; else -> if (s.autoUpdate) "Auto" else "Off" }) { open = "updates" }
         if (openPrivacy != null) { SetLine(); SetRow(Ico.USER, SetTint.grey, "Privacy & data", onClick = openPrivacy) }
         SetLine()
+        SetRow(Ico.ALERT, SetTint.grey, "Help & feedback") { open = "support" }
+        SetLine()
         SetRow(Ico.INFO, SetTint.grey, "About", version) { open = "about" }
     }
     Spacer(Modifier.height(8.dp))
@@ -325,7 +327,9 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
                         // A little remote in the theme's colours: screen, a key row and a dial.
                         Column(Modifier.weight(1f).selectable(sel, role = Role.RadioButton) { vm.update(s.copy(theme = p.key)) }, horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(
-                                Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(14.dp)).background(p.screen)
+                                Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(14.dp))
+                                    .then(if (p.key == "auto") Modifier.background(androidx.compose.ui.graphics.Brush.linearGradient(
+                                        0f to Palettes.LIGHT.screen, 0.5f to Palettes.LIGHT.screen, 0.5f to Palettes.DARK.screen, 1f to Palettes.DARK.screen)) else Modifier.background(p.screen))
                                     .border(if (sel) 2.dp else 1.dp, if (sel) accent else p.line, RoundedCornerShape(14.dp)),
                                 contentAlignment = Alignment.Center,
                             ) {
@@ -402,6 +406,17 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
                     }
                 }
             }
+        }
+        "support" -> SetSheet("Help & feedback", "Ideas, problems or questions: they go straight to the developer.", { open = null }) {
+            SetCard {
+                SetRow(Ico.STAR, SetTint.grey, "Request a feature", sub = "Something you'd like the app to do") { vm.contact("Feature request") }
+                SetLine()
+                SetRow(Ico.ALERT, SetTint.grey, "Report a bug", sub = "Something that doesn't work right") { vm.contact("Bug report") }
+                SetLine()
+                SetRow(Ico.USER, SetTint.grey, "Ask a question", sub = "Setting up a TV, pairing, anything else") { vm.contact("Question") }
+            }
+            Text("Your app version, phone and TV type are added so it's easier to help. Nothing else is sent.",
+                color = SubInk, fontSize = 12.5.sp, modifier = Modifier.padding(top = 10.dp, start = 4.dp, end = 4.dp))
         }
         "about" -> SetSheet("Mini Remote", "Version $version", { open = null }) {
             Text("No account, no ads, no analytics or tracking.", color = T.Ink, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 2.dp))

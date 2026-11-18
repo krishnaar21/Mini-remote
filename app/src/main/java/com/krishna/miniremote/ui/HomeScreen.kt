@@ -326,8 +326,8 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
             // The TV's name, and what's on it underneath when the TV says (app, time played).
             val playing: String? = null // now playing moved to the bottom-left line
             Column(Modifier.weight(1f, fill = false)) {
-                Text(d?.let { shortName(it.name, it.brand.label) } ?: "Choose a TV", color = T.Ink, fontSize = if (playing != null) 14.sp else 15.sp,
-                    lineHeight = 17.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(d?.let { shortName(it.name, it.brand.label) } ?: "Choose a TV", color = T.Ink, fontSize = if (playing != null) 13.sp else 14.sp,
+                    lineHeight = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (playing != null) Text(playing, color = T.Dim, fontSize = 12.sp, lineHeight = 14.sp, maxLines = 1, softWrap = false,
                     modifier = Modifier.padding(top = 3.dp).widthIn(max = 200.dp).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 1500)
                         .semantics { contentDescription = "On the TV: $playing" })

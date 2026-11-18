@@ -49,7 +49,7 @@ class Store(ctx: Context) {
             logos = p.getBoolean("logos", d.logos),
             autoKeyboard = p.getBoolean("autoKeyboard", d.autoKeyboard),
             notifRemote = p.getBoolean("notifRemote", d.notifRemote),
-            theme = p.getString("theme", d.theme)?.takeIf { it in setOf("dark", "light", "navy", "retro") } ?: d.theme,
+            theme = p.getString("theme", d.theme)?.takeIf { it in setOf("auto", "dark", "light", "navy") } ?: d.theme,
             autoClose = p.getBoolean("autoClose", d.autoClose),
             layout = p.getString("layout", d.layout)?.takeIf { it in setOf("cards", "strip") } ?: d.layout,
             appsIn = p.getString("appsIn", d.appsIn)?.takeIf { it == "home" || it == "more" } ?: d.appsIn,
