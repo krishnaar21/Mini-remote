@@ -27,12 +27,12 @@ struct SCard<Content: View>: View {
     @ViewBuilder let content: () -> Content
     var body: some View {
         VStack(spacing: 0) { content() }
-            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(T.container))
+            .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(T.container))
     }
 }
 
 /** The thin line between rows in an SCard, starting after the icon. */
-struct SLine: View { var inset: CGFloat = 60; var body: some View { Rectangle().fill(T.line).frame(height: 1).padding(.leading, inset) } }
+struct SLine: View { var inset: CGFloat = 64; var body: some View { Rectangle().fill(T.line).frame(height: 1).padding(.leading, inset) } }
 
 /** A row: icon tile, title and a smaller line, what's set, and a chevron or tick. */
 struct SRow: View {
@@ -47,17 +47,17 @@ struct SRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                Image(systemName: symbol).font(.system(size: 15, weight: .medium)).foregroundStyle(tile == nil ? T.ink : .white)
-                    .frame(width: 32, height: 32).background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(tile ?? T.highest))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(.system(size: 16)).foregroundStyle(T.ink)
+                Image(systemName: symbol).font(.system(size: 16, weight: .medium)).foregroundStyle(tile == nil ? T.ink : .white)
+                    .frame(width: 34, height: 34).background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(tile ?? T.high))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(size: 17)).foregroundStyle(T.ink)
                     if let sub { Text(sub).font(.system(size: 12.5)).foregroundStyle(T.sub).fixedSize(horizontal: false, vertical: true) }
                 }
                 Spacer(minLength: 8)
                 if let value { Text(value).font(.system(size: 14)).foregroundStyle(T.sub).lineLimit(1) }
                 if let trailing { Image(systemName: trailing).font(.system(size: 13, weight: .semibold)).foregroundStyle(trailingTint) }
             }
-            .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 60)
+            .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 64)
             .contentShape(Rectangle())
         }
         .buttonStyle(Pressable())
@@ -74,16 +74,35 @@ struct SToggle: View {
     var body: some View {
         Toggle(isOn: $on) {
             HStack(spacing: 14) {
-                Image(systemName: symbol).font(.system(size: 15, weight: .medium)).foregroundStyle(T.ink)
-                    .frame(width: 32, height: 32).background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(T.highest))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(.system(size: 16)).foregroundStyle(T.ink)
+                Image(systemName: symbol).font(.system(size: 16, weight: .medium)).foregroundStyle(T.ink)
+                    .frame(width: 34, height: 34).background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(T.high))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(size: 17)).foregroundStyle(T.ink)
                     if let sub { Text(sub).font(.system(size: 12.5)).foregroundStyle(T.sub).fixedSize(horizontal: false, vertical: true) }
                 }
             }
         }
         .tint(accent)
-        .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 60)
+        .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 64)
+    }
+}
+
+/** A grey heading over a group of cards ("Remote", "Appearance"…). */
+struct SHead: View {
+    let text: String
+    var body: some View {
+        Text(text).font(.system(size: 17, weight: .semibold)).foregroundStyle(T.sub)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 20).padding(.top, 14).padding(.bottom, -4)
+    }
+}
+
+/** A small grey note under a card. */
+struct SNote: View {
+    let text: String
+    var body: some View {
+        Text(text).font(.system(size: 13)).foregroundStyle(T.sub).lineSpacing(2)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.top, -6)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 

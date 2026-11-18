@@ -320,6 +320,7 @@ private struct SettingsPage: View {
                     }
                     .buttonStyle(Pressable())
                 }
+                SHead(text: "Remote")
                 SCard {
                     row(s.controlStyle == "trackpad" ? "hand.draw" : "circle.circle", "Control", s.controlStyle == "trackpad" ? "Trackpad" : "Dial") { open = "control" }
                     SLine()
@@ -327,16 +328,19 @@ private struct SettingsPage: View {
                     SLine()
                     row("hand.tap", "Gestures") { path.append(.gestures) }
                 }
+                SHead(text: "TV")
                 SCard {
                     row("tv", "TV controls", "\([s.autoKeyboard, s.autoClose].filter { $0 }.count) of 2 on") { open = "tv" }
                     SLine()
                     row("speaker.wave.2", "Touch & sound", feel.isEmpty ? "Off" : feel) { open = "feel" }
                 }
+                SHead(text: "Look")
                 SCard {
                     row("paintpalette", "Appearance", "\(Palettes.of(s.theme).label) · \(ACCENTS.first { $0.1.caseInsensitiveCompare(s.accentHex) == .orderedSame }?.0 ?? "Custom")") { open = "look" }
                     SLine()
                     SToggle(symbol: "sun.max", title: "Keep screen on", sub: "While the remote is open", accent: accent, on: b({ $0.keepAwake }, { $0.keepAwake = $1 }))
                 }
+                SHead(text: "Data & help")
                 SCard {
                     row("externaldrive", "Backup & restore") { open = "backup" }
                     SLine()
@@ -346,6 +350,8 @@ private struct SettingsPage: View {
                     SLine()
                     row("info.circle", "About", version) { open = "about" }
                 }
+                Label("No account · nothing leaves your Wi-Fi", systemImage: "lock.shield")
+                    .font(.system(size: 14, weight: .medium)).foregroundStyle(T.sub).padding(.top, 18)
             }
             .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 32)
         }
@@ -475,7 +481,7 @@ private struct SettingsSheets: View {
                 SCard {
                     SToggle(symbol: "square.3.layers.3d", title: "Depth", sub: "Raised keys, dial and trackpad, with light and shadow", accent: accent, on: bind({ $0.depth }, { $0.depth = $1 }))
                 }
-                label("Theme")
+                SHead(text: "Theme")
                 HStack(spacing: 10) {
                     ForEach(Palettes.all, id: \.key) { p in
                         let sel = s.theme == p.key
@@ -498,7 +504,7 @@ private struct SettingsSheets: View {
                         .accessibilityLabel("\(p.label) theme").accessibilityAddTraits(sel ? .isSelected : [])
                     }
                 }
-                label("Accent colour")
+                SHead(text: "Accent colour")
                 SCard {
                     HStack {
                         ForEach(0..<ACCENTS.count, id: \.self) { i in
@@ -522,7 +528,7 @@ private struct SettingsSheets: View {
                     SLine()
                     SRow(symbol: "questionmark.circle", title: "Ask a question") { contact("Question") }
                 }
-                note("Your app version, iPhone and TV type are added so it's easier to help. Nothing else is sent.")
+                SNote(text: "Your app version, iPhone and TV type are added so it's easier to help. Nothing else is sent.")
                 SCard {
                     SRow(symbol: "hand.point.up.left", title: "Take the tour") { set { $0.toured = false }; dismiss() }
                     SLine()
