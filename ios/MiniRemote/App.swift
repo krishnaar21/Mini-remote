@@ -45,6 +45,8 @@ struct ContentView: View {
             HomeView(vm: vm, accent: accent, numpad: $numpad, keyPage: $keyPage,
                      openDevices: { showDevices = true }, openKeys: { keysVoice = false; showKeys = true },
                      openMore: { showMore = true }, openApps: { pick in apps = pick }, openSleep: { showSleep = true })
+                // The remote stays the same size when a sheet brings up the keyboard.
+                .ignoresSafeArea(.keyboard)
 
             // Messages (not key names: those show at the foot) float above the keys.
             ToastChip(text: vm.toastKey == nil ? vm.toast : nil).padding(.bottom, 300)

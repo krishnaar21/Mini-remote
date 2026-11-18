@@ -677,7 +677,8 @@ extension RemoteModel {
                 try engine.start()
                 voiceSession = (engine, id, a, buf)
                 listening = true
-                a.onVoiceDone = { [weak self] in Task { @MainActor in if self?.voiceSession?.id == id { self?.voiceStop() } } }
+                // Cleared in voiceStop, so holding self here is only for the session.
+                a.onVoiceDone = { Task { @MainActor in if self.voiceSession?.id == id { self.voiceStop() } } }
                 say("Listening…", .voice)
                 let start = Date()
                 while voiceSession?.id == id {
