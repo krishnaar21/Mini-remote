@@ -126,7 +126,7 @@ fun KeyButton(
             .softFace(if (down) downFace else KEY_UP, sheen = !down)
             .rippleLayer { rip.value }
             .then(if (enabled) Modifier.pressInput(repeat, scope, { down = it; if (it) scope.ripple(rip) }, onPress)
-                else if (onDisabled != null) Modifier.pointerInput(Unit) { androidx.compose.foundation.gestures.detectTapGestures { onDisabled() } } else Modifier),
+                else if (onDisabled != null) Modifier.pointerInput(Unit) { detectTapGestures { onDisabled() } } else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         // Hide icons/text from TalkBack; the button's own label speaks for them.
