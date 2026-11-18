@@ -87,6 +87,8 @@ data class Settings(
     val controlStyle: String = "dial",
     /** Shown on Home as "Hello, <first name>!". */
     val profileName: String = "",
+    /** Optional, kept on this phone (and in backups): shown on the profile. */
+    val profileEmail: String = "",
     /** The phone's own volume buttons change the TV's volume while the app is open. */
     val volumeKeys: Boolean = true,
     /** Download app logos from Simple Icons for Quick access and app details. */

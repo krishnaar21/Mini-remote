@@ -995,7 +995,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         val st = settings
         val o = org.json.JSONObject()
             .put("app", "Mini Remote").put("kind", "profile").put("version", 1)
-            .put("name", st.profileName).put("appIcon", appIcon)
+            .put("name", st.profileName).put("email", st.profileEmail).put("appIcon", appIcon)
             .put("settings", org.json.JSONObject()
                 .put("haptics", st.haptics).put("hapticStrength", st.hapticStrength.toDouble())
                 .put("sound", st.sound).put("soundLevel", st.soundLevel.toDouble())
@@ -1017,6 +1017,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         fun f(k: String, def: Float) = if (j.has(k)) j.getDouble(k).toFloat() else def
         val next = d.copy(
             profileName = o.optString("name", d.profileName).take(30),
+            profileEmail = o.optString("email", d.profileEmail).take(80),
             haptics = j.optBoolean("haptics", d.haptics),
             hapticStrength = f("hapticStrength", d.hapticStrength).let { v -> HAPTIC_STRENGTHS.firstOrNull { it.first == v }?.first ?: d.hapticStrength },
             sound = j.optBoolean("sound", d.sound),

@@ -44,6 +44,7 @@ class Store(ctx: Context) {
             autoUpdate = p.getBoolean("autoupdate", d.autoUpdate),
             controlStyle = p.getString("control", d.controlStyle)?.takeIf { it == "dial" || it == "trackpad" } ?: d.controlStyle,
             profileName = p.getString("profileName", d.profileName) ?: d.profileName,
+            profileEmail = p.getString("profileEmail", d.profileEmail) ?: d.profileEmail,
             volumeKeys = p.getBoolean("volumeKeys", d.volumeKeys),
             logos = p.getBoolean("logos", d.logos),
             autoKeyboard = p.getBoolean("autoKeyboard", d.autoKeyboard),
@@ -59,7 +60,7 @@ class Store(ctx: Context) {
         .putString("accent", s.accentHex).putFloat("step", s.scrubStepDp)
         .putBoolean("gyro", s.gyro).putBoolean("awake", s.keepAwake)
         .putBoolean("autoupdate", s.autoUpdate)
-        .putString("control", s.controlStyle).putString("profileName", s.profileName)
+        .putString("control", s.controlStyle).putString("profileName", s.profileName).putString("profileEmail", s.profileEmail)
         .putBoolean("volumeKeys", s.volumeKeys).putBoolean("logos", s.logos).putString("layout", s.layout).putString("appsIn", s.appsIn)
         .putBoolean("autoKeyboard", s.autoKeyboard).putBoolean("notifRemote", s.notifRemote).apply()
 

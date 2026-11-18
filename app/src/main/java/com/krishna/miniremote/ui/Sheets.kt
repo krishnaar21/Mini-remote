@@ -1,5 +1,6 @@
 package com.krishna.miniremote.ui
 
+import androidx.compose.foundation.layout.imePadding
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -682,10 +683,12 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
     val s = vm.settings
     val ctx = androidx.compose.ui.platform.LocalContext.current
 
+    androidx.compose.runtime.CompositionLocalProvider(LocalAccent provides accent) {
     // Profile: your name, and everything you've set up, saved to a file (and loaded back).
     ProfileCard(vm, accent)
 
-    Fold("Remote", "${if (s.controlStyle == "trackpad") "Trackpad" else "Dial"} · Apps ${if (s.appsIn == "more") "in More" else "on Home"}", startOpen = true) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalRowLines provides false) {
+    Fold("Remote", "", collapsible = false) {
         SegRow("Quick access", listOf("home" to "Home page", "more" to "More sheet"), s.appsIn) { vm.update(s.copy(appsIn = it)) }
         SegRow("Control", listOf("dial" to "Dial", "trackpad" to "Trackpad"), s.controlStyle) { vm.update(s.copy(controlStyle = it)) }
         ToggleRow("Volume keys", "Phone keys change TV volume", s.volumeKeys) { vm.update(s.copy(volumeKeys = it)) }
@@ -694,7 +697,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
         if (openGestures != null) LinkRow("Gestures", "Swipes and taps, with demos", last = true, onClick = openGestures)
     }
 
-    Fold("Look", "${com.krishna.miniremote.AppIcon.all.firstOrNull { it.first == com.krishna.miniremote.AppIcon.current(ctx) }?.second ?: "Dial"} icon · ${ACCENTS.firstOrNull { it.second.equals(s.accentHex, true) }?.first ?: "Accent"}") {
+    Fold("Appearance", "${com.krishna.miniremote.AppIcon.all.firstOrNull { it.first == com.krishna.miniremote.AppIcon.current(ctx) }?.second ?: "Dial"} icon · ${ACCENTS.firstOrNull { it.second.equals(s.accentHex, true) }?.first ?: "Accent"}") {
         Text("App icon", color = T.Ink, fontSize = 15.sp, modifier = Modifier.padding(top = 16.dp))
         val ctx = androidx.compose.ui.platform.LocalContext.current
         var icon by remember { mutableStateOf(com.krishna.miniremote.AppIcon.current(ctx)) }
@@ -740,7 +743,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
     }
         }
 
-    Fold("Feel", listOf(if (s.haptics) "Haptics" else null, if (s.sound) "Sound" else null).filterNotNull().joinToString(" · ").ifEmpty { "Quiet" }) {
+    Fold("Touch & sound", "", collapsible = false) {
         ToggleRow("Haptics", "On every press", s.haptics) { vm.update(s.copy(haptics = it)) }
         if (s.haptics) SegRow("Strength", HAPTIC_STRENGTHS, s.hapticStrength) { vm.update(s.copy(hapticStrength = it)) }
         ToggleRow("Sound", "Click on press", s.sound) { vm.update(s.copy(sound = it)) }
@@ -763,7 +766,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
     }
         }
 
-    Fold("General", listOf(if (s.autoUpdate) "Auto updates" else "Updates off", "${vm.devices.size} TV${if (vm.devices.size == 1) "" else "s"}").joinToString(" · ")) {
+    Fold("General", "", collapsible = false) {
         ToggleRow("App logos", "Download logos", s.logos) { vm.update(s.copy(logos = it)) }
         ToggleRow("Stay awake", "While open", s.keepAwake) { vm.update(s.copy(keepAwake = it)) }
         if (manage != null) { LinkRow("TVs", "${vm.devices.size} saved", onClick = manage) }
@@ -822,6 +825,8 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
         }
     } else Spacer(Modifier.height(10.dp))
         }
+    }
+    }
 }
 
 /**
@@ -829,32 +834,43 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
  * and the rows when open. Remembered while Settings stays open.
  */
 @Composable
-internal fun Fold(title: String, summary: String, startOpen: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+internal fun Fold(title: String, summary: String, startOpen: Boolean = false, collapsible: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
+    // Native settings style: no cards. A small accent heading, then the rows; only the big
+    // sections (Appearance, About) fold away, with a one-line summary while folded.
+    val accent = LocalAccent.current
+    if (!collapsible) {
+        Text(title, color = accent, fontSize = 13.5.sp, fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(top = 28.dp, bottom = 2.dp, start = 2.dp).semantics { heading() })
+        Column(Modifier.fillMaxWidth(), content = content)
+        return
+    }
     var open by androidx.compose.runtime.saveable.rememberSaveable(title) { mutableStateOf(startOpen) }
     val turn by androidx.compose.animation.core.animateFloatAsState(if (open) 180f else 0f, label = "fold")
-    Column(Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(20.dp)).background(M.Container)) {
+    Column(Modifier.fillMaxWidth().padding(top = 16.dp)) {
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 64.dp)
+            Modifier.fillMaxWidth().heightIn(min = 60.dp)
                 .clickable(onClickLabel = if (open) "collapse $title" else "expand $title", role = Role.Button) { open = !open }
                 .semantics { stateDescription = if (open) "Expanded" else "Collapsed"; heading() }
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 2.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(title, color = T.Ink, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                if (!open) Text(summary, color = Muted, fontSize = 12.5.sp, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
+                Text(title, color = accent, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
+                if (!open) Text(summary, color = Muted, fontSize = 13.sp, maxLines = 1, modifier = Modifier.padding(top = 3.dp))
             }
             Box(Modifier.graphicsLayer { rotationZ = turn }) { LineIcon(Ico.DOWN, T.Dim, 18.dp, stroke = 2.2f) }
         }
         androidx.compose.animation.AnimatedVisibility(open, enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
             exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()) {
-            Column(Modifier.fillMaxWidth()) {
-                Divider()
-                Column(Modifier.padding(horizontal = 16.dp), content = content)
-            }
+            Column(Modifier.fillMaxWidth(), content = content)
         }
     }
 }
+
+/** Settings rows draw no lines between them (native style); other pages keep theirs. */
+internal val LocalRowLines = androidx.compose.runtime.compositionLocalOf { true }
+/** The accent colour, for section headings. */
+internal val LocalAccent = androidx.compose.runtime.compositionLocalOf { Color(0xFF8AB4F8) }
 
 /** A tonal button with an icon, for the profile card. */
 @Composable
@@ -907,42 +923,78 @@ internal fun ProfileCard(vm: RemoteVM, accent: Color) {
     val apps = vm.shortcuts.count { it.pinned }
     val stats = listOf(
         "${vm.devices.size} TV${if (vm.devices.size == 1) "" else "s"}",
-        "$apps in Quick access",
-        if (s.controlStyle == "trackpad") "Trackpad" else "Dial",
-    ).joinToString("  ·  ")
-    // A card with a soft wash of your accent colour: you, what you've set up, and the backup.
-    Column(
-        Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(24.dp))
-            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(accent.copy(alpha = 0.22f).compositeOver(M.Container), M.Container)))
-            .padding(18.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Box(Modifier.size(68.dp).border(2.dp, accent.copy(alpha = 0.7f), CircleShape).padding(4.dp)) { Avatar(initials(name), accent, 60.dp) }
+        "$apps app${if (apps == 1) "" else "s"}",
+    ).joinToString(" · ")
+    var editing by remember { mutableStateOf(false) }
+    if (editing) ProfileEditSheet(vm, accent) { editing = false }
+    // A plain card: you (tap Edit for name and email), then backup and restore.
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(24.dp)).background(M.Container).padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Avatar(initials(s.profileName), accent, 56.dp)
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BasicTextField(
-                        name, { name = it.take(30) }, singleLine = true,
-                        textStyle = TextStyle(color = T.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, fontFamily = Inter),
-                        cursorBrush = SolidColor(T.Ink),
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { vm.update(s.copy(profileName = name.trim())) }),
-                        modifier = Modifier.weight(1f).onFocusChanged { if (!it.isFocused && name.trim() != s.profileName) vm.update(s.copy(profileName = name.trim())) }
-                            .semantics { contentDescription = "Your name" },
-                        decorationBox = { inner -> Box { if (name.isEmpty()) Text("Add your name", color = Muted, fontSize = 20.sp, fontWeight = FontWeight.SemiBold); inner() } },
-                    )
-                    LineIcon(Ico.EDIT, Muted, 16.dp)
+                Text(s.profileName.ifBlank { "Add your name" }, color = if (s.profileName.isBlank()) Muted else T.Ink, fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text(s.profileEmail.ifBlank { stats }, color = Muted, fontSize = 12.5.sp, maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+            }
+            Box(Modifier.height(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).clickable(role = Role.Button, onClickLabel = "edit profile") { editing = true }
+                .padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    LineIcon(Ico.EDIT, T.Ink, 15.dp)
+                    Text("Edit", color = T.Ink, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
                 }
-                Text(stats, color = Muted, fontSize = 12.5.sp, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
             }
         }
-        Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             ProfileAction(Ico.BACKUP, "Back up", Modifier.weight(1f)) { save.launch("Mini Remote profile${if (s.profileName.isNotBlank()) " - " + s.profileName else ""}.json") }
             ProfileAction(Ico.RESTORE, "Restore", Modifier.weight(1f)) { load.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
         }
-        Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            LineIcon(Ico.INFO, Muted, 14.dp)
-            Text("A backup holds your settings, Quick access and app icon. Paired TVs stay on this phone: pair once on a new one.",
-                color = Muted, fontSize = 12.sp, lineHeight = 16.sp)
+        Text("Backs up settings and apps. TVs pair again on a new phone.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp, start = 2.dp))
+    }
+}
+
+/** Edit profile: name and email (both optional, kept on this phone and in backups). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProfileEditSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
+    val s = vm.settings
+    var name by remember { mutableStateOf(s.profileName) }
+    var email by remember { mutableStateOf(s.profileEmail) }
+    val st = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onClose, sheetState = st, containerColor = SheetBg, contentColor = T.Ink,
+        shape = SheetShape, scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
+    ) {
+        Column(Modifier.navigationBarsPadding().imePadding().padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Avatar(initials(name), accent, 72.dp) }
+            Text("Profile", color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
+            Text("Shown here and on Home. Stays on this phone.", color = Muted, fontSize = 12.5.sp, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 12.dp))
+            @Composable fun field(label: String, value: String, hint: String, type: KeyboardType, cap: KeyboardCapitalization, set: (String) -> Unit) {
+                Text(label, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp, start = 2.dp))
+                BasicTextField(
+                    value, set, singleLine = true,
+                    textStyle = TextStyle(color = T.Ink, fontSize = 16.sp, fontFamily = Inter), cursorBrush = SolidColor(T.Ink),
+                    keyboardOptions = KeyboardOptions(capitalization = cap, keyboardType = type, imeAction = ImeAction.Next),
+                    modifier = Modifier.fillMaxWidth().height(52.dp).semantics { contentDescription = label },
+                    decorationBox = { inner ->
+                        Box(Modifier.fillMaxSize().softFace(HOLLOW, sheen = false, corner = 14.dp, dpUnits = true).padding(horizontal = 14.dp), contentAlignment = Alignment.CenterStart) {
+                            if (value.isEmpty()) Text(hint, color = Color(0xFF8A8A8E), fontSize = 16.sp); inner()
+                        }
+                    },
+                )
+            }
+            field("Name", name, "Your name", KeyboardType.Text, KeyboardCapitalization.Words) { name = it.take(30) }
+            field("Email", email, "Optional", KeyboardType.Email, KeyboardCapitalization.None) { email = it.take(80).trim() }
+            val bad = email.isNotEmpty() && !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
+            if (bad) Text("That doesn't look like an email address", color = DangerInk, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp, start = 2.dp))
+            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.weight(1f)) { Btn("Cancel", kind = 1) { onClose() } }
+                Box(Modifier.weight(1.4f)) { Btn("Save", enabled = !bad) {
+                    vm.update(s.copy(profileName = name.trim(), profileEmail = email.trim())); vm.say("Profile saved"); onClose()
+                } }
+            }
         }
     }
 }
@@ -958,7 +1010,7 @@ internal fun Group(content: @Composable ColumnScope.() -> Unit) {
 
 
 @Composable
-internal fun Divider() = Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF3A3A3E)))
+internal fun Divider() { if (LocalRowLines.current) Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF3A3A3E))) }
 
 @Composable
 internal fun ToggleRow(title: String, sub: String?, checked: Boolean, last: Boolean = false, onChange: (Boolean) -> Unit) {
