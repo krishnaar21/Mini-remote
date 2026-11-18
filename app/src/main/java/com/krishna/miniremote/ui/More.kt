@@ -261,8 +261,6 @@ internal fun SleepCard(vm: RemoteVM, accent: Color, card: Boolean = true) {
                     contentAlignment = Alignment.Center) { Text("Cancel", color = T.Ink, fontSize = 13.5.sp, fontWeight = FontWeight.Medium) }
             }
             Text("Keep Mini Remote open (it can be in the background).", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
-        } else {
-            Text("Turn the TV off after", color = T.Ink, fontSize = 15.sp, modifier = Modifier.padding(top = 16.dp))
         }
         Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(15, 30, 60, 90).forEach { m ->
@@ -287,7 +285,7 @@ fun SleepSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
             SleepArt(accent, Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 20.dp).height(120.dp))
-            SheetTitle("Sleep timer", "The TV turns itself off when the time's up.", Modifier.padding(bottom = 12.dp), center = true)
+            SheetTitle("Sleep timer", "Pick when the TV turns itself off.", Modifier.padding(bottom = 8.dp), center = true, small = true)
             SleepCard(vm, accent, card = false)
         }
     }

@@ -107,8 +107,51 @@ object Logos {
      * name (the Android TV id, e.g. com.netflix.ninja). Only the package name is sent to Google
      * Play; the image comes from Google's image host. Cached like the others.
      */
+    /**
+     * The official app icon from Apple's App Store (iTunes lookup: JSON with a 512 px artwork
+     * link), for apps whose Play listing doesn't give one reliably. Keyed by the Android
+     * package; the result is checked against the expected name so a wrong id can't show
+     * another app's icon.
+     */
+    private val appStore = mapOf(
+        "com.amazon.avod.thirdpartyclient" to (545519333L to "prime"),
+        "in.startv.hotstar" to (934459219L to "hotstar"),
+        "com.sonyliv" to (587794258L to "sony"),
+        "com.graymatrix.did" to (743691886L to "zee"),
+        "com.hulu.plus" to (376510438L to "hulu"),
+        "com.peacocktv.peacockandroid" to (1508186374L to "peacock"),
+    )
+
+    private fun storeIcon(ctx: Context, pkg: String): Bitmap? {
+        val (id, word) = appStore[pkg] ?: return null
+        val file = File(File(ctx.cacheDir, "logos").apply { mkdirs() }, "ios-$id.png")
+        fun decode(b: ByteArray?) = b?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }
+        if (file.exists()) decode(file.readBytes())?.let { return it }
+        for (country in listOf("in", "us")) {
+            val json = runCatching {
+                site.newCall(Request.Builder().url("https://itunes.apple.com/lookup?id=$id&country=$country").build()).execute().use { r ->
+                    if (!r.isSuccessful) null else r.body?.string()?.take(200_000)
+                }
+            }.getOrNull() ?: continue
+            val item = runCatching { org.json.JSONObject(json).getJSONArray("results").optJSONObject(0) }.getOrNull() ?: continue
+            if (word !in item.optString("trackName").lowercase()) continue
+            val art = item.optString("artworkUrl512").takeIf { it.startsWith("https://") && "mzstatic.com" in it } ?: continue
+            val url = art.substringBeforeLast('/') + "/256x256bb.png"
+            val b = fetchPng(site, url) ?: fetchPng(site, art) ?: continue
+            val d = decode(b) ?: continue
+            file.writeBytes(b)
+            return d
+        }
+        return null
+    }
+
     suspend fun playIcon(ctx: Context, pkg: String): Bitmap? = withContext(Dispatchers.IO) {
         if (pkg.isEmpty() || !pkg.all { it.isLetterOrDigit() || it == '.' || it == '_' } || '.' !in pkg) return@withContext null
+        // Apps known to need it: the App Store icon first.
+        if (pkg in appStore) {
+            mem.get("ios:$pkg")?.let { return@withContext it }
+            storeIcon(ctx, pkg)?.let { mem.put("ios:$pkg", it); return@withContext it }
+        }
         val key = "play:$pkg"
         mem.get(key)?.let { return@withContext it }
         if (key in misses) return@withContext null
@@ -125,8 +168,10 @@ object Logos {
             }.getOrNull()
             // The listing's og:image is the app icon on play-lh.googleusercontent.com; ask for 256 px.
             val img = html?.let {
-                Regex("<meta property=\"og:image\" content=\"(https://play-lh\\.googleusercontent\\.com/[^\"]+)\"").find(it)?.groupValues?.get(1)
-                    ?: Regex("(https://play-lh\\.googleusercontent\\.com/[A-Za-z0-9_\\-]+)=[^\"]*\"[^>]*alt=\"Icon image\"").find(it)?.groupValues?.get(1)
+                (Regex("<meta[^>]*og:image\"[^>]*content=\"(https://play-lh\\.googleusercontent\\.com/[^\"]+)\"").find(it)
+                    ?: Regex("<meta[^>]*content=\"(https://play-lh\\.googleusercontent\\.com/[^\"]+)\"[^>]*og:image").find(it))?.groupValues?.get(1)
+                    ?.takeIf { !it.contains(PLAY_LOGO) }
+                    ?: Regex("(https://play-lh\\.googleusercontent\\.com/[A-Za-z0-9_\\-]+)=[^\"]*\"[^>]*alt=\"Icon image\"").find(it)?.groupValues?.get(1)?.takeIf { !it.contains(PLAY_LOGO) }
             }
                 ?.substringBefore('=')?.let { "$it=s256" }
             val b = img?.let { fetchPng(site, it) }
@@ -137,6 +182,9 @@ object Logos {
         mem.put(key, bmp)
         bmp
     }
+
+    /** The Google Play logo's image id: what a blocked or generic page shows instead of the app's icon. */
+    private const val PLAY_LOGO = "OSPwLdQHHx16DNvMT8GxkBvpzj5x9WG9"
 
     /** Removes downloaded logos (with "Erase all data"). */
     fun clear(ctx: Context) { runCatching { File(ctx.cacheDir, "logos").deleteRecursively() }; mem.evictAll() }

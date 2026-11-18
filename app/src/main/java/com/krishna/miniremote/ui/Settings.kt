@@ -110,11 +110,11 @@ import kotlin.math.roundToInt
 
 /** Left-aligned sheet title with its line of explanation close under it. */
 @Composable
-internal fun SheetTitle(title: String, sub: String? = null, modifier: Modifier = Modifier, center: Boolean = false) {
+internal fun SheetTitle(title: String, sub: String? = null, modifier: Modifier = Modifier, center: Boolean = false, small: Boolean = false) {
     Column(modifier.fillMaxWidth().padding(horizontal = 2.dp).semantics(mergeDescendants = true) { heading() },
         horizontalAlignment = if (center) Alignment.CenterHorizontally else Alignment.Start) {
-        Text(title, color = T.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, textAlign = if (center) TextAlign.Center else TextAlign.Start)
-        sub?.let { Text(it, color = SubInk, fontSize = 13.sp, lineHeight = 16.sp, textAlign = if (center) TextAlign.Center else TextAlign.Start, modifier = Modifier.padding(top = 1.dp)) }
+        Text(title, color = T.Ink, fontSize = if (small) 17.sp else 20.sp, fontWeight = FontWeight.SemiBold, textAlign = if (center) TextAlign.Center else TextAlign.Start)
+        sub?.let { Text(it, color = SubInk, fontSize = if (small) 12.5.sp else 13.sp, lineHeight = 16.sp, textAlign = if (center) TextAlign.Center else TextAlign.Start, modifier = Modifier.padding(top = 1.dp)) }
     }
 }
 
@@ -140,7 +140,8 @@ internal val SubInk = Color(0xFF8E8E93)
 /** A settings icon on its own rounded square, in the row's colour. */
 @Composable
 internal fun IconTile(ico: Ico, tint: Color) {
-    Box(Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(tint), contentAlignment = Alignment.Center) { LineIcon(ico, Color.White, 18.dp) }
+    // One calm colour for every tile (the row's colour is ignored): the page stays quiet.
+    Box(Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(Color(0xFF3A3A3F)), contentAlignment = Alignment.Center) { LineIcon(ico, T.Ink, 18.dp) }
 }
 
 /** A rounded group of rows. */
@@ -239,15 +240,10 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
         if (openGestures != null) { SetLine(); SetRow(Ico.TRACKPAD, SetTint.teal, "Gestures", onClick = openGestures) }
     }
     SetCard {
+        val on = listOf(s.volumeKeys, s.autoKeyboard, s.notifRemote, s.autoClose).count { it }
+        SetRow(Ico.TV, SetTint.blue, "TV controls", "$on of 4 on") { open = "tv" }
+        SetLine()
         SetRow(Ico.SPEAKER, SetTint.red, "Touch & sound", listOf(if (s.haptics) "Haptics" else null, if (s.sound) "Sound" else null).filterNotNull().joinToString(", ").ifEmpty { "Off" }) { open = "feel" }
-        SetLine()
-        SetToggle(Ico.VOL_PLUS, SetTint.orange, "Volume keys", "Phone keys change TV volume", s.volumeKeys) { vm.update(s.copy(volumeKeys = it)) }
-        SetLine()
-        SetToggle(Ico.KEYBOARD, SetTint.blue, "Auto keyboard", "When the TV asks for text", s.autoKeyboard) { vm.update(s.copy(autoKeyboard = it)) }
-        SetLine()
-        SetToggle(Ico.ALERT, SetTint.green, "Notification remote", "Volume and play in the background", s.notifRemote) { vm.update(s.copy(notifRemote = it)) }
-        SetLine()
-        SetToggle(Ico.BACK, SetTint.teal, "Close idle TV menus", "Back after 30 s without use", s.autoClose) { vm.update(s.copy(autoClose = it)) }
     }
     SetCard {
         SetRow(Ico.DISPLAY, SetTint.pink, "Appearance", "$iconName · $accentName") { open = "look" }
@@ -269,6 +265,17 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
 
     when (open) {
         "profile" -> ProfileEditSheet(vm, accent) { open = null }
+        "tv" -> SetSheet("TV controls", "How the phone works with the TV.", { open = null }) {
+            SetCard {
+                SetToggle(Ico.VOL_PLUS, SetTint.orange, "Volume keys", "Phone keys change TV volume", s.volumeKeys) { vm.update(s.copy(volumeKeys = it)) }
+                SetLine()
+                SetToggle(Ico.KEYBOARD, SetTint.blue, "Auto keyboard", "When the TV asks for text", s.autoKeyboard) { vm.update(s.copy(autoKeyboard = it)) }
+                SetLine()
+                SetToggle(Ico.ALERT, SetTint.green, "Notification remote", "Volume and play in the background", s.notifRemote) { vm.update(s.copy(notifRemote = it)) }
+                SetLine()
+                SetToggle(Ico.BACK, SetTint.teal, "Close idle TV menus", "Back after 15 s without use", s.autoClose) { vm.update(s.copy(autoClose = it)) }
+            }
+        }
         "control" -> SetSheet("Control", "What the middle of the remote is.", { open = null }) {
             SetCard(Modifier.padding(top = 0.dp)) {
                 Choice("Dial", "Ring with arrows, OK in the middle; turn the ring for volume", s.controlStyle == "dial", accent) { vm.update(s.copy(controlStyle = "dial")) }

@@ -308,7 +308,7 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
     }
     Box(modifier.padding(end = 12.dp), contentAlignment = Alignment.CenterStart) {
         Row(
-            Modifier.heightIn(min = 54.dp).widthIn(min = 180.dp).clip(CircleShape).background(M.High)
+            Modifier.heightIn(min = 54.dp).widthIn(min = 236.dp).clip(CircleShape).background(M.High)
                 .clickable(onClickLabel = "choose a TV", role = Role.Button, onClick = openDevices)
                 .semantics(mergeDescendants = true) {
                     contentDescription = d?.let { "TV: ${it.name}" } ?: "Choose a TV"
@@ -326,10 +326,10 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
             // The TV's name, and what's on it underneath when the TV says (app, time played).
             val playing = nowLine(vm)
             Column(Modifier.weight(1f, fill = false)) {
-                Text(d?.let { shortName(it.name, it.brand.label) } ?: "Choose a TV", color = T.Ink, fontSize = if (playing != null) 15.sp else 16.sp,
-                    lineHeight = 18.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(d?.let { shortName(it.name, it.brand.label) } ?: "Choose a TV", color = T.Ink, fontSize = if (playing != null) 14.sp else 15.sp,
+                    lineHeight = 17.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (playing != null) Text(playing, color = T.Dim, fontSize = 12.sp, lineHeight = 14.sp, maxLines = 1, softWrap = false,
-                    modifier = Modifier.widthIn(max = 200.dp).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 1500)
+                    modifier = Modifier.padding(top = 3.dp).widthIn(max = 200.dp).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 1500)
                         .semantics { contentDescription = "On the TV: $playing" })
             }
             Spacer(Modifier.weight(1f, fill = false))
