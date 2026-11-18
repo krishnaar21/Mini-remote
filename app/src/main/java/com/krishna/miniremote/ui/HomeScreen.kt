@@ -225,7 +225,7 @@ fun HomeScreen(
     val topBar: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 32.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             TvPicker(vm, Modifier.weight(1f), openDevices)
-            KeyButton(accent, "Power", Modifier.size(52.dp), pressedScale = 1f, onPress = {
+            KeyButton(accent, "Power", Modifier.size(52.dp).coach("power"), pressedScale = 1f, onPress = {
                 // Off (not reachable): wake it. On: ask before turning it off.
                 if (vm.active == null) openDevices() else if (vm.link != Link.READY) vm.wake() else askPower = true
             }) { c, _ ->
@@ -259,13 +259,13 @@ fun HomeScreen(
                 }
                 CardDots(3, cards.currentPage) { scope.launch { cards.animateScrollToPage(it) } }
             }
-            HomeLayout.STRIP -> ringArea(m.padding(vertical = 8.dp).then(a11y))
+            HomeLayout.STRIP -> ringArea(m.padding(vertical = 8.dp).then(a11y).coach("dial"))
         }
     }
     val keysBlock: @Composable () -> Unit = {
         when (layout) {
             HomeLayout.CARDS -> FourKeys(vm, accent, openKeys)
-            HomeLayout.STRIP -> KeyRows(vm, accent, numpad, onNumpad, openKeys, openMore, openApps, keyPager)
+            HomeLayout.STRIP -> Box(Modifier.coach("keys")) { KeyRows(vm, accent, numpad, onNumpad, openKeys, openMore, openApps, keyPager) }
         }
     }
 
@@ -308,7 +308,7 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
     }
     Box(modifier.padding(end = 12.dp), contentAlignment = Alignment.CenterStart) {
         Row(
-            Modifier.height(52.dp).widthIn(min = 150.dp, max = 236.dp).clip(CircleShape).background(M.High)
+            Modifier.coach("tv").height(52.dp).widthIn(min = 150.dp, max = 236.dp).clip(CircleShape).background(M.High)
                 .clickable(onClickLabel = "choose a TV", role = Role.Button, onClick = openDevices)
                 .semantics(mergeDescendants = true) {
                     contentDescription = d?.let { "TV: ${it.name}" } ?: "Choose a TV"

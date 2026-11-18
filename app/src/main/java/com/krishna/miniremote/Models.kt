@@ -101,6 +101,9 @@ data class Settings(
     val theme: String = "dark",
     /** Close TV menus opened from here (Settings, Input…) with Back after 10 s of no use. */
     val autoClose: Boolean = true,
+    /** The welcome pages and the guided tour have been seen. */
+    val onboarded: Boolean = false,
+    val toured: Boolean = false,
     /** Home layout: "strip" (Black) or "cards" (see ui.HomeLayout). */
     val layout: String = "strip",
     /** Where quick access apps live: "home" (a third page of circles) or "more" (top of the More sheet). */

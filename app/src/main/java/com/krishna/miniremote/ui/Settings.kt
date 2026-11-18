@@ -415,6 +415,15 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
                 SetLine()
                 SetRow(Ico.USER, SetTint.grey, "Ask a question", sub = "Setting up a TV, pairing, anything else") { vm.contact("Question") }
             }
+            SetCard {
+                SetRow(Ico.TRACKPAD, SetTint.grey, "Take the tour", sub = "A walk round the remote, step by step") {
+                    open = null; vm.update(s.copy(toured = false))
+                }
+                SetLine()
+                SetRow(Ico.INFO, SetTint.grey, "Show the welcome again", sub = "The first-run pages") {
+                    open = null; vm.update(s.copy(onboarded = false, toured = false))
+                }
+            }
             Text("Your app version, phone and TV type are added so it's easier to help. Nothing else is sent.",
                 color = SubInk, fontSize = 12.5.sp, modifier = Modifier.padding(top = 10.dp, start = 4.dp, end = 4.dp))
         }

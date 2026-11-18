@@ -220,7 +220,7 @@ fun AppShell(vm: RemoteVM) {
                                 }
                             }
                         }
-                        PagePills(keyPager.pageCount, keyPager.currentPage, accent, listOf("Main keys", "More keys", "Apps", "More apps")) { i ->
+                        PagePills(keyPager.pageCount, keyPager.currentPage, accent, listOf("Main keys", "More keys", "Apps", "More apps"), Modifier.coach("pills")) { i ->
                             vm.feel.fire(com.krishna.miniremote.Feel.TICK); scope.launch { keyPager.animateScrollToPage(i) }
                         }
                     }
@@ -286,6 +286,13 @@ fun AppShell(vm: RemoteVM) {
                     }
                 }
             }
+        }
+        // First run: the welcome pages, then the guided tour; then choose a TV if there's none.
+        val s0 = vm.settings
+        if (!s0.onboarded) Onboarding(accent) { vm.update(vm.settings.copy(onboarded = true)) }
+        else if (!s0.toured && onRemote && sheet == null && !more && !keys) CoachTour(accent) {
+            vm.update(vm.settings.copy(toured = true))
+            if (vm.active == null) sheet = Page.Devices
         }
         sheet?.let { start -> RemoteSheet(vm, accent, start) { sheet = null } }
         if (keys) KeyboardSheet(vm, accent, openSearch = !keysFromTv && !keysVoice, startVoice = keysVoice) { keys = false; keysFromTv = false; keysVoice = false }

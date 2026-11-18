@@ -1192,5 +1192,5 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
 }
 
 /** Where Help & feedback goes: an email address (when set), else new issues on GitHub. */
-const val SUPPORT_EMAIL = ""
+const val SUPPORT_EMAIL = "iamyourdev123@gmail.com"
 const val SUPPORT_ISSUES = "https://github.com/krishnaar21/mini-remote/issues/new"
