@@ -367,7 +367,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     }
 
     fun scrubTick(key: RemoteKey) {
-        userAt = System.currentTimeMillis() feel.fire(Feel.TICK); nudgeVolume(key); queue.trySend(key) }
+        userAt = System.currentTimeMillis(); feel.fire(Feel.TICK); nudgeVolume(key); queue.trySend(key) }
 
     /** Moves the shown volume right away, then asks the TV for the real value a moment later. */
     private fun nudgeVolume(key: RemoteKey) {
