@@ -30,6 +30,9 @@ struct ContentView: View {
     @State private var keysFromTv = false
     /** The apps screen; picking = opened from a + place (tapping an app adds it to quick access). */
     @State private var apps: Bool? = nil
+    #if DEBUG
+    @State private var showIcons = false
+    #endif
 
     private var accent: Color { Color(hexString: vm.settings.accentHex) }
     private var pages: Int { vm.settings.appsIn == "more" ? 2 : 4 }
@@ -121,6 +124,7 @@ struct ContentView: View {
         }
         .onChange(of: vm.nowOn?.live) { _, live in if live != true { numpad = false } }
         #if DEBUG
+        .overlay { if showIcons { HomeIconChoices() } }
         .onAppear { screenshot() }
         #endif
     }
@@ -138,6 +142,7 @@ extension ContentView {
             switch s {
             case "more": showMore = true
             case "sleep": showSleep = true
+            case "homeicons": showIcons = true
             case "welcome": var st = vm.settings; st.onboarded = false; vm.update(st)
             case "tour": var st = vm.settings; st.toured = false; vm.update(st)
             case "page2": keyPage = 1
@@ -183,3 +188,25 @@ private struct CodeSheet: View {
         .presentationDetents([.height(340)])
     }
 }
+
+#if DEBUG
+/** Screenshot only: candidate SF Symbols for the Home key, as they'd look on the remote. */
+private struct HomeIconChoices: View {
+    let names = ["house", "house.fill", "homekit", "house.lodge", "house.circle", "tv", "play.tv", "appletv",
+                 "square.grid.2x2", "circle.grid.2x2", "rectangle.grid.2x2", "square.grid.3x3", "rectangle.split.2x2", "square.on.square", "dot.circle", "circle.circle"]
+    var body: some View {
+        ZStack {
+            T.screen.ignoresSafeArea()
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 18) {
+                ForEach(Array(names.enumerated()), id: \.offset) { i, n in
+                    VStack(spacing: 6) {
+                        GlassKey(symbol: n, label: n, size: 68, icon: 22) {}
+                        Text("\(i + 1). \(n)").font(.system(size: 10)).foregroundStyle(T.dim).lineLimit(1).minimumScaleFactor(0.6)
+                    }
+                }
+            }
+            .padding(16)
+        }
+    }
+}
+#endif
