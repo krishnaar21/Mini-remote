@@ -807,4 +807,32 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
             say("Couldn't reach the TV")
         }
     }
+
+    /** What the TV is showing, as far as it tells us. */
+    enum class Screen { HOME, APP, LIVE, UNKNOWN }
+
+    val screen: Screen get() {
+        val n = nowOn ?: return Screen.UNKNOWN
+        return when {
+            n.name.isEmpty() -> Screen.UNKNOWN
+            n.live -> Screen.LIVE
+            n.name == "Home" -> Screen.HOME
+            else -> Screen.APP
+        }
+    }
+
+    /**
+     * Whether [k] does something right now: the TV must have the key, and it must fit what's on
+     * screen (no playback keys on the home screen, no channel keys in apps). Unknown = allowed.
+     */
+    fun can(k: RemoteKey): Boolean {
+        val a = adapter
+        if (a != null && link == Link.READY && !a.supports(k)) return false
+        return when (screen) {
+            Screen.HOME -> k !in setOf(RemoteKey.PLAY_PAUSE, RemoteKey.REWIND, RemoteKey.FAST_FORWARD, RemoteKey.SUBTITLES, RemoteKey.AUDIO,
+                RemoteKey.CH_UP, RemoteKey.CH_DOWN, RemoteKey.GUIDE, RemoteKey.CH_LIST)
+            Screen.APP -> k !in setOf(RemoteKey.CH_UP, RemoteKey.CH_DOWN, RemoteKey.GUIDE, RemoteKey.CH_LIST)
+            else -> true
+        }
+    }
 }

@@ -98,6 +98,8 @@ fun KeyButton(
     pressedScale: Float = 0.95f,
     downFace: Face = KEY_DOWN,
     restColor: Color = T.Ink,
+    /** False: shown dimmed and does nothing (not available for what's on the TV). */
+    enabled: Boolean = true,
     onPress: () -> Unit,
     content: @Composable (color: Color, down: Boolean) -> Unit,
 ) {
@@ -108,7 +110,9 @@ fun KeyButton(
 
     Box(
         modifier
+            .graphicsLayer { alpha = if (enabled) 1f else 0.32f }
             .semantics(mergeDescendants = true) {
+                if (!enabled) androidx.compose.ui.semantics.disabled()
                 role = Role.Button
                 contentDescription = label
                 if (!state.isNullOrEmpty()) stateDescription = state
@@ -118,7 +122,7 @@ fun KeyButton(
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .softFace(if (down) downFace else KEY_UP, sheen = !down)
             .rippleLayer { rip.value }
-            .pressInput(repeat, scope, { down = it; if (it) scope.ripple(rip) }, onPress),
+            .then(if (enabled) Modifier.pressInput(repeat, scope, { down = it; if (it) scope.ripple(rip) }, onPress) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         // Hide icons/text from TalkBack; the button's own label speaks for them.

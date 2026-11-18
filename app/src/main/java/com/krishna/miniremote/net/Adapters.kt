@@ -51,6 +51,9 @@ interface RemoteAdapter {
         get() = null
         set(_) {}
 
+    /** Whether this TV has [key] at all (keys it lacks are shown disabled). */
+    fun supports(key: RemoteKey): Boolean = true
+
     /** True when [setText] can put the whole text in the TV's focused box (Android TV's keyboard link). */
     val replacesText: Boolean get() = false
 
@@ -174,6 +177,7 @@ class RokuAdapter(private val host: String) : RemoteAdapter {
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 
     override suspend fun send(key: RemoteKey) { post("keypress/${keys[key] ?: missing(key, "Roku")}") }
+    override fun supports(key: RemoteKey) = key in keys
 
     override suspend fun typeText(text: String) {
         for (ch in text) post("keypress/Lit_" + enc(ch.toString()))
@@ -324,6 +328,8 @@ class SamsungAdapter(
         try { withTimeout(25_000) { ready.await() } } catch (e: Exception) { close(); throw e }
         if (pin == null) tls.seen?.let(onPin)
     }
+
+    override fun supports(key: RemoteKey) = key in keys
 
     override suspend fun send(key: RemoteKey) {
         val s = ws ?: error("Not connected")
@@ -524,6 +530,8 @@ class LgAdapter(
     private suspend fun button(name: String) {
         ensurePointer().send("type:button\nname:$name\n\n")
     }
+
+    override fun supports(key: RemoteKey) = key != RemoteKey.VOICE
 
     override suspend fun send(key: RemoteKey) {
         key.digit?.let { button(it.toString()); return }

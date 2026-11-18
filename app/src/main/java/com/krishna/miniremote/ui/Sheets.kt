@@ -607,6 +607,10 @@ internal fun brandHelp(b: Brand): String? = when (b) {
 internal fun CodeEntry(vm: RemoteVM, prompt: PairPrompt) {
     var code by remember(prompt) { mutableStateOf("") }
     val ok = code.length == 6
+    // The keyboard comes up as soon as the code entry shows.
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    LaunchedEffect(prompt) { kotlinx.coroutines.delay(250); runCatching { focus.requestFocus() }; kb?.show() }
     Lead("Type the code on the TV.")
     BasicTextField(
         code,
@@ -617,7 +621,7 @@ internal fun CodeEntry(vm: RemoteVM, prompt: PairPrompt) {
         cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.Transparent),
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { if (ok) vm.answerCode(code) }),
-        modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Pairing code, 6 characters" },
+        modifier = Modifier.fillMaxWidth().focusRequester(focus).semantics { contentDescription = "Pairing code, 6 characters" },
         decorationBox = { inner ->
             Box {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {

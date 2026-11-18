@@ -338,6 +338,29 @@ class AndroidTvAdapter(
     }
 
     override suspend fun send(key: RemoteKey) = key(keys[key] ?: missing(key, "this TV"))
+    override fun supports(key: RemoteKey) = key in keys
+
+    private fun isLauncher(p: String) = "launcher" in p.lowercase() || p == "com.google.android.apps.tv.launcherx" || p == "com.google.android.tvlauncher"
+
+    /** True when the TV shows its home screen (or we don't know yet). */
+    val onHome: Boolean get() = currentApp?.let(::isLauncher) ?: true
+
+    /**
+     * Opens search: in an app, that app's own search (a full Search key press: down, then up);
+     * on the home screen, the TV's search. Some TVs start voice search from the key: that
+     * session is answered and closed right away, which leaves the search screen with its keyboard.
+     */
+    override suspend fun openSearch() {
+        withContext(Dispatchers.IO) {
+            val f = io ?: error("Not connected")
+            f.send(Pb().apply { msg(10) { int(1, 84); int(2, 1) } }.toBytes()) // down
+            f.send(Pb().apply { msg(10) { int(1, 84); int(2, 2) } }.toBytes()) // up
+        }
+        val w = CompletableDeferred<Long>().also { voiceWait = it }
+        val id = kotlinx.coroutines.withTimeoutOrNull(1500) { w.await() }
+        voiceWait = null
+        if (id != null) { withContext(Dispatchers.IO) { io?.send(Pb().apply { msg(30) { int(1, id) } }.toBytes()) }; voiceEnd(id) }
+    }
 
     /** Opens an app: a package name (launched through the Play Store link) or a full app link. */
     /** The app's Play Store page on the TV (install, open or uninstall there). */
@@ -396,7 +419,7 @@ class AndroidTvAdapter(
 
     override suspend fun nowOn(): NowOn {
         val app = currentApp ?: return NowOn("", false)
-        return NowOn(app, isLive(app))
+        return NowOn(if (isLauncher(app)) "Home" else app, isLive(app))
     }
 
     override suspend fun typeText(text: String) = setText(text)

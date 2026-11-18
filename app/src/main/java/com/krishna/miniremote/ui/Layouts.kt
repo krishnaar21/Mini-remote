@@ -9,6 +9,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -142,14 +145,14 @@ fun RingDial(dial: Dp, accent: Color, level: Float? = null, value: String? = nul
 
 /** A round key that fires on release (so it can sit in a scrolling strip). Icon or a short word, with an optional caption. */
 @Composable
-fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ico: Ico? = null, word: String? = null, caption: String? = null, onClick: () -> Unit) {
+fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ico: Ico? = null, word: String? = null, caption: String? = null, enabled: Boolean = true, onClick: () -> Unit) {
     val src = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.94f else 1f, if (pressed) tween(70) else androidx.compose.animation.core.spring(0.45f, 700f), label = "press")
     Box(
-        Modifier.size(size).graphicsLayer { scaleX = scale; scaleY = scale }.clip(CircleShape)
+        Modifier.size(size).graphicsLayer { scaleX = scale; scaleY = scale; alpha = if (enabled) 1f else 0.32f }.clip(CircleShape)
             .background(if (active || pressed) Color(0xFF2E2E31) else Color(0xFF1C1C1E))
-            .clickable(src, androidx.compose.material3.ripple(color = Color.White), onClickLabel = label, role = Role.Button, onClick = onClick)
+            .clickable(src, androidx.compose.material3.ripple(color = Color.White), enabled = enabled, onClickLabel = label, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
@@ -175,22 +178,52 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             StripKey(accent, "Back", k, ico = Ico.CHEVRON_L) { vm.press(RemoteKey.BACK) }
             StripKey(accent, "Home", k, ico = Ico.HOME) { vm.press(RemoteKey.HOME) }
-            StripKey(accent, if (vm.playing) "Pause" else "Play", k, ico = if (vm.playing) Ico.PAUSE else Ico.PLAY_ONLY) { vm.press(RemoteKey.PLAY_PAUSE) }
+            StripKey(accent, if (vm.playing) "Pause" else "Play", k, ico = if (vm.playing) Ico.PAUSE else Ico.PLAY_ONLY, enabled = vm.can(RemoteKey.PLAY_PAUSE)) { vm.press(RemoteKey.PLAY_PAUSE) }
             StripKey(accent, "Search", k, ico = Ico.SEARCH, onClick = openKeys)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             if (tv) {
-                StripKey(accent, "Channel down", k, ico = Ico.MINUS, caption = "CH") { vm.press(RemoteKey.CH_DOWN) }
-                StripKey(accent, "Channel up", k, ico = Ico.PLUS, caption = "CH") { vm.press(RemoteKey.CH_UP) }
+                StripKey(accent, "Channel down", k, ico = Ico.MINUS, caption = "CH", enabled = vm.can(RemoteKey.CH_DOWN)) { vm.press(RemoteKey.CH_DOWN) }
+                StripKey(accent, "Channel up", k, ico = Ico.PLUS, caption = "CH", enabled = vm.can(RemoteKey.CH_UP)) { vm.press(RemoteKey.CH_UP) }
                 StripKey(accent, "Number pad", k, active = numpad, word = "123", onClick = onNumpad)
             } else {
                 StripKey(accent, "Volume down", k, ico = Ico.MINUS, caption = "VOL") { vm.press(RemoteKey.VOL_DOWN, quiet = true) }
                 StripKey(accent, "Volume up", k, ico = Ico.PLUS, caption = "VOL") { vm.press(RemoteKey.VOL_UP, quiet = true) }
-                StripKey(accent, "Mute", k, active = vm.muted, ico = if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER) { vm.press(RemoteKey.MUTE) }
+                VoiceKey(vm, k)
             }
             StripKey(accent, "More: keys, inputs, sleep timer", k, ico = Ico.MORE, onClick = openMore)
         }
     }
+}
+
+/**
+ * The voice assistant key: hold and speak (on Android / Google TV your voice goes to the TV's
+ * Assistant until you let go); on other TVs a tap opens the TV's own voice search.
+ */
+@Composable
+fun VoiceKey(vm: RemoteVM, size: Dp) {
+    var down by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(if (down) 0.94f else 1f, tween(90), label = "voice")
+    Box(
+        Modifier.size(size).graphicsLayer { scaleX = scale; scaleY = scale }.clip(CircleShape)
+            .background(if (down) Color(0xFF2E2E31) else Color(0xFF1C1C1E))
+            .semantics {
+                contentDescription = "Voice assistant"
+                role = Role.Button
+                onClick(label = "talk to the TV") { vm.voiceStart(); true }
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(onPress = {
+                    down = true
+                    vm.feel.fire(com.krishna.miniremote.Feel.HEAVY)
+                    val streaming = vm.voiceStart()
+                    tryAwaitRelease()
+                    down = false
+                    if (streaming) vm.voiceStop()
+                })
+            },
+        contentAlignment = Alignment.Center,
+    ) { LineIcon(Ico.MIC, T.Ink, 23.dp) }
 }
 
 /** Small dots for the cards: tap one, or swipe across them. */
@@ -245,7 +278,7 @@ fun FourKeys(vm: RemoteVM, accent: Color, openKeys: () -> Unit, size: Dp = 62.dp
     Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
         KeyButton(accent, "Back", k, pressedScale = 0.94f, onPress = { vm.press(RemoteKey.BACK) }) { c, _ -> LineIcon(Ico.CHEVRON_L, c, 24.dp, stroke = 2.2f) }
         KeyButton(accent, "Home", k, pressedScale = 0.94f, onPress = { vm.press(RemoteKey.HOME) }) { c, _ -> LineIcon(Ico.HOME, c, 22.dp) }
-        KeyButton(accent, if (vm.playing) "Pause" else "Play", k, pressedScale = 0.94f, onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { c, _ ->
+        KeyButton(accent, if (vm.playing) "Pause" else "Play", k, pressedScale = 0.94f, enabled = vm.can(RemoteKey.PLAY_PAUSE), onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { c, _ ->
             LineIcon(if (vm.playing) Ico.PAUSE else Ico.PLAY_ONLY, c, if (vm.playing) 22.dp else 20.dp, stroke = if (vm.playing) 2.4f else 1.8f)
         }
         KeyButton(accent, "Search", k, actionLabel = "search or type on TV", pressedScale = 0.94f, onPress = openKeys) { c, _ -> LineIcon(Ico.SEARCH, c, 21.dp) }
