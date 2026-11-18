@@ -17,6 +17,8 @@ jobs:
         run: |
           brew install xcodegen
           cd ios && xcodegen generate
+          # A ready-to-open Xcode project (no git, Homebrew or XcodeGen needed on the Mac).
+          mkdir -p shots && zip -qr shots/MiniRemote-Xcode.zip MiniRemote MiniRemote.xcodeproj project.yml
       - name: Pick and boot an iPhone simulator
         run: |
           UDID=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith("iPhone 17 Pro"))][0].udid // empty')
