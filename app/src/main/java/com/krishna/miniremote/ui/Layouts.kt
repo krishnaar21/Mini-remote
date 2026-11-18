@@ -176,19 +176,19 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
     val k = 68.dp
     Column(verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            StripKey(accent, "Back", k, ico = Ico.CHEVRON_L) { vm.press(RemoteKey.BACK) }
-            StripKey(accent, "Home", k, ico = Ico.HOME) { vm.press(RemoteKey.HOME) }
+            StripKey(accent, "Back", k, ico = Ico.CHEVRON_L, enabled = vm.can(RemoteKey.BACK), onDisabled = { vm.explain(RemoteKey.BACK) }) { vm.press(RemoteKey.BACK) }
+            StripKey(accent, "Home", k, ico = Ico.HOME, enabled = vm.can(RemoteKey.HOME), onDisabled = { vm.explain(RemoteKey.HOME) }) { vm.press(RemoteKey.HOME) }
             StripKey(accent, if (vm.playing) "Pause" else "Play", k, ico = if (vm.playing) Ico.PAUSE else Ico.PLAY_ONLY, enabled = vm.can(RemoteKey.PLAY_PAUSE), onDisabled = { vm.explain(RemoteKey.PLAY_PAUSE) }) { vm.press(RemoteKey.PLAY_PAUSE) }
-            StripKey(accent, "Search", k, ico = Ico.SEARCH, onClick = openKeys)
+            StripKey(accent, "Search", k, ico = Ico.SEARCH, enabled = vm.can(RemoteKey.HOME), onDisabled = { vm.explain(RemoteKey.HOME) }, onClick = openKeys)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             if (tv) {
                 StripKey(accent, "Channel down", k, ico = Ico.MINUS, caption = "CH", enabled = vm.can(RemoteKey.CH_DOWN), onDisabled = { vm.explain(RemoteKey.CH_DOWN) }) { vm.press(RemoteKey.CH_DOWN) }
                 StripKey(accent, "Channel up", k, ico = Ico.PLUS, caption = "CH", enabled = vm.can(RemoteKey.CH_UP), onDisabled = { vm.explain(RemoteKey.CH_UP) }) { vm.press(RemoteKey.CH_UP) }
-                StripKey(accent, "Number pad", k, active = numpad, word = "123", onClick = onNumpad)
+                StripKey(accent, "Number pad", k, active = numpad, word = "123", enabled = vm.can(RemoteKey.N0), onDisabled = { vm.explain(RemoteKey.N0) }, onClick = onNumpad)
             } else {
-                StripKey(accent, "Volume down", k, ico = Ico.SPEAKER_DOWN) { vm.press(RemoteKey.VOL_DOWN, quiet = true) }
-                StripKey(accent, "Volume up", k, ico = Ico.SPEAKER_UP) { vm.press(RemoteKey.VOL_UP, quiet = true) }
+                StripKey(accent, "Volume down", k, ico = Ico.VOL_MINUS, enabled = vm.can(RemoteKey.VOL_DOWN), onDisabled = { vm.explain(RemoteKey.VOL_DOWN) }) { vm.press(RemoteKey.VOL_DOWN, quiet = true) }
+                StripKey(accent, "Volume up", k, ico = Ico.VOL_PLUS, enabled = vm.can(RemoteKey.VOL_UP), onDisabled = { vm.explain(RemoteKey.VOL_UP) }) { vm.press(RemoteKey.VOL_UP, quiet = true) }
                 VoiceKey(vm, k)
             }
             StripKey(accent, "More: keys, inputs, sleep timer", k, ico = Ico.MORE, onClick = openMore)
@@ -205,7 +205,7 @@ fun VoiceKey(vm: RemoteVM, size: Dp) {
     var down by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (down) 0.94f else 1f, tween(90), label = "voice")
     Box(
-        Modifier.size(size).graphicsLayer { scaleX = scale; scaleY = scale }.clip(CircleShape)
+        Modifier.size(size).graphicsLayer { scaleX = scale; scaleY = scale; alpha = if (vm.can(RemoteKey.HOME)) 1f else 0.32f }.clip(CircleShape)
             .background(if (down || vm.listening) Color(0xFF3A3A3E) else Color(0xFF1C1C1E))
             .semantics {
                 contentDescription = "Voice assistant"
@@ -215,6 +215,7 @@ fun VoiceKey(vm: RemoteVM, size: Dp) {
             .pointerInput(Unit) {
                 detectTapGestures(onPress = {
                     // Tap: listen until you stop talking (or tap again). Hold: listen until you let go.
+                    if (!vm.can(RemoteKey.HOME)) { vm.explain(RemoteKey.HOME); return@detectTapGestures }
                     if (vm.listening) { vm.voiceStop(); return@detectTapGestures }
                     down = true
                     vm.feel.fire(com.krishna.miniremote.Feel.HEAVY)
@@ -283,12 +284,12 @@ fun VolChCard(vm: RemoteVM, accent: Color, openMore: () -> Unit = {}) {
 fun FourKeys(vm: RemoteVM, accent: Color, openKeys: () -> Unit, size: Dp = 62.dp, gap: Dp = 20.dp) {
     val k = Modifier.size(size)
     Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-        KeyButton(accent, "Back", k, pressedScale = 0.94f, onPress = { vm.press(RemoteKey.BACK) }) { c, _ -> LineIcon(Ico.CHEVRON_L, c, 24.dp, stroke = 2.2f) }
-        KeyButton(accent, "Home", k, pressedScale = 0.94f, onPress = { vm.press(RemoteKey.HOME) }) { c, _ -> LineIcon(Ico.HOME, c, 22.dp) }
+        KeyButton(accent, "Back", k, pressedScale = 0.94f, enabled = vm.can(RemoteKey.BACK), onDisabled = { vm.explain(RemoteKey.BACK) }, onPress = { vm.press(RemoteKey.BACK) }) { c, _ -> LineIcon(Ico.CHEVRON_L, c, 24.dp, stroke = 2.2f) }
+        KeyButton(accent, "Home", k, pressedScale = 0.94f, enabled = vm.can(RemoteKey.HOME), onDisabled = { vm.explain(RemoteKey.HOME) }, onPress = { vm.press(RemoteKey.HOME) }) { c, _ -> LineIcon(Ico.HOME, c, 22.dp) }
         KeyButton(accent, if (vm.playing) "Pause" else "Play", k, pressedScale = 0.94f, enabled = vm.can(RemoteKey.PLAY_PAUSE), onDisabled = { vm.explain(RemoteKey.PLAY_PAUSE) }, onPress = { vm.press(RemoteKey.PLAY_PAUSE) }) { c, _ ->
             LineIcon(if (vm.playing) Ico.PAUSE else Ico.PLAY_ONLY, c, if (vm.playing) 22.dp else 20.dp, stroke = if (vm.playing) 2.4f else 1.8f)
         }
-        KeyButton(accent, "Search", k, actionLabel = "search or type on TV", pressedScale = 0.94f, onPress = openKeys) { c, _ -> LineIcon(Ico.SEARCH, c, 21.dp) }
+        KeyButton(accent, "Search", k, actionLabel = "search or type on TV", pressedScale = 0.94f, enabled = vm.can(RemoteKey.HOME), onDisabled = { vm.explain(RemoteKey.HOME) }, onPress = openKeys) { c, _ -> LineIcon(Ico.SEARCH, c, 21.dp) }
     }
 }
 

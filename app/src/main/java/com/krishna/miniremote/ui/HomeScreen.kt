@@ -221,7 +221,7 @@ fun HomeScreen(
     // Top, as on the Apple TV Remote: mute · TV picker · power, inset from the screen edges.
     val topBar: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 20.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            KeyButton(accent, "Mute", Modifier.size(52.dp), state = if (vm.muted) "Muted" else null, pressedScale = 1f, onPress = { vm.press(RemoteKey.MUTE) }) { c, _ ->
+            KeyButton(accent, "Mute", Modifier.size(52.dp), state = if (vm.muted) "Muted" else null, pressedScale = 1f, enabled = vm.can(RemoteKey.MUTE), onDisabled = { vm.explain(RemoteKey.MUTE) }, onPress = { vm.press(RemoteKey.MUTE) }) { c, _ ->
                 LineIcon(if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, c, 22.dp)
             }
             TvPicker(vm, Modifier.weight(1f), openDevices)

@@ -861,6 +861,10 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
 
     /** Why [k] isn't available right now, in a few words for a toast; null when it is. */
     fun whyNot(k: RemoteKey): String? {
+        // Nothing works until a TV is connected.
+        val d = active ?: return "Choose a TV first"
+        if (link == Link.CONNECTING) return "Connecting to ${d.name}…"
+        if (link != Link.READY) return "${d.name} isn't connected. Tap the TV at the top to connect."
         val a = adapter
         if (a != null && link == Link.READY && !a.supports(k)) return "${active?.name ?: "This TV"} doesn't have ${k.word}"
         return when (screen) {

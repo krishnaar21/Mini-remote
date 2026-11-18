@@ -102,6 +102,39 @@ object Logos {
         bmp
     }
 
+    /**
+     * The app's real icon, the one its makers publish on Google Play, found by Android package
+     * name (the Android TV id, e.g. com.netflix.ninja). Only the package name is sent to Google
+     * Play; the image comes from Google's image host. Cached like the others.
+     */
+    suspend fun playIcon(ctx: Context, pkg: String): Bitmap? = withContext(Dispatchers.IO) {
+        if (pkg.isEmpty() || !pkg.all { it.isLetterOrDigit() || it == '.' || it == '_' } || '.' !in pkg) return@withContext null
+        val key = "play:$pkg"
+        mem.get(key)?.let { return@withContext it }
+        if (key in misses) return@withContext null
+        val dir = File(ctx.cacheDir, "logos").apply { mkdirs() }
+        val file = File(dir, "play-$pkg.png")
+        fun decode(b: ByteArray?) = b?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }
+        var bmp = if (file.exists()) decode(file.readBytes()) else null
+        if (bmp == null) {
+            val html = runCatching {
+                site.newCall(Request.Builder().url("https://play.google.com/store/apps/details?id=$pkg&hl=en")
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/131 Mobile Safari/537.36").build()).execute().use { r ->
+                    if (!r.isSuccessful) null else r.body?.string()?.take(600_000)
+                }
+            }.getOrNull()
+            // The listing's og:image is the app icon on play-lh.googleusercontent.com; ask for 256 px.
+            val img = html?.let { Regex("<meta property=\"og:image\" content=\"(https://play-lh\\.googleusercontent\\.com/[^\"]+)\"").find(it)?.groupValues?.get(1) }
+                ?.substringBefore('=')?.let { "$it=s256" }
+            val b = img?.let { fetchPng(site, it) }
+            val d = decode(b)
+            if (d != null && d.width >= 96) { file.writeBytes(b!!); bmp = d }
+        }
+        if (bmp == null) { synchronized(misses) { misses += key }; return@withContext null }
+        mem.put(key, bmp)
+        bmp
+    }
+
     /** Removes downloaded logos (with "Erase all data"). */
     fun clear(ctx: Context) { runCatching { File(ctx.cacheDir, "logos").deleteRecursively() }; mem.evictAll() }
 }

@@ -10,6 +10,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -67,6 +69,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Request
 import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.rememberUpdatedState
@@ -104,6 +107,8 @@ private class AppEntry(
     val logo: String? = null,
     /** The app's website, for its icon when Simple Icons has none. */
     val site: String? = null,
+    /** Android package name, for the app's real icon from Google Play. */
+    val pkg: String? = null,
     val vendor: String? = null,
     val version: String? = null,
     /** true / false when the TV lists its apps; null when it can't tell. */
@@ -161,6 +166,7 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
             AppEntry(
                 key = "tv:${app.id}", name = app.name, bg = tint(app.name), ink = Color.White, icon = app.icon,
                 logo = Catalog.apps.firstOrNull { it.name.equals(app.name, true) }?.logo ?: Logos.slugFor(app.name),
+                pkg = if (brand == Brand.ANDROID_TV) app.id else Catalog.apps.firstOrNull { it.name.equals(app.name, true) }?.ids?.get(Brand.ANDROID_TV),
                 version = app.version, installed = true, pinned = pin != null,
                 storeId = if (brand == Brand.ROKU) app.id else null,
                 open = { vm.launchApp(app.name, app.id) }, pin = { vm.pinTvApp(app) }, unpin = { pin?.let { vm.setPinned(it, false) } },
@@ -170,7 +176,7 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
     val popular = Catalog.apps.filter { brand == null || it.ids.containsKey(brand) }.map { c ->
         val pin = vm.pinnedCatalog(c)
         AppEntry(
-            key = "cat:${c.key}", name = c.name, bg = Color(c.bg), ink = Color(c.ink), vendor = c.vendor.ifEmpty { null }, logo = c.logo, site = c.site.ifEmpty { null },
+            key = "cat:${c.key}", name = c.name, bg = Color(c.bg), ink = Color(c.ink), vendor = c.vendor.ifEmpty { null }, logo = c.logo, site = c.site.ifEmpty { null }, pkg = c.ids[Brand.ANDROID_TV],
             installed = vm.installed(c), pinned = pin != null,
             storeId = brand?.let { b -> if (b == Brand.ROKU || b == Brand.ANDROID_TV) c.ids[b] else null },
             open = { vm.launchCatalog(c) }, pin = { vm.pinCatalog(c) }, unpin = { pin?.let { vm.setPinned(it, false) } },
@@ -180,6 +186,7 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
         AppEntry(
             key = "add:${s.id}", name = s.name, bg = tint(s.name), ink = Color.White, badge = s.brand?.label, pinned = s.pinned,
             logo = Logos.slugFor(s.name),
+            pkg = if (s.brand == Brand.ANDROID_TV) s.value.takeIf { "://" !in it } else Catalog.apps.firstOrNull { it.name.equals(s.name, true) }?.ids?.get(Brand.ANDROID_TV),
             storeId = if (s.brand == Brand.ROKU || s.brand == Brand.ANDROID_TV) s.value.takeIf { "://" !in it } else null,
             open = { vm.launch(s) }, pin = { vm.setPinned(s, true) }, unpin = { vm.setPinned(s, false) }, delete = { vm.removeShortcut(s) },
         )
@@ -289,16 +296,16 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
 /** Where a dragged app lands: a grey dashed box in the Quick access row. Lights up when the tile is over it. */
 @Composable
 private fun DropSlot(over: Boolean, accent: Color, modifier: Modifier) {
-    val line = if (over) accent else Color(0xFF8A8A8E)
+    val line = if (over) accent else Color(0xFF5E5E63)
     Box(
         modifier.fillMaxWidth().height(96.dp)
             .background(if (over) accent.copy(alpha = 0.12f) else Color.Transparent, RoundedCornerShape(20.dp))
             .drawBehind {
-                val w = 2.dp.toPx()
+                val w = 1.5.dp.toPx()
                 drawRoundRect(
                     line, topLeft = Offset(w / 2, w / 2), size = androidx.compose.ui.geometry.Size(size.width - w, size.height - w),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(20.dp.toPx()),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(w, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10.dp.toPx(), 7.dp.toPx()))),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(w, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 5.dp.toPx()))),
                 )
             },
         contentAlignment = Alignment.Center,
@@ -386,7 +393,7 @@ private fun AppSheet(e: AppEntry, accent: Color, logosOn: Boolean, onOpen: () ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Box(Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)).background(e.bg), contentAlignment = Alignment.Center) {
                     val short: @Composable () -> Unit = { Text(e.name.take(2).uppercase(), color = e.ink, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
-                    val logo: @Composable () -> Unit = { AppLogo(e.logo, e.ink, 34.dp, logosOn, e.site, short) }
+                    val logo: @Composable () -> Unit = { AppLogo(e.logo, e.ink, 34.dp, logosOn, e.site, e.pkg, short) }
                     if (e.icon != null) TvIcon(e.icon, Modifier.fillMaxSize().padding(6.dp), logo) else logo()
                 }
                 Column(Modifier.weight(1f)) {
@@ -400,6 +407,8 @@ private fun AppSheet(e: AppEntry, accent: Color, logosOn: Boolean, onOpen: () ->
                 InfoRow("Version", e.version ?: "Not shared by the TV")
                 Divider()
                 InfoRow("On this TV", when (installed) { true -> "Installed"; false -> "Not installed"; null -> "Can't tell" })
+                // The TV's own id for the app (what Add asks for).
+                if (e.key.startsWith("tv:")) { Divider(); InfoRow("App ID", e.key.removePrefix("tv:")) }
             }
             Spacer(Modifier.height(8.dp))
             if (installed != false) Btn("Open") { onOpen(); onClose() }
@@ -462,7 +471,9 @@ private fun QuickTile(s: Shortcut, accent: Color, icon: String?, logoOn: Boolean
             // The TV's own icon for the app when it has one (Roku, LG); otherwise its initials.
             // Logo, in order: the TV's own icon, then Simple Icons, then the initials.
             val slug = if (s.kind == ShortcutKind.CHANNEL) null else cat?.logo ?: Logos.slugFor(s.name)
-            val logo: @Composable () -> Unit = { AppLogo(slug, ink, 34.dp, logoOn, cat?.site, short) }
+            val pkg = if (s.kind == ShortcutKind.CHANNEL) null else (cat?.ids?.get(Brand.ANDROID_TV)
+                ?: if (s.brand == Brand.ANDROID_TV) s.value.takeIf { "://" !in it } else Catalog.apps.firstOrNull { it.name.equals(s.name, true) }?.ids?.get(Brand.ANDROID_TV))
+            val logo: @Composable () -> Unit = { AppLogo(slug, ink, 34.dp, logoOn, cat?.site, pkg, short) }
             if (icon != null) TvIcon(icon, Modifier.fillMaxSize().padding(8.dp), logo) else logo()
         }
         Text(s.name, color = T.Ink, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
@@ -514,14 +525,18 @@ private fun OptionsMenu(open: Boolean, onDismiss: () -> Unit, items: List<Pair<S
  * Simple Icons doesn't carry (JioHotstar, Prime Video…). [fallback] while loading, when off, or if neither exists.
  */
 @Composable
-private fun AppLogo(slug: String?, ink: Color, size: androidx.compose.ui.unit.Dp, enabled: Boolean, site: String? = null, fallback: @Composable () -> Unit) {
+private fun AppLogo(slug: String?, ink: Color, size: androidx.compose.ui.unit.Dp, enabled: Boolean, site: String? = null, pkg: String? = null, fallback: @Composable () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val px = with(LocalDensity.current) { size.roundToPx() }
     val hex = String.format("%06X", ink.toArgb() and 0xFFFFFF)
-    var bmp by remember(slug, hex, site) { mutableStateOf<ImageBitmap?>(null) }
-    var full by remember(slug, hex, site) { mutableStateOf(false) }
-    LaunchedEffect(slug, hex, enabled, site) {
+    var bmp by remember(slug, hex, site, pkg) { mutableStateOf<ImageBitmap?>(null) }
+    var full by remember(slug, hex, site, pkg) { mutableStateOf(false) }
+    var real by remember(slug, hex, site, pkg) { mutableStateOf(false) }
+    LaunchedEffect(slug, hex, enabled, site, pkg) {
         if (!enabled) { bmp = null; return@LaunchedEffect }
+        // The real app icon first (Google Play), then the Simple Icons mark, then the website icon.
+        val play = pkg?.let { Logos.playIcon(ctx, it) }
+        if (play != null) { bmp = play.asImageBitmap(); full = true; real = true; return@LaunchedEffect }
         val mono = slug?.let { Logos.get(ctx, it, hex, px) }
         if (mono != null) { bmp = mono.asImageBitmap(); full = false; return@LaunchedEffect }
         val icon = site?.let { Logos.siteIcon(ctx, it, px * 2) }
@@ -529,6 +544,9 @@ private fun AppLogo(slug: String?, ink: Color, size: androidx.compose.ui.unit.Dp
     }
     val b = bmp
     if (b == null) fallback()
+    // The real app icon fills its tile (as square as the tile allows), with app-icon corners.
+    else if (real) Image(b, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+        modifier = Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true).padding(6.dp).clip(RoundedCornerShape(16.dp)))
     // Full-colour site icons get a small rounded plate so they sit well on any tile colour.
     else if (full) Image(b, contentDescription = null, modifier = Modifier.size(size).clip(RoundedCornerShape(size * 0.22f)))
     else Image(b, contentDescription = null, modifier = Modifier.size(size))
@@ -587,16 +605,69 @@ private fun AddShortcutSheet(vm: RemoteVM, accent: Color, start: ShortcutKind, o
                 Field("App ID on ${brand?.label ?: "your TV"}", value, { value = it.trim().take(200) }, placeholder = when (brand) {
                     Brand.ROKU -> "12"; Brand.SAMSUNG -> "3201907018807"; Brand.LG -> "netflix"; Brand.ANDROID_TV -> "com.netflix.ninja"; null -> ""
                 })
-                Hint(when (brand) {
-                    Brand.ANDROID_TV -> "Use the app's package name. You'll find it in the app's Play Store web address after id=."
-                    Brand.ROKU -> "Roku channel ids are numbers. Installed channels already show under On your TV."
-                    Brand.SAMSUNG, Brand.LG -> "Installed apps already show under On your TV, so you only need this for ones the TV doesn't list."
-                    null -> "Choose a TV first: app ids are different on every kind of TV."
-                }, top = 0)
+                IdHint(brand, accent)
             }
             ToggleRow("Pin it", null, pin) { pin = it }
             Btn("Save", enabled = name.isNotBlank() && value.isNotBlank() && (kind == ShortcutKind.CHANNEL || brand != null)) {
                 vm.addShortcut(kind, name, value, pin); onClose()
+            }
+        }
+    }
+}
+
+/**
+ * Where to find an app's ID, for the Add sheet: a line for the TV in use and a small picture of
+ * where the ID shows, with the ID picked out.
+ */
+@Composable
+private fun IdHint(brand: Brand?, accent: Color) {
+    var open by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+        Row(
+            Modifier.clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button) { open = !open }.padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            LineIcon(Ico.INFO, T.Dim, 15.dp)
+            Text("Where do I find the App ID?", color = T.Dim, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            LineIcon(if (open) Ico.UP else Ico.DOWN, T.Dim, 13.dp, stroke = 2.2f)
+        }
+        androidx.compose.animation.AnimatedVisibility(open) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(M.Container).padding(14.dp)) {
+                val (text, before, id, after) = when (brand) {
+                    Brand.ANDROID_TV -> listOf("Open the app's Google Play page in a browser. The ID is the part after id= in the address.",
+                        "play.google.com/store/apps/details?id=", "com.netflix.ninja", "")
+                    Brand.ROKU -> listOf("Installed channels are already under On your TV (tap one to see its ID). For others, it's the number in the channel's address on channelstore.roku.com.",
+                        "channelstore.roku.com/details/", "12", "/netflix")
+                    Brand.SAMSUNG -> listOf("Apps on the TV are already under On your TV: tap one and its App ID is in the details.",
+                        "App ID   ", "3201907018807", "")
+                    Brand.LG -> listOf("Apps on the TV are already under On your TV: tap one and its App ID is in the details.",
+                        "App ID   ", "netflix", "")
+                    null -> listOf("Choose a TV first: app IDs are different on every kind of TV.", "", "", "")
+                }
+                Text(text, color = Muted, fontSize = 12.5.sp, lineHeight = 18.sp)
+                if (id.isNotEmpty()) {
+                    // The picture: a little screen (browser address bar, or the app's details), with the ID highlighted.
+                    Box(
+                        Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFF111113))
+                            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp)).padding(12.dp),
+                    ) {
+                        Column {
+                            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.padding(bottom = 10.dp)) {
+                                listOf(Color(0xFFFF5F57), Color(0xFFFEBC2E), Color(0xFF28C840)).forEach { Box(Modifier.size(7.dp).clip(CircleShape).background(it.copy(alpha = 0.7f))) }
+                            }
+                            Row(
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color(0xFF26262A)).padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(before, color = Muted, fontSize = 11.5.sp, fontFamily = Mono, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                Text(id, color = Color.White, fontSize = 11.5.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                                    modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(accent.copy(alpha = 0.35f)).border(1.dp, accent, RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 1.dp))
+                                if (after.isNotEmpty()) Text(after, color = Muted, fontSize = 11.5.sp, fontFamily = Mono, maxLines = 1)
+                            }
+                            Text("↑ this is the App ID", color = accent, fontSize = 11.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 6.dp).align(Alignment.End))
+                        }
+                    }
+                }
             }
         }
     }
