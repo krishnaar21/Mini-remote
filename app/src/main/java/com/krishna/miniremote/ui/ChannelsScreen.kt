@@ -609,7 +609,7 @@ private fun AppLogo(slug: String?, ink: Color, size: androidx.compose.ui.unit.Dp
                 runCatching { android.graphics.Bitmap.createBitmap(ab, i, i, ab.width - 2 * i, ab.height - 2 * i) }.getOrDefault(ab)
             }
             androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-                val target = size.minDimension * 0.74f
+                val target = this.size.minDimension * 0.74f
                 val k = target / maxOf(src.width, src.height)
                 val shader = android.graphics.BitmapShader(src, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
                 shader.setLocalMatrix(android.graphics.Matrix().apply {

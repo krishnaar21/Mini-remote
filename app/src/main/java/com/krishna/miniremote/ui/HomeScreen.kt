@@ -223,7 +223,7 @@ fun HomeScreen(
 
     // Top: the TV pill on the left, power on the right.
     val topBar: @Composable () -> Unit = {
-        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 20.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 32.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             TvPicker(vm, Modifier.weight(1f), openDevices)
             KeyButton(accent, "Power", Modifier.size(52.dp), pressedScale = 1f, onPress = {
                 // Off (not reachable): wake it. On: ask before turning it off.
@@ -308,18 +308,18 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
     }
     Box(modifier.padding(end = 12.dp), contentAlignment = Alignment.CenterStart) {
         Row(
-            Modifier.heightIn(min = 54.dp).widthIn(min = 150.dp, max = 236.dp).clip(CircleShape).background(M.High)
+            Modifier.height(52.dp).widthIn(min = 150.dp, max = 236.dp).clip(CircleShape).background(M.High)
                 .clickable(onClickLabel = "choose a TV", role = Role.Button, onClick = openDevices)
                 .semantics(mergeDescendants = true) {
                     contentDescription = d?.let { "TV: ${it.name}" } ?: "Choose a TV"
                     if (d != null) stateDescription = linkWord(vm.link)
                 }
-                .padding(start = 8.dp, end = 16.dp),
+                .padding(start = 7.dp, end = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             // A TV in a circle, with the connection colour as a small badge on its corner.
-            Box(Modifier.size(40.dp)) {
+            Box(Modifier.size(38.dp)) {
                 Box(Modifier.fillMaxSize().clip(CircleShape).background(T.Ink.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) { LineIcon(Ico.TV, T.Ink, 20.dp) }
                 dot?.let { Box(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp).size(10.dp).clip(CircleShape).background(M.High).padding(1.5.dp).clip(CircleShape).background(it)) }
             }
