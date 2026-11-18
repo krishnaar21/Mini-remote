@@ -28,11 +28,15 @@ open class UserFacing(msg: String) : Exception(msg)
 class Unsupported(msg: String) : UserFacing(msg)
 
 /** What the TV is showing: an app or input by name, and whether it's live TV / an input. */
-data class NowOn(val name: String, val live: Boolean)
+/** What's on the TV: app or input name, whether it's live TV, and (Roku) playback position. */
+data class NowOn(val name: String, val live: Boolean, val positionMs: Long? = null, val durationMs: Long? = null)
 
 /** An app installed on the TV, as the TV lists it. [icon] is a URL on the TV, if it has one. */
 /** The TV's own volume: [level] of [max], and whether it's muted. */
 data class TvVolume(val level: Int, val max: Int, val muted: Boolean)
+
+/** A TV input (HDMI 1, antenna…) the app can switch to. */
+data class TvInput(val id: String, val name: String)
 
 data class TvApp(val id: String, val name: String, val icon: String? = null, val version: String? = null)
 
@@ -52,6 +56,23 @@ interface RemoteAdapter {
 
     /** Makes the TV's focused text box read [text]. */
     suspend fun setText(text: String) { throw Unsupported("Typing isn't supported on this TV yet") }
+
+    /** The TV's network (MAC) address, for waking it later; null when it can't tell. */
+    suspend fun macAddress(): String? = null
+
+    /** The TV's inputs (HDMI and so on), by name. Empty when it can't list them. */
+    suspend fun listInputs(): List<TvInput> = emptyList()
+
+    /** Switches to an input from [listInputs]. */
+    suspend fun switchInput(id: String) { throw Unsupported("Pick the input on the TV") }
+
+    /** Called when the TV focuses a text box and wants a keyboard (Android TV). */
+    var onKeyboard: (() -> Unit)?
+        get() = null
+        set(_) {}
+
+    /** Turns the TV on when it's in standby but still on the network (Roku). */
+    suspend fun powerOn(): Boolean = false
 
     /** Asks the TV for its volume; null when this TV can't tell. */
     suspend fun readVolume(): TvVolume? = null
@@ -130,6 +151,7 @@ class RokuAdapter(private val host: String) : RemoteAdapter {
         RemoteKey.VOICE to "Search",
         RemoteKey.REWIND to "Rev", RemoteKey.FAST_FORWARD to "Fwd",
         RemoteKey.CH_UP to "ChannelUp", RemoteKey.CH_DOWN to "ChannelDown", RemoteKey.INFO to "Info",
+        RemoteKey.INPUT to "InputTuner",
     ) + RemoteKey.entries.filter { it.digit != null }.associateWith { "Lit_${it.digit}" }
 
     override suspend fun connect() {
@@ -157,6 +179,21 @@ class RokuAdapter(private val host: String) : RemoteAdapter {
         for (ch in text) post("keypress/Lit_" + enc(ch.toString()))
     }
 
+    override suspend fun macAddress(): String? {
+        val x = get("query/device-info")
+        fun tag(t: String) = Regex("<$t>([^<]*)</$t>").find(x)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() }
+        return if (tag("network-type") == "ethernet") tag("ethernet-mac") ?: tag("wifi-mac") else tag("wifi-mac") ?: tag("ethernet-mac")
+    }
+
+    /** Roku TVs list their inputs as channels of type tvin (HDMI, antenna, AV). */
+    override suspend fun listInputs(): List<TvInput> =
+        Regex("<app id=\"([^\"]+)\" type=\"tvin\"[^>]*>([^<]*)</app>").findAll(get("query/apps"))
+            .map { TvInput(it.groupValues[1], xmlText(it.groupValues[2]).ifEmpty { it.groupValues[1] }) }.toList()
+
+    override suspend fun switchInput(id: String) { post("launch/${enc(id)}") }
+
+    override suspend fun powerOn(): Boolean = runCatching { post("keypress/PowerOn"); true }.getOrDefault(false)
+
     /** Channels (type appl) and, on Roku TVs, inputs like HDMI 1 (type tvin). Icons come from the Roku. */
     override suspend fun listApps(): List<TvApp> =
         Regex("<app id=\"([^\"]+)\"([^>]*)>([^<]*)</app>").findAll(get("query/apps")).map { m ->
@@ -176,7 +213,10 @@ class RokuAdapter(private val host: String) : RemoteAdapter {
             ?: return NowOn("Home", false)
         val id = m.groupValues[2]
         if (id.isEmpty()) return NowOn("Home", false)
-        return NowOn(xmlText(m.groupValues[3]).ifEmpty { id }, id.startsWith("tvinput."))
+        // Position and length of what's playing, when a player is up.
+        val mp = runCatching { get("query/media-player") }.getOrNull().orEmpty()
+        fun ms(t: String) = Regex("<$t>(\\d+) ms</$t>").find(mp)?.groupValues?.get(1)?.toLongOrNull()
+        return NowOn(xmlText(m.groupValues[3]).ifEmpty { id }, id.startsWith("tvinput."), ms("position"), ms("duration"))
     }
 
     /** Roku TVs tune live TV through the antenna input with a channel number like 7 or 7.1. */
@@ -210,7 +250,27 @@ class SamsungAdapter(
         RemoteKey.CH_UP to "KEY_CHUP", RemoteKey.CH_DOWN to "KEY_CHDOWN",
         RemoteKey.GUIDE to "KEY_GUIDE", RemoteKey.CH_LIST to "KEY_CH_LIST", RemoteKey.INFO to "KEY_INFO",
         RemoteKey.INPUT to "KEY_SOURCE", RemoteKey.MENU to "KEY_MENU", RemoteKey.AUDIO to "KEY_MTS",
+        RemoteKey.SUBTITLES to "KEY_CAPTION", RemoteKey.SETTINGS to "KEY_MENU",
+        RemoteKey.RED to "KEY_RED", RemoteKey.GREEN to "KEY_GREEN", RemoteKey.YELLOW to "KEY_YELLOW", RemoteKey.BLUE to "KEY_CYAN",
     ) + RemoteKey.entries.filter { it.digit != null }.associateWith { "KEY_${it.digit}" }
+
+    /** The Wi-Fi MAC from the TV's REST info (port 8001), for Wake-on-LAN ("Power on with mobile"). */
+    override suspend fun macAddress(): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            Net.plain.newCall(Request.Builder().url("http://$host:8001/api/v2/").build()).execute().use { r ->
+                if (!r.isSuccessful) null else JSONObject(r.body?.string().orEmpty()).optJSONObject("device")?.optString("wifiMac")?.takeIf { it.isNotEmpty() }
+            }
+        }.getOrNull()
+    }
+
+    /** Samsung has no input list over this channel: offer the HDMI keys. */
+    override suspend fun listInputs(): List<TvInput> = (1..4).map { TvInput("KEY_HDMI$it", "HDMI $it") } + TvInput("KEY_TV", "TV")
+
+    override suspend fun switchInput(id: String) {
+        val s = ws ?: error("Not connected")
+        s.send(JSONObject().put("method", "ms.remote.control").put("params", JSONObject()
+            .put("Cmd", "Click").put("DataOfCmd", id).put("Option", "false").put("TypeOfRemote", "SendRemoteKey")).toString())
+    }
 
     /** Volume through UPnP RenderingControl (port 9197), which most Samsung TVs since 2016 answer. */
     override suspend fun readVolume(): TvVolume? = withContext(Dispatchers.IO) {
@@ -342,6 +402,8 @@ class LgAdapter(
                 "CONTROL_MOUSE_AND_KEYBOARD", "CONTROL_INPUT_MEDIA_PLAYBACK",
                 // Lets the Channels tab list installed apps (the TV asks once to allow it).
                 "READ_INSTALLED_APPS",
+                // Inputs list, and the TV's network address for waking it.
+                "READ_INPUT_DEVICE_LIST", "READ_NETWORK_STATE", "CONTROL_INPUT_TV",
             )
         )
     )
@@ -359,6 +421,22 @@ class LgAdapter(
         val mute = st?.optBoolean("muteStatus", false) ?: p.optBoolean("muted", p.optBoolean("mute", false))
         return TvVolume(level, max, mute)
     }
+
+    override suspend fun macAddress(): String? = runCatching {
+        val p = request("ssap://com.webos.service.connectionmanager/getinfo").optJSONObject("payload")
+        listOf("wiredInfo", "wifiInfo").firstNotNullOfOrNull { k -> p?.optJSONObject(k)?.optString("macAddress")?.takeIf { it.isNotEmpty() } }
+    }.getOrNull()
+
+    override suspend fun listInputs(): List<TvInput> {
+        val a = request("ssap://tv/getExternalInputList").optJSONObject("payload")?.optJSONArray("devices") ?: return emptyList()
+        return (0 until a.length()).mapNotNull { i ->
+            val o = a.optJSONObject(i) ?: return@mapNotNull null
+            val id = o.optString("id").ifEmpty { return@mapNotNull null }
+            TvInput(id, o.optString("label").ifEmpty { id })
+        }
+    }
+
+    override suspend fun switchInput(id: String) { request("ssap://tv/switchInput", JSONObject().put("inputId", id)) }
 
     override suspend fun readVolume(): TvVolume? = parseVolume(request("ssap://audio/getVolume").optJSONObject("payload"))
 
@@ -472,6 +550,12 @@ class LgAdapter(
             RemoteKey.INPUT -> button("INPUT_HUB")
             RemoteKey.MENU -> button("MENU")
             RemoteKey.AUDIO -> button("SAP")
+            RemoteKey.SUBTITLES -> button("CC")
+            RemoteKey.SETTINGS -> button("MENU")
+            RemoteKey.RED -> button("RED")
+            RemoteKey.GREEN -> button("GREEN")
+            RemoteKey.YELLOW -> button("YELLOW")
+            RemoteKey.BLUE -> button("BLUE")
             RemoteKey.VOICE -> throw Unsupported("Voice isn't available on LG over WiFi")
             else -> missing(key, "LG")
         }

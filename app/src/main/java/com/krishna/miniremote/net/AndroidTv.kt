@@ -190,6 +190,9 @@ class AndroidTvAdapter(
     @Volatile private var imeCounter = 0L
     @Volatile private var fieldCounter = 0L
     @Volatile private var currentApp: String? = null
+    override var onKeyboard: (() -> Unit)? = null
+    /** Voice: the session id the TV hands out after Search is pressed. */
+    @Volatile private var voiceWait: CompletableDeferred<Long>? = null
 
     private val keys = mapOf(
         RemoteKey.UP to 19, RemoteKey.DOWN to 20, RemoteKey.LEFT to 21, RemoteKey.RIGHT to 22,
@@ -201,6 +204,8 @@ class AndroidTvAdapter(
         RemoteKey.CH_UP to 166, RemoteKey.CH_DOWN to 167,
         RemoteKey.GUIDE to 172, RemoteKey.CH_LIST to 172, RemoteKey.INFO to 165,
         RemoteKey.INPUT to 178, RemoteKey.MENU to 176, RemoteKey.AUDIO to 222,
+        RemoteKey.SUBTITLES to 175, RemoteKey.SETTINGS to 176,
+        RemoteKey.RED to 183, RemoteKey.GREEN to 184, RemoteKey.YELLOW to 185, RemoteKey.BLUE to 186,
     ) + RemoteKey.entries.filter { it.digit != null }.associateWith { 7 + (it.digit!! - '0') }
 
     override suspend fun connect() {
@@ -306,7 +311,9 @@ class AndroidTvAdapter(
                         // RemoteImeBatchEdit from the TV: the counters our edits must carry.
                         m[21] != null -> m.sub(21)?.let { b -> b.long(1)?.let { imeCounter = it }; b.long(2)?.let { fieldCounter = it } }
                         // RemoteImeShowRequest: a text box got focus.
-                        m[22] != null -> m.sub(22)?.sub(2)?.long(1)?.let { fieldCounter = it }
+                        m[22] != null -> { m.sub(22)?.sub(2)?.long(1)?.let { fieldCounter = it }; onKeyboard?.invoke() }
+                        // RemoteVoiceBegin: the TV opened a voice session for us.
+                        m[30] != null -> voiceWait?.complete(m.sub(30)?.long(1) ?: 0L)
                         m[50] != null -> m.sub(50)?.let { v ->
                             val max = v.long(6)?.toInt() ?: 0
                             if (max > 0) onVolume?.invoke(TvVolume((v.long(7) ?: 0L).toInt(), max, (v.long(8) ?: 0L) != 0L))
@@ -343,6 +350,29 @@ class AndroidTvAdapter(
     }
 
     /** Types letters, digits and a few symbols as key presses (the TV's IME protocol is far heavier). */
+    /**
+     * Voice to the TV's Assistant: presses Search, waits for the TV's voice session, and
+     * answers it. Returns the session id, or null if the TV didn't open one (then the search
+     * screen is simply open). Audio then goes with [voiceChunk] (16-bit mono PCM, 8 kHz).
+     */
+    suspend fun voiceBegin(): Long? {
+        val w = CompletableDeferred<Long>().also { voiceWait = it }
+        key(84)
+        val id = kotlinx.coroutines.withTimeoutOrNull(2500) { w.await() } ?: return null
+        voiceWait = null
+        withContext(Dispatchers.IO) { (io ?: error("Not connected")).send(Pb().apply { msg(30) { int(1, id) } }.toBytes()) }
+        return id
+    }
+
+    suspend fun voiceChunk(id: Long, pcm: ByteArray) = withContext(Dispatchers.IO) {
+        (io ?: error("Not connected")).send(Pb().apply { msg(31) { int(1, id); bytes(2, pcm) } }.toBytes())
+    }
+
+    suspend fun voiceEnd(id: Long) = withContext(Dispatchers.IO) {
+        runCatching { (io ?: error("Not connected")).send(Pb().apply { msg(32) { int(1, id) } }.toBytes()) }
+        Unit
+    }
+
     override val replacesText: Boolean get() = true
 
     /** Puts [text] in the TV's focused box through its keyboard link (any characters). */

@@ -17,6 +17,7 @@ enum class RemoteKey(val word: String, val digit: Char? = null) {
     VOL_UP("Volume +"), VOL_DOWN("Volume -"), MUTE("Mute"), VOICE("Voice"),
     REWIND("Rewind"), FAST_FORWARD("Fast forward"), CH_UP("Channel +"), CH_DOWN("Channel -"),
     GUIDE("TV Guide"), CH_LIST("Channel list"), INFO("Info"), INPUT("Input"), MENU("Display settings"), AUDIO("Audio"),
+    SUBTITLES("Subtitles"), SETTINGS("Settings"), RED("Red"), GREEN("Green"), YELLOW("Yellow"), BLUE("Blue"),
     N0("0", '0'), N1("1", '1'), N2("2", '2'), N3("3", '3'), N4("4", '4'),
     N5("5", '5'), N6("6", '6'), N7("7", '7'), N8("8", '8'), N9("9", '9');
 
@@ -33,11 +34,14 @@ data class Device(
     val token: String? = null,
     /** SHA-256 of the TV's TLS certificate, recorded on first pairing (Samsung / LG wss). */
     val pin: String? = null,
+    /** The TV's network (MAC) address, saved after connecting, for waking it (Wake-on-LAN). */
+    val mac: String? = null,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("name", name).put("host", host).put("brand", brand.name)
         .put("token", token ?: JSONObject.NULL)
         .put("pin", pin ?: JSONObject.NULL)
+        .put("mac", mac ?: JSONObject.NULL)
 
     companion object {
         fun fromJson(o: JSONObject): Device? = runCatching {
@@ -48,6 +52,7 @@ data class Device(
                 brand = Brand.valueOf(o.getString("brand")),
                 token = if (o.isNull("token")) null else o.getString("token"),
                 pin = if (!o.has("pin") || o.isNull("pin")) null else o.getString("pin"),
+                mac = if (!o.has("mac") || o.isNull("mac")) null else o.getString("mac"),
             )
         }.getOrNull()
 
@@ -82,6 +87,10 @@ data class Settings(
     val volumeKeys: Boolean = true,
     /** Download app logos from Simple Icons for Quick access and app details. */
     val logos: Boolean = true,
+    /** Open the typing sheet by itself when the TV focuses a text box (Android TV). */
+    val autoKeyboard: Boolean = true,
+    /** While connected and the app is in the background, a notification with volume and play keys. */
+    val notifRemote: Boolean = true,
     /** Home layout: "strip" (Black) or "cards" (see ui.HomeLayout). */
     val layout: String = "strip",
 )

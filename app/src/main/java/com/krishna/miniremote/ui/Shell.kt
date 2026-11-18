@@ -117,6 +117,10 @@ fun AppShell(vm: RemoteVM) {
     val scope = rememberCoroutineScope()
     var sheet by remember { mutableStateOf<Page?>(null) }
     var keys by remember { mutableStateOf(false) }
+    var keysFromTv by remember { mutableStateOf(false) }
+    var more by remember { mutableStateOf(false) }
+    // The TV focused a text box (login, search): open the typing sheet, without pressing Search again.
+    LaunchedEffect(vm.keyboardAsk) { if (vm.keyboardAsk > 0 && !keys) { keysFromTv = true; keys = true } }
     val style = vm.settings.controlStyle
     // Dial or trackpad is a setting; the tray's 123 key swaps in the number pad for a while.
     var numpad by remember { mutableStateOf(false) }
@@ -157,6 +161,7 @@ fun AppShell(vm: RemoteVM) {
                                 openKeys = { keys = true },
                                 tray = tray, numpad = numpad, onNumpad = { numpad = !numpad },
                                 onTray = { open -> if (open != tray) vm.feel.fire(com.krishna.miniremote.Feel.TICK); tray = open },
+                                openMore = { more = true },
                             )
                             Tab.CHANNELS -> ChannelsScreen(vm, accent, openDevices = { sheet = Page.Devices })
                         }
@@ -179,7 +184,8 @@ fun AppShell(vm: RemoteVM) {
             }
         }
         sheet?.let { start -> RemoteSheet(vm, accent, start) { sheet = null } }
-        if (keys) KeyboardSheet(vm, accent) { keys = false }
+        if (keys) KeyboardSheet(vm, accent, openSearch = !keysFromTv) { keys = false; keysFromTv = false }
+        if (more) MoreSheet(vm, accent) { more = false }
         if (sheet == null) vm.pairPrompt?.let { PairCodeDialog(vm, it, accent) }
     }
 }

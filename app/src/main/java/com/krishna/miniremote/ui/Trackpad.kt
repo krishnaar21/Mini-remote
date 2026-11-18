@@ -66,6 +66,8 @@ fun Trackpad(
     onTwoFinger: ((RemoteKey) -> Unit)? = null,
     /** Two fingers tapped (no slide); two of these quickly switch dial / trackpad. */
     onTwoFingerTap: () -> Unit = {},
+    /** The finger lifted after a hold (voice ends). */
+    onVoiceEnd: () -> Unit = {},
 ) {
     val twoStepPx = with(LocalDensity.current) { 30.dp.toPx() }
     val twoCb = androidx.compose.runtime.rememberUpdatedState(onTwoFinger)
@@ -138,6 +140,7 @@ fun Trackpad(
                     }
                     hold.cancel()
                     if (two?.tapped == true) twoTapCb.value()
+                    if (held) onVoiceEnd()
                     if (!moved && !held) onKey(RemoteKey.OK)
                     touch = null; lit = null; twoMode = false; twoKey = null
                 }

@@ -168,7 +168,7 @@ fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ic
  * numbers and input, and in apps volume down / up, mute and input.
  */
 @Composable
-fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, openKeys: () -> Unit) {
+fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, openKeys: () -> Unit, openMore: () -> Unit = {}) {
     val tv = vm.nowOn?.live == true
     val k = 68.dp
     Column(verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -188,7 +188,7 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
                 StripKey(accent, "Volume up", k, ico = Ico.PLUS, caption = "VOL") { vm.press(RemoteKey.VOL_UP, quiet = true) }
                 StripKey(accent, "Mute", k, active = vm.muted, ico = if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER) { vm.press(RemoteKey.MUTE) }
             }
-            StripKey(accent, "Input", k, ico = Ico.INPUT) { vm.press(RemoteKey.INPUT) }
+            StripKey(accent, "More: keys, inputs, sleep timer", k, ico = Ico.MORE, onClick = openMore)
         }
     }
 }
@@ -222,7 +222,7 @@ val CARD_W = 308.dp
 
 /** The volume / channel card: two tall rockers, then input and guide. */
 @Composable
-fun VolChCard(vm: RemoteVM, accent: Color) {
+fun VolChCard(vm: RemoteVM, accent: Color, openMore: () -> Unit = {}) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(22.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(36.dp)) {
             VerticalRocker(accent, "VOL", "Volume up", "Volume down", Ico.PLUS, Ico.MINUS, Modifier.width(80.dp).height(210.dp),
@@ -233,7 +233,7 @@ fun VolChCard(vm: RemoteVM, accent: Color) {
         // Under the rockers' centres.
         Row(horizontalArrangement = Arrangement.spacedBy(60.dp)) {
             KeyButton(accent, "Input", Modifier.size(56.dp), pressedScale = 1f, onPress = { vm.press(RemoteKey.INPUT) }) { c, _ -> LineIcon(Ico.INPUT, c, 20.dp) }
-            KeyButton(accent, "Guide", Modifier.size(56.dp), pressedScale = 1f, onPress = { vm.press(RemoteKey.GUIDE) }) { c, _ -> LineIcon(Ico.GUIDE, c, 20.dp) }
+            KeyButton(accent, "More", Modifier.size(56.dp), pressedScale = 0.94f, onPress = openMore) { c, _ -> LineIcon(Ico.MORE, c, 22.dp) }
         }
     }
 }

@@ -25,6 +25,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
 
 class RemoteVM(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
@@ -355,11 +356,14 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 tvVolume = null
                 a.onVolume = { v -> viewModelScope.launch { tvVolume = v; muted = v.muted } }
                 a.onDropped = { dropped(d, a) }
+                a.onKeyboard = { viewModelScope.launch { if (settings.autoKeyboard) keyboardAsk++ } }
                 a.connect()
                 adapter = a
                 refreshVolume(0)
                 link = Link.READY
                 redials = 0
+                // Remember the TV's network address so it can be woken later.
+                if (d.mac == null) viewModelScope.launch { runCatching { a.macAddress() }.getOrNull()?.let { m -> updateDevice(d.id) { it.copy(mac = m) } } }
                 if (!quiet) feel.fire(Feel.SUCCESS)
             } catch (e: CancellationException) {
                 // A timeout inside connect is a failure to show, not this job being cancelled.
@@ -679,4 +683,118 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() { adapter?.close() }
+
+    /* ---------------------------------------------------- wake, voice, more */
+
+    /** Bumps when the TV asks for a keyboard (a text box got focus): the Search sheet opens. */
+    var keyboardAsk by mutableIntStateOf(0); private set
+
+    /** Turns the TV on: Wake-on-LAN with its saved network address (and Roku's PowerOn), then connects. */
+    fun wake() {
+        val d = active ?: run { say("Choose a TV first"); return }
+        feel.fire(Feel.HEAVY)
+        viewModelScope.launch {
+            val a = adapter
+            if (a != null && link == Link.READY && a.powerOn()) { say("Turning on ${d.name}"); return@launch }
+            val mac = d.mac
+            if (mac == null) { say("${d.name} can't be turned on from here yet. Connect once while it's on."); return@launch }
+            if (!com.krishna.miniremote.net.Wol.wake(mac, d.host)) { say("Couldn't reach the network"); return@launch }
+            say("Waking ${d.name}…")
+            // TVs take a few seconds to join the network.
+            repeat(6) {
+                delay(2500)
+                if (link == Link.READY) return@launch
+                if (link != Link.CONNECTING) connect(d)
+            }
+        }
+    }
+
+    /** Hold OK on an Android TV: the phone's mic goes to the TV's Assistant while held. */
+    private var voiceJob: Job? = null
+    @Volatile private var voiceOn = false
+
+    fun voiceStart(): Boolean {
+        val a = adapter as? com.krishna.miniremote.net.AndroidTvAdapter
+        val ctx = getApplication<Application>()
+        val mic = androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (a == null || link != Link.READY || !mic) {
+            press(RemoteKey.VOICE)
+            if (a != null && !mic) say("Allow the microphone (Search › mic) to talk to the TV from here")
+            return false
+        }
+        voiceOn = true
+        voiceJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val id = try { a.voiceBegin() } catch (e: Exception) { null }
+            if (id == null) { voiceOn = false; return@launch }
+            withContext(kotlinx.coroutines.Dispatchers.Main) { say("Listening…", RemoteKey.VOICE) }
+            val rate = 8000
+            val min = android.media.AudioRecord.getMinBufferSize(rate, android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT)
+            @Suppress("MissingPermission")
+            val rec = runCatching {
+                android.media.AudioRecord(android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION, rate,
+                    android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT, maxOf(min, 3200) * 2)
+            }.getOrNull()
+            try {
+                rec?.startRecording()
+                val buf = ByteArray(3200) // 200 ms
+                val started = System.currentTimeMillis()
+                while (voiceOn && rec != null && System.currentTimeMillis() - started < 15_000) {
+                    val n = rec.read(buf, 0, buf.size)
+                    if (n > 0) a.voiceChunk(id, buf.copyOf(n))
+                }
+            } catch (e: Exception) {
+            } finally {
+                runCatching { rec?.stop() }; rec?.release()
+                a.voiceEnd(id)
+                voiceOn = false
+            }
+        }
+        return true
+    }
+
+    fun voiceStop() { voiceOn = false }
+
+    /** Inputs of the TV, for the More sheet. */
+    var inputs by mutableStateOf<List<com.krishna.miniremote.net.TvInput>>(emptyList()); private set
+
+    fun loadInputs() {
+        val a = adapter ?: return
+        if (link != Link.READY) return
+        viewModelScope.launch { inputs = runCatching { a.listInputs() }.getOrDefault(emptyList()) }
+    }
+
+    fun switchInput(i: com.krishna.miniremote.net.TvInput) {
+        val a = adapter ?: run { say("Choose a TV first"); return }
+        feel.fire(Feel.PRESS); say(i.name)
+        viewModelScope.launch {
+            try { a.switchInput(i.id); txCount++ } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                say((e as? UserFacing)?.message ?: "Couldn't switch input")
+            }
+        }
+    }
+
+    /** Sleep timer: turns the TV off after the chosen minutes (while the app is running). */
+    var sleepAt by mutableStateOf<Long?>(null); private set
+    private var sleepJob: Job? = null
+
+    fun setSleep(minutes: Int?) {
+        sleepJob?.cancel(); sleepJob = null
+        if (minutes == null) { sleepAt = null; say("Sleep timer off"); return }
+        val at = System.currentTimeMillis() + minutes * 60_000L
+        sleepAt = at
+        say("TV turns off in $minutes min")
+        sleepJob = viewModelScope.launch {
+            while (System.currentTimeMillis() < at) delay(1000)
+            sleepAt = null
+            if (active != null) { if (link != Link.READY) active?.let { connect(it) }; delay(1500); press(RemoteKey.POWER, quiet = true) }
+        }
+    }
+
+    /** Sends a key from outside the app's screen (notification, tile): connects first if needed. */
+    fun remoteKey(k: RemoteKey) {
+        val d = active ?: return
+        if (link != Link.READY) { connect(d); viewModelScope.launch { repeat(60) { if (link == Link.READY) { press(k, quiet = true); return@launch }; delay(100) } } }
+        else press(k, quiet = true)
+    }
 }

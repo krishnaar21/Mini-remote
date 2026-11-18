@@ -77,6 +77,8 @@ fun Clickpad(
     onTwoFingerTap: () -> Unit = {},
     /** Inside a volume ring: touches outside the round pad belong to the ring. */
     roundOnly: Boolean = false,
+    /** The finger left OK after a hold (voice ends). */
+    onVoiceEnd: () -> Unit = {},
 ) {
     val twoStepPx = with(LocalDensity.current) { 30.dp.toPx() }
     val twoCb = androidx.compose.runtime.rememberUpdatedState(onTwoFinger)
@@ -186,6 +188,7 @@ fun Clickpad(
                     }
                     hold.cancel()
                     if (two?.tapped == true) twoTapCb.value()
+                    if (holdFired && inWell) onVoiceEnd()
                     if (!moved && !holdFired) onKey(if (inWell) RemoteKey.OK else zoneKey)
                     litDir = null; wellDown = false; listening = false; touch = null; twoMode = false; twoKey = null
                 }

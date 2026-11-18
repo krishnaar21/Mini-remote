@@ -96,6 +96,7 @@ fun HomeScreen(
     numpad: Boolean,
     onNumpad: () -> Unit,
     onTray: (open: Boolean) -> Unit,
+    openMore: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val pendingOk = remember { arrayOfNulls<Job>(1) }
@@ -148,7 +149,8 @@ fun HomeScreen(
     }
 
     val layout = HomeLayout.of(vm.settings.layout)
-    val voice = { vm.feel.fire(Feel.HEAVY); vm.press(RemoteKey.VOICE) }
+    val voice = { vm.feel.fire(Feel.HEAVY); vm.voiceStart(); Unit }
+    val voiceEnd = { vm.voiceStop() }
     val offlineTap = { vm.feel.fire(Feel.PRESS); openDevices() }
     // The dial at a given size; [round] = sits inside the volume ring.
     val dialAt: @Composable (Dp, Boolean, String?) -> Unit = { s, round, center ->
@@ -159,7 +161,7 @@ fun HomeScreen(
                 toastIcon = if (center != null) (if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER) else vm.toastKey?.let { keyIcon(it, vm.muted, vm.playing) },
                 onKey = onKey, onTick = onTick, onVoice = voice,
                 offline = offline, onOffline = offlineTap,
-                onTwoFinger = onTwo, onTwoFingerTap = onTwoTap, roundOnly = round,
+                onTwoFinger = onTwo, onTwoFingerTap = onTwoTap, roundOnly = round, onVoiceEnd = voiceEnd,
             )
         }
     }
@@ -168,7 +170,7 @@ fun HomeScreen(
             Trackpad(
                 size = s, height = s, accent = accent, stepDp = vm.settings.scrubStepDp, offline = offline,
                 onKey = onKey, onTick = onTick, onVoice = voice, onOffline = offlineTap,
-                onTwoFinger = onTwo, onTwoFingerTap = onTwoTap,
+                onTwoFinger = onTwo, onTwoFingerTap = onTwoTap, onVoiceEnd = voiceEnd,
             )
         }
     }
@@ -222,12 +224,14 @@ fun HomeScreen(
             }
             TvPicker(vm, Modifier.weight(1f), openDevices)
             KeyButton(accent, "Power", Modifier.size(52.dp), pressedScale = 1f, onPress = {
-                if (vm.active == null) openDevices() else askPower = true
+                // Off (not reachable): wake it. On: ask before turning it off.
+                if (vm.active == null) openDevices() else if (vm.link != Link.READY) vm.wake() else askPower = true
             }) { c, _ ->
                 LineIcon(Ico.POWER, c, 22.dp)
             }
         }
 
+        NowPlaying(vm)
         when (layout) {
             HomeLayout.CARDS -> {
                 val cards = androidx.compose.foundation.pager.rememberPagerState { 3 }
@@ -242,7 +246,7 @@ fun HomeScreen(
                         val card = Modifier.size(cw, ch).clip(RoundedCornerShape(28.dp)).background(M.Container).padding(24.dp)
                         when (p) {
                             0 -> padArea(padOnly, Modifier.width(cw).height(ch))
-                            1 -> Box(card, contentAlignment = Alignment.Center) { VolChCard(vm, accent) }
+                            1 -> Box(card, contentAlignment = Alignment.Center) { VolChCard(vm, accent, openMore) }
                             else -> Box(card, contentAlignment = Alignment.Center) {
                                 CompositionLocalProvider(LocalK provides (cw - 48.dp).value / 780f) { Numpad(vm, accent, Modifier.fillMaxSize()) }
                             }
@@ -256,7 +260,7 @@ fun HomeScreen(
 
             HomeLayout.STRIP -> {
                 ringArea(Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp).then(a11y))
-                Box(Modifier.padding(top = 10.dp, bottom = 26.dp)) { KeyRows(vm, accent, numpad, onNumpad, openKeys) }
+                Box(Modifier.padding(top = 10.dp, bottom = 26.dp)) { KeyRows(vm, accent, numpad, onNumpad, openKeys, openMore) }
             }
 
         }
@@ -299,4 +303,31 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
 fun shortName(name: String, fallback: String): String {
     val n = name.replace(Regex("\\(?\\b\\d{1,3}(\\.\\d{1,3}){3}\\b\\)?"), "").replace(Regex("\\s+"), " ").trim().ifEmpty { fallback }
     return if (n.length > 18) n.take(17).trimEnd() + "…" else n
+}
+
+/** What's on the TV, in one quiet line under the top bar; with a thin progress line when the TV says how far in it is (Roku). */
+@Composable
+private fun NowPlaying(vm: RemoteVM) {
+    val n = vm.nowOn
+    val name = n?.name?.let { raw ->
+        if ('.' in raw && ' ' !in raw) com.krishna.miniremote.Catalog.apps.firstOrNull { it.ids.values.contains(raw) }?.name
+            ?: vm.tvApps.firstOrNull { it.id == raw }?.name
+        else raw
+    }?.takeIf { it.isNotBlank() && it != "Home" }
+    Box(Modifier.fillMaxWidth().height(30.dp), contentAlignment = Alignment.Center) {
+        if (name != null && vm.link == Link.READY) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                val pos = n?.positionMs; val dur = n?.durationMs
+                fun t(ms: Long) = (ms / 1000).let { s -> if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60) }
+                Text(if (pos != null && dur != null && dur > 0) "$name · ${t(pos)} / ${t(dur)}" else name,
+                    color = T.Dim, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { contentDescription = "On the TV: $name" })
+                if (pos != null && dur != null && dur > 0) {
+                    Box(Modifier.padding(top = 4.dp).width(140.dp).height(2.dp).clip(CircleShape).background(Color.White.copy(0.15f))) {
+                        Box(Modifier.fillMaxHeight().fillMaxWidth((pos.toFloat() / dur).coerceIn(0f, 1f)).background(T.Dim))
+                    }
+                }
+            }
+        }
+    }
 }
