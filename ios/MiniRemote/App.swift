@@ -50,43 +50,9 @@ struct ContentView: View {
             ToastChip(text: vm.toastKey == nil ? vm.toast : nil).padding(.bottom, 300)
                 .animation(.easeOut(duration: 0.2), value: vm.toast)
 
-            // The foot: what's playing, scrolling, or the key just pressed; the page pills on the right.
-            HStack(spacing: 8) {
-                let keyName = vm.toastKey != nil ? vm.toast : nil
-                if let line = keyName ?? vm.nowLine {
-                    HStack(spacing: 8) {
-                        Image(systemName: keyName != nil ? (vm.toastKey.flatMap { keySymbol($0, muted: vm.muted, playing: vm.playing) } ?? "circle.fill") : "play.fill")
-                            .font(.system(size: 11, weight: .semibold)).foregroundStyle(keyName != nil ? T.ink : T.dim)
-                        Marquee(text: line, color: keyName != nil ? T.ink : T.dim).frame(height: 18)
-                    }
-                    .transition(.opacity)
-                    .id(line)
-                } else { Spacer() }
-                PagePills(count: pages, page: min(keyPage ?? 0, pages - 1), accent: accent) {
-                    vm.feel.fire(.tick)
-                    withAnimation(.easeInOut(duration: 0.3)) { keyPage = ((keyPage ?? 0) + 1) % pages }
-                }
-                .coach("pills")
-            }
-            .animation(.easeOut(duration: 0.16), value: vm.toast)
-            .frame(width: KEYROW_W)
-            .padding(.bottom, 4)
+            foot
         }
-        // The guided tour, over the remote (after the welcome pages).
-        .overlayPreferenceValue(CoachKey.self) { anchors in
-            if vm.settings.onboarded && !vm.settings.toured && !showDevices && !showMore && !showKeys && apps == nil {
-                GeometryReader { g in
-                    CoachTour(rects: anchors.mapValues { g[$0] }, accent: accent) {
-                        var s = vm.settings; s.toured = true; vm.update(s)
-                        vm.endDemo()
-                        if vm.active == nil { showDevices = true }
-                    }
-                    // A pretend TV for the tour, so the remote shows as it does when connected.
-                    .onAppear { vm.startDemo() }
-                    .onDisappear { vm.endDemo() }
-                }
-            }
-        }
+        .overlayPreferenceValue(CoachKey.self) { anchors in tour(anchors) }
         .id(vm.settings.theme + (scheme == .dark ? "-d" : "-l") + (vm.settings.depth ? "-3d" : ""))
         .fullScreenCover(isPresented: Binding(get: { !vm.settings.onboarded }, set: { _ in })) {
             OnboardingView(accent: accent) { var s = vm.settings; s.onboarded = true; vm.update(s) }
@@ -127,6 +93,46 @@ struct ContentView: View {
         .overlay { if showIcons { HomeIconChoices() } }
         .onAppear { screenshot() }
         #endif
+    }
+
+    /** The foot: what's playing, scrolling, or the key just pressed; the page pills on the right. */
+    private var foot: some View {
+        HStack(spacing: 8) {
+            let keyName = vm.toastKey != nil ? vm.toast : nil
+            if let line = keyName ?? vm.nowLine {
+                HStack(spacing: 8) {
+                    Image(systemName: keyName != nil ? (vm.toastKey.flatMap { keySymbol($0, muted: vm.muted, playing: vm.playing) } ?? "circle.fill") : "play.fill")
+                        .font(.system(size: 11, weight: .semibold)).foregroundStyle(keyName != nil ? T.ink : T.dim)
+                    Marquee(text: line, color: keyName != nil ? T.ink : T.dim).frame(height: 18)
+                }
+                .transition(.opacity)
+                .id(line)
+            } else { Spacer() }
+            PagePills(count: pages, page: min(keyPage ?? 0, pages - 1), accent: accent) {
+                vm.feel.fire(.tick)
+                withAnimation(.easeInOut(duration: 0.3)) { keyPage = ((keyPage ?? 0) + 1) % pages }
+            }
+            .coach("pills")
+        }
+        .animation(.easeOut(duration: 0.16), value: vm.toast)
+        .frame(width: KEYROW_W)
+        .padding(.bottom, 4)
+    }
+
+    /** The guided tour, over the remote (after the welcome pages). */
+    @ViewBuilder private func tour(_ anchors: [String: Anchor<CGRect>]) -> some View {
+        if vm.settings.onboarded && !vm.settings.toured && !showDevices && !showMore && !showKeys && apps == nil {
+            GeometryReader { g in
+                CoachTour(rects: anchors.mapValues { g[$0] }, accent: accent) {
+                    var s = vm.settings; s.toured = true; vm.update(s)
+                    vm.endDemo()
+                    if vm.active == nil { showDevices = true }
+                }
+                // A pretend TV for the tour, so the remote shows as it does when connected.
+                .onAppear { vm.startDemo() }
+                .onDisappear { vm.endDemo() }
+            }
+        }
     }
 }
 
