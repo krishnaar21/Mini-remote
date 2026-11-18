@@ -1,5 +1,7 @@
 package com.krishna.miniremote.ui
 
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.activity.compose.BackHandler
@@ -200,9 +202,27 @@ fun AppShell(vm: RemoteVM) {
                         }
                     }
                     // Which page of circles: a pill for the one showing, dots for the others.
-                    if (!apps) PagePills(keyPager.pageCount, keyPager.currentPage, accent,
-                        listOf("Main keys", "More keys", "Apps", "More apps"), Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp)) { i ->
-                        vm.feel.fire(com.krishna.miniremote.Feel.TICK); scope.launch { keyPager.animateScrollToPage(i) }
+                    // The bottom line: what's playing (scrolling) on the left, or the name of the key
+                    // just pressed for a moment; the page pills on the right.
+                    if (!apps) Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 24.dp, end = 16.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        val keyName = if (vm.toastKey != null) vm.toast else null
+                        val line = keyName ?: nowLine(vm)
+                        Box(Modifier.weight(1f).height(40.dp), contentAlignment = Alignment.CenterStart) {
+                            androidx.compose.animation.AnimatedContent(line, label = "bottomLine",
+                                transitionSpec = { androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(160)) togetherWith androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(160)) }) { t ->
+                                if (t != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    val ico = if (t == keyName) vm.toastKey?.let { keyIcon(it, vm.muted, vm.playing) } else Ico.PLAY_ONLY
+                                    ico?.let { LineIcon(it, if (t == keyName) T.Ink else T.Dim, 14.dp) }
+                                    Text(t, color = if (t == keyName) T.Ink else T.Dim, fontSize = 13.sp, maxLines = 1, softWrap = false,
+                                        modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 1500)
+                                            .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite })
+                                }
+                            }
+                        }
+                        PagePills(keyPager.pageCount, keyPager.currentPage, accent, listOf("Main keys", "More keys", "Apps", "More apps")) { i ->
+                            vm.feel.fire(com.krishna.miniremote.Feel.TICK); scope.launch { keyPager.animateScrollToPage(i) }
+                        }
                     }
                     androidx.compose.animation.AnimatedVisibility(
                         apps,
@@ -251,7 +271,8 @@ fun AppShell(vm: RemoteVM) {
                     }
                     // The dial shows messages in its well; everywhere else they float near the bottom.
                     // Only quick key feedback sits in the dial; messages and errors go to the toast.
-                    val inWell = onRemote && deck == Deck.DIAL && !tray && layout != "cards" && vm.toastKey != null
+                    // Key names show on the bottom line (on the remote), not as a toast.
+                    val inWell = onRemote && vm.toastKey != null
                     // On the remote it sits under the top bar (clear of the keys); elsewhere near the bottom.
                     ToastChip(if (inWell) null else vm.toast,
                         if (onRemote) Modifier.align(Alignment.TopCenter).padding(top = 96.dp, start = 24.dp, end = 24.dp)

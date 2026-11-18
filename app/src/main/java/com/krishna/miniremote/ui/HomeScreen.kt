@@ -162,8 +162,8 @@ fun HomeScreen(
         CompositionLocalProvider(LocalK provides s.value / 780f) {
             Clickpad(
                 size = s, accent = accent, stepDp = vm.settings.scrubStepDp,
-                toast = center ?: if (layout == HomeLayout.CARDS || vm.toastKey == null) null else vm.toast,
-                toastIcon = if (center != null) (if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER) else vm.toastKey?.let { keyIcon(it, vm.muted, vm.playing) },
+                toast = center,
+                toastIcon = if (center != null) (if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER) else null,
                 onKey = onKey, onTick = onTick, onVoice = voice,
                 offline = offline, onOffline = offlineTap,
                 onTwoFinger = onTwo, onTwoFingerTap = onTwoTap, roundOnly = round, onVoiceEnd = voiceEnd,
@@ -324,7 +324,7 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
                 dot?.let { Box(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp).size(10.dp).clip(CircleShape).background(M.High).padding(1.5.dp).clip(CircleShape).background(it)) }
             }
             // The TV's name, and what's on it underneath when the TV says (app, time played).
-            val playing = nowLine(vm)
+            val playing: String? = null // now playing moved to the bottom-left line
             Column(Modifier.weight(1f, fill = false)) {
                 Text(d?.let { shortName(it.name, it.brand.label) } ?: "Choose a TV", color = T.Ink, fontSize = if (playing != null) 14.sp else 15.sp,
                     lineHeight = 17.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -346,7 +346,7 @@ fun shortName(name: String, fallback: String): String {
 /** What's on the TV, in one quiet line under the top bar; with a thin progress line when the TV says how far in it is (Roku). */
 @Composable
 /** What's on the TV, for the pill: "YouTube · 1:23 / 4:56", or null when nothing (or Home). */
-private fun nowLine(vm: RemoteVM): String? {
+internal fun nowLine(vm: RemoteVM): String? {
     if (vm.link != Link.READY) return null
     val n = vm.nowOn ?: return null
     val name = n.name.let { raw ->
