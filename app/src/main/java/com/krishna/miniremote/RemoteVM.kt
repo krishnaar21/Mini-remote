@@ -255,7 +255,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
 
     /** Mirrors an edit of the search box on the TV: deletes what changed, types what's new. */
     fun liveType(old: String, new: String) {
-        userAt = System.currentTimeMillis()
+        userAt = System.currentTimeMillis(); menuUsed()
         if (active == null) { say("Choose a TV first"); return }
         // Android TV takes the whole box at once (any characters, no key-by-key typing).
         if (adapter?.replacesText == true) { textOps.trySend("\u0001" + new); return }
@@ -328,46 +328,53 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     /** When the user last pressed, turned or typed anything here (not background traffic like volume checks). */
     @Volatile private var userAt = 0L
 
-    /** Keys that open a menu or panel over what's on the TV. */
+    /** Keys that open a menu or panel over what's on the TV (settings, quick settings, inputs…). */
     private val menuKeys = setOf(RemoteKey.SETTINGS, RemoteKey.INPUT, RemoteKey.MENU, RemoteKey.INFO, RemoteKey.GUIDE,
         RemoteKey.CH_LIST, RemoteKey.SUBTITLES, RemoteKey.AUDIO)
+    /** Keys that leave a menu by themselves. */
+    private val menuExits = setOf(RemoteKey.BACK, RemoteKey.HOME, RemoteKey.POWER)
+    private val menuIdle = 10_000L
+    /** A menu opened from here is up, and when it closes unless used again. */
+    @Volatile private var menuUntil = 0L
+    private var menuBehind: String? = null
     private var menuJob: Job? = null
-    private val menuIdle = 8_000L
 
     /**
-     * A TV menu opened from here closes itself: after 15 s with nothing sent from the app
-     * (moving through it, typing or speaking all count as use), Back is pressed once. Not when
-     * the screen behind it changed meanwhile (an input or app was chosen: the menu is gone),
-     * and not after Back / Home / Power.
+     * Idle TV menus close themselves. Opening one (Settings, Input, Menu, Info, Guide, Channels,
+     * Subtitles, Audio) starts a 10 s clock; anything you do here while it's up (a key, the dial
+     * or trackpad, typing, voice) starts it again. When it runs out, Back is pressed once.
+     * Back, Home or Power end it; so does the screen behind changing (an input or app was picked
+     * and the menu went with it). One watcher checks four times a second, so it's on time.
      */
     private fun watchMenu(key: RemoteKey) {
+        val now = System.currentTimeMillis()
         when {
-            !settings.autoClose -> { menuJob?.cancel(); menuJob = null }
-            key == RemoteKey.BACK || key == RemoteKey.HOME || key == RemoteKey.POWER -> { menuJob?.cancel(); menuJob = null }
+            !settings.autoClose || key in menuExits -> { menuUntil = 0L; menuJob?.cancel(); menuJob = null }
             key in menuKeys -> {
-                val behind = nowOn?.name
-                menuJob?.cancel()
-                menuJob = viewModelScope.launch {
-                    delay(menuIdle)
-                    // Still being used: wait until it has been quiet for the whole spell.
-                    while (true) {
-                        val quiet = System.currentTimeMillis() - userAt
-                        if (quiet >= menuIdle) break
-                        delay(menuIdle - quiet)
+                menuBehind = nowOn?.name
+                menuUntil = now + menuIdle
+                if (menuJob?.isActive != true) menuJob = viewModelScope.launch {
+                    while (menuUntil != 0L) {
+                        delay(250)
+                        val behind = menuBehind
+                        val shown = nowOn?.name
+                        if (behind != null && shown != null && shown != behind) { menuUntil = 0L; break }
+                        if (menuUntil != 0L && System.currentTimeMillis() >= menuUntil) {
+                            menuUntil = 0L
+                            if (link == Link.READY) { queue.trySend(RemoteKey.BACK); say("Closed the TV's menu (unused for 10 s)") }
+                        }
                     }
-                    menuJob = null
-                    val nowBehind = nowOn?.name
-                    if (behind != null && nowBehind != null && nowBehind != behind) return@launch
-                    if (link != Link.READY) return@launch
-                    queue.trySend(RemoteKey.BACK)
-                    say("Closed the TV's menu (no use for 8 s)")
                 }
             }
+            menuUntil != 0L -> menuUntil = now + menuIdle // used: keep it open
         }
     }
 
+    /** Dial turns, trackpad moves and typing keep an open menu alive too. */
+    private fun menuUsed() { if (menuUntil != 0L) menuUntil = System.currentTimeMillis() + menuIdle }
+
     fun scrubTick(key: RemoteKey) {
-        userAt = System.currentTimeMillis(); feel.fire(Feel.TICK); nudgeVolume(key); queue.trySend(key) }
+        userAt = System.currentTimeMillis(); menuUsed(); feel.fire(Feel.TICK); nudgeVolume(key); queue.trySend(key) }
 
     /** Moves the shown volume right away, then asks the TV for the real value a moment later. */
     private fun nudgeVolume(key: RemoteKey) {

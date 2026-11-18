@@ -231,8 +231,19 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit, picking
                 if (entries.isEmpty()) Loading(accent, "Loading apps…")
                 TileGrid(entries) { e -> Tile(e, dragger) { tap(e) } }
             }
-            SectionTitle(if (entries.isEmpty()) "Apps" else "Popular apps")
-            TileGrid(popular) { e -> Tile(e, dragger) { tap(e) } }
+            // The TV lists its apps: those are above; the catalogue's other apps are suggestions.
+            // It doesn't: the catalogue it is (ticked when we can tell they're installed).
+            if (entries.isNotEmpty()) {
+                val missing = popular.filter { it.installed == false }
+                if (missing.isNotEmpty()) {
+                    SectionTitle("Not on your TV")
+                    Hint("Tap one to get it from the TV's store.", top = 4)
+                    TileGrid(missing) { e -> Tile(e, dragger) { tap(e) } }
+                }
+            } else {
+                SectionTitle("Apps")
+                TileGrid(popular) { e -> Tile(e, dragger) { tap(e) } }
+            }
             if (added.isNotEmpty()) {
                 SectionTitle("Added apps")
                 TileGrid(added) { e -> Tile(e, dragger) { tap(e) } }
@@ -587,10 +598,28 @@ private fun AppLogo(slug: String?, ink: Color, size: androidx.compose.ui.unit.Dp
     else if (real && bleed) {
         // Balanced with the other logos: the icon at about three quarters of the tile, on its own
         // edge colour, so the two blend instead of the app's catalogue colour showing round it.
-        val edge = remember(b) { edgeColour(b)?.let(::liftDark) }
-        Box(Modifier.fillMaxSize().then(if (edge != null) Modifier.background(edge) else Modifier), contentAlignment = Alignment.Center) {
-            Image(b, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(0.74f).clip(RoundedCornerShape(26)))
+        // The icon stays its size (about three quarters of the tile); round it, its own edge
+        // pixels are stretched outward to the tile's edge, so its background simply carries on
+        // (gradients too) instead of a band of another colour.
+        val opaque = remember(b) { edgeColour(b) != null }
+        if (opaque) {
+            val src = remember(b) {
+                val ab = b.asAndroidBitmap()
+                val i = (minOf(ab.width, ab.height) * 0.035f).toInt() // trim soft, anti-aliased edges
+                runCatching { android.graphics.Bitmap.createBitmap(ab, i, i, ab.width - 2 * i, ab.height - 2 * i) }.getOrDefault(ab)
+            }
+            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                val target = size.minDimension * 0.74f
+                val k = target / maxOf(src.width, src.height)
+                val shader = android.graphics.BitmapShader(src, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
+                shader.setLocalMatrix(android.graphics.Matrix().apply {
+                    setScale(k, k); postTranslate(center.x - src.width * k / 2f, center.y - src.height * k / 2f)
+                })
+                drawRect(androidx.compose.ui.graphics.ShaderBrush(shader))
+            }
+        } else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            // See-through corners (an icon on its own plate): the plate as it is, on the tile's colour.
+            Image(b, contentDescription = null, modifier = Modifier.fillMaxSize(0.74f))
         }
     }
     // The real app icon fills its tile (as square as the tile allows), with app-icon corners.

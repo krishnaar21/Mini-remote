@@ -99,7 +99,7 @@ data class Settings(
     val notifRemote: Boolean = true,
     /** Look: "dark", "light", "navy" or "retro" (see ui.Palettes). */
     val theme: String = "dark",
-    /** Close TV menus opened from here (Settings, Input…) with Back after 15 s of no use. */
+    /** Close TV menus opened from here (Settings, Input…) with Back after 10 s of no use. */
     val autoClose: Boolean = true,
     /** Home layout: "strip" (Black) or "cards" (see ui.HomeLayout). */
     val layout: String = "strip",

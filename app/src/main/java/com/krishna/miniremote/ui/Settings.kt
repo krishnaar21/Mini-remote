@@ -274,7 +274,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
                 SetLine()
                 SetToggle(Ico.ALERT, SetTint.green, "Notification remote", "Volume and play in the background", s.notifRemote) { vm.update(s.copy(notifRemote = it)) }
                 SetLine()
-                SetToggle(Ico.BACK, SetTint.teal, "Close idle TV menus", "Back after 8 s without use", s.autoClose) { vm.update(s.copy(autoClose = it)) }
+                SetToggle(Ico.BACK, SetTint.teal, "Close idle TV menus", "Back after 10 s without use", s.autoClose) { vm.update(s.copy(autoClose = it)) }
             }
         }
         "control" -> SetSheet("Control", "What the middle of the remote is.", { open = null }) {

@@ -115,7 +115,8 @@ private fun flatColor(f: Face): Color = when (f) {
 fun Modifier.softFace(face: Face, sheen: Boolean = true, corner: Dp? = null, dpUnits: Boolean = false): Modifier = composed {
     val density = LocalDensity.current.density
     val cr = corner?.let { it.value * density }
-    val fill = remember(face) { flatColor(face) }
+    // Read each time (not remembered): the palette can change while the screen is up.
+    val fill = flatColor(face)
     drawBehind {
         val r = cr ?: (min(size.width, size.height) / 2f)
         drawRoundRect(fill, cornerRadius = CornerRadius(r))
