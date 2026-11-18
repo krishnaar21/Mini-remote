@@ -320,15 +320,18 @@ fun TrayPill(open: Boolean, accent: Color, onToggle: (Boolean) -> Unit) {
 /** Page dots: a pill in the accent colour for the page showing, dots for the others; tap to go. */
 @Composable
 fun PagePills(n: Int, page: Int, accent: Color, names: List<String>, modifier: Modifier = Modifier, onPick: (Int) -> Unit) {
-    Row(modifier.height(40.dp).selectableGroup(), verticalAlignment = Alignment.CenterVertically) {
+    // One tap target for the whole group: each tap goes to the next page, and round again.
+    Row(
+        modifier.height(40.dp).clip(CircleShape)
+            .clickable(onClickLabel = "next page") { if (n > 0) onPick((page + 1) % n) }
+            .semantics { contentDescription = "Page ${page + 1} of $n: ${names.getOrElse(page) { "" }}" }
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
         repeat(n) { i ->
             val sel = i == page
             val w by androidx.compose.animation.core.animateDpAsState(if (sel) 18.dp else 6.dp, label = "pill")
-            Box(
-                Modifier.height(24.dp).clip(CircleShape).selectable(sel, role = Role.Tab) { onPick(i) }
-                    .semantics { contentDescription = names.getOrElse(i) { "Page ${i + 1}" } }.padding(horizontal = 3.dp),
-                contentAlignment = Alignment.Center,
-            ) { Box(Modifier.size(w, 6.dp).clip(CircleShape).background(if (sel) accent else T.DotOff)) }
+            Box(Modifier.size(w, 6.dp).clip(CircleShape).background(if (sel) accent else T.DotOff))
         }
     }
 }
