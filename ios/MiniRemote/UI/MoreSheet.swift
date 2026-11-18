@@ -1,5 +1,92 @@
 import SwiftUI
 
+/**
+ * A sheet that's as tall as what's in it (and scrolls only when that's taller than the screen):
+ * the content is measured and the sheet's height follows it.
+ */
+struct FitSheet: ViewModifier {
+    @State private var h: CGFloat = 320
+    func body(content: Content) -> some View {
+        ScrollView {
+            content.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h = $0 }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .background(T.sheet)
+        .presentationDetents([.height(max(180, h + 12))])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(T.sheet)
+    }
+}
+
+extension View {
+    func fitSheet() -> some View { modifier(FitSheet()) }
+}
+
+/** A rounded group of rows on a sheet (as on Android). */
+struct SCard<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+    var body: some View {
+        VStack(spacing: 0) { content() }
+            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(T.container))
+    }
+}
+
+/** The thin line between rows in an SCard, starting after the icon. */
+struct SLine: View { var inset: CGFloat = 60; var body: some View { Rectangle().fill(T.line).frame(height: 1).padding(.leading, inset) } }
+
+/** A row: icon tile, title and a smaller line, what's set, and a chevron or tick. */
+struct SRow: View {
+    let symbol: String
+    let title: String
+    var sub: String? = nil
+    var value: String? = nil
+    var tile: Color? = nil
+    var trailing: String? = "chevron.right"
+    var trailingTint: Color = T.sub
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: symbol).font(.system(size: 15, weight: .medium)).foregroundStyle(tile == nil ? T.ink : .white)
+                    .frame(width: 32, height: 32).background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(tile ?? T.highest))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.system(size: 16)).foregroundStyle(T.ink)
+                    if let sub { Text(sub).font(.system(size: 12.5)).foregroundStyle(T.sub).fixedSize(horizontal: false, vertical: true) }
+                }
+                Spacer(minLength: 8)
+                if let value { Text(value).font(.system(size: 14)).foregroundStyle(T.sub).lineLimit(1) }
+                if let trailing { Image(systemName: trailing).font(.system(size: 13, weight: .semibold)).foregroundStyle(trailingTint) }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 60)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(Pressable())
+    }
+}
+
+/** An on / off row with an icon tile: the whole row is the switch. */
+struct SToggle: View {
+    let symbol: String
+    let title: String
+    var sub: String? = nil
+    let accent: Color
+    @Binding var on: Bool
+    var body: some View {
+        Toggle(isOn: $on) {
+            HStack(spacing: 14) {
+                Image(systemName: symbol).font(.system(size: 15, weight: .medium)).foregroundStyle(T.ink)
+                    .frame(width: 32, height: 32).background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(T.highest))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.system(size: 16)).foregroundStyle(T.ink)
+                    if let sub { Text(sub).font(.system(size: 12.5)).foregroundStyle(T.sub).fixedSize(horizontal: false, vertical: true) }
+                }
+            }
+        }
+        .tint(accent)
+        .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 60)
+    }
+}
+
 /** A sheet's title with its line of explanation close under it, on the left (or centred). */
 struct SheetTitle: View {
     let title: String
@@ -37,8 +124,7 @@ struct MoreSheet: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
                 SheetTitle(title: "More", sub: what).padding(.top, 22)
 
                 if vm.settings.appsIn == "more" {
@@ -84,14 +170,11 @@ struct MoreSheet: View {
                         }
                     }
                 }
+                // Move around the TV and select without going back.
+                NavPad(vm: vm).padding(.top, 24)
             }
-            .padding(.horizontal, 24).padding(.bottom, 16)
-        }
-        // Always at hand, under the keys: move around the TV and select without going back.
-        .safeAreaInset(edge: .bottom) { NavPad(vm: vm).padding(.horizontal, 24).padding(.top, 8).padding(.bottom, 8).background(T.sheet) }
-        .background(T.sheet)
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+            .padding(.horizontal, 24).padding(.bottom, 20)
+        .fitSheet()
         .onAppear { vm.loadInputs() }
     }
 
@@ -199,16 +282,13 @@ struct SleepSheet: View {
                         Text(m < 60 ? "\(m) min" : (m % 60 == 0 ? "\(m / 60) h" : "1.5 h")).font(.system(size: 13, weight: .medium)).foregroundStyle(T.ink)
                             .frame(maxWidth: .infinity).frame(height: 40)
                     }
-                    .buttonStyle(.plain).glassEffect(.regular.interactive(), in: .capsule)
+                    .buttonStyle(Pressable()).background(Capsule().fill(T.high))
                     .disabled(!vm.can(.power))
                 }
             }
             .padding(.top, 16)
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 24).padding(.bottom, 20)
-        .background(T.sheet)
-        .presentationDetents([.height(vm.sleepAt == nil ? 360 : 460)])
-        .presentationDragIndicator(.visible)
+        .padding(.horizontal, 24).padding(.bottom, 24)
+        .fitSheet()
     }
 }

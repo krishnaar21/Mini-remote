@@ -24,8 +24,7 @@ struct KeyboardSheet: View {
     private func clearAll() { if voice.on { voice.cancel() }; let n = text.count; text = ""; vm.clearTvBox(n) }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
                 SheetTitle(title: "Search", sub: caption).padding(.top, 22)
                 HStack(spacing: 10) {
                     Group {
@@ -46,13 +45,13 @@ struct KeyboardSheet: View {
                         }
                     }
                     .padding(.horizontal, 14).frame(height: 54)
-                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 14))
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(T.high))
                     Button { if voice.on { voice.cancel() } else { focused = false; voice.start() } } label: {
                         Image(systemName: voice.on ? "xmark" : "mic.fill").font(.system(size: 20)).foregroundStyle(voice.on ? accent : T.ink)
                             .frame(width: 54, height: 54).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 14))
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(T.high))
                     .accessibilityLabel(voice.on ? "Stop voice" : "Voice mode")
                 }
                 .padding(.top, 16)
@@ -70,7 +69,7 @@ struct KeyboardSheet: View {
                                 Text(label).font(.system(size: 13, weight: .medium)).foregroundStyle(ok ? T.ink : T.muted)
                                     .frame(maxWidth: .infinity).frame(height: 38)
                             }
-                            .buttonStyle(.plain).glassEffect(.regular.interactive(), in: .capsule).disabled(!ok)
+                            .buttonStyle(Pressable()).background(Capsule().fill(T.high)).disabled(!ok)
                         }
                     }
                     .padding(.top, 22)
@@ -78,10 +77,7 @@ struct KeyboardSheet: View {
                 }
             }
             .padding(.horizontal, 24).padding(.bottom, 24)
-        }
-        .background(T.sheet)
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        .fitSheet()
         .onAppear {
             if openSearch { vm.openTvSearch() }
             // Spoken words go into the box, are typed on the TV, and searched: no extra tap.

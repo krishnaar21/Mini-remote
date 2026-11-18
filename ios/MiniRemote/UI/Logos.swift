@@ -103,7 +103,7 @@ extension Logos {
     }
 
     /** How an icon sits on a tile: its edges stretched out (plain edges), or as a smaller plate (busy or see-through edges). */
-    enum Fit { case extend(UIImage), plate }
+    enum Fit { case extend(UIImage), plate(Color?) }
 
     private static let ctx = CIContext()
 
@@ -113,7 +113,10 @@ extension Logos {
      * carries on. Icons with see-through corners or artwork reaching the edge are left as plates.
      */
     static func fit(_ img: UIImage, side: CGFloat, scale: CGFloat) -> Fit {
-        guard let cg = img.cgImage, let stats = edgeStats(cg), stats.opaque, !stats.busy else { return .plate }
+        guard let cg = img.cgImage, let stats = edgeStats(cg) else { return .plate(nil) }
+        // See-through corners: the icon on the tile's colour. Artwork to the edge: a smaller plate on its edge colour.
+        guard stats.opaque else { return .plate(nil) }
+        guard !stats.busy else { return .plate(stats.edge) }
         let inset = CGFloat(min(cg.width, cg.height)) * 0.035
         let src = CIImage(cgImage: cg).cropped(to: CGRect(x: inset, y: inset, width: CGFloat(cg.width) - 2 * inset, height: CGFloat(cg.height) - 2 * inset))
         let px = side * scale
@@ -123,22 +126,28 @@ extension Logos {
             .transformed(by: CGAffineTransform(scaleX: k, y: k))
             .transformed(by: CGAffineTransform(translationX: (px - src.extent.width * k) / 2, y: (px - src.extent.height * k) / 2))
             .cropped(to: CGRect(x: 0, y: 0, width: px, height: px))
-        guard let out = ctx.createCGImage(moved, from: CGRect(x: 0, y: 0, width: px, height: px)) else { return .plate }
+        guard let out = ctx.createCGImage(moved, from: CGRect(x: 0, y: 0, width: px, height: px)) else { return .plate(nil) }
         return .extend(UIImage(cgImage: out, scale: scale, orientation: .up))
     }
 
     /** Corners opaque? Border one plain colour (low spread of brightness)? */
-    private static func edgeStats(_ cg: CGImage) -> (opaque: Bool, busy: Bool)? {
+    private static func edgeStats(_ cg: CGImage) -> (opaque: Bool, busy: Bool, edge: Color)? {
         let w = 64, h = 64
         var px = [UInt8](repeating: 0, count: w * h * 4)
-        guard let c = CGContext(data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
-                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-        c.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        // Draw while the buffer's pointer is valid (an &px argument only lives for the call).
+        let drawn: Bool = px.withUnsafeMutableBytes { buf in
+            guard let c = CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                    space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            c.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return true
+        }
+        guard drawn else { return nil }
         func at(_ x: Int, _ y: Int) -> (Double, Double) {
             let i = (y * w + x) * 4
             let l = (0.299 * Double(px[i]) + 0.587 * Double(px[i + 1]) + 0.114 * Double(px[i + 2])) / 255
             return (l, Double(px[i + 3]) / 255)
         }
+        func rgb(_ x: Int, _ y: Int) -> (Double, Double, Double) { let i = (y * w + x) * 4; return (Double(px[i]) / 255, Double(px[i + 1]) / 255, Double(px[i + 2]) / 255) }
         let i = 3
         let corners = [at(i, i), at(w - 1 - i, i), at(i, h - 1 - i), at(w - 1 - i, h - 1 - i)]
         let opaque = corners.allSatisfy { $0.1 > 0.8 }
@@ -149,7 +158,10 @@ extension Logos {
         }
         let m = lum.reduce(0, +) / Double(lum.count)
         let sd = (lum.map { ($0 - m) * ($0 - m) }.reduce(0, +) / Double(lum.count)).squareRoot()
-        return (opaque, sd > 0.16)
+        let cs = [rgb(i, i), rgb(w - 1 - i, i), rgb(i, h - 1 - i), rgb(w - 1 - i, h - 1 - i)]
+        var edge = Color(red: cs.map(\.0).reduce(0, +) / 4, green: cs.map(\.1).reduce(0, +) / 4, blue: cs.map(\.2).reduce(0, +) / 4)
+        if !Look.p.light && cs.allSatisfy({ 0.299 * $0.0 + 0.587 * $0.1 + 0.114 * $0.2 < 0.08 }) { edge = T.high }
+        return (opaque, sd > 0.16, edge)
     }
 }
 
@@ -175,7 +187,12 @@ struct AppTile: View {
             shape.fill(bg)
             switch fit {
             case .extend(let img): Image(uiImage: img).resizable().scaledToFill()
-            case .plate: if let image { Image(uiImage: image).resizable().scaledToFit().frame(width: size * 0.64, height: size * 0.64).clipShape(RoundedRectangle(cornerRadius: size * 0.15, style: .continuous)) }
+            case .plate(let edge):
+                ZStack {
+                    if let edge { edge }
+                    if let image { Image(uiImage: image).resizable().scaledToFit().frame(width: size * (edge == nil ? 0.74 : 0.64), height: size * (edge == nil ? 0.74 : 0.64))
+                        .clipShape(RoundedRectangle(cornerRadius: size * 0.16, style: .continuous)) }
+                }
             case nil:
                 Text(s.kind == .channel ? s.value : String(s.name.prefix(2)).uppercased())
                     .font(.system(size: size * 0.26, weight: .bold, design: s.kind == .channel ? .monospaced : .default))

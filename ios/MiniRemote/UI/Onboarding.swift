@@ -60,8 +60,8 @@ struct OnboardingView: View {
             ZStack {
                 Circle().stroke(T.ink.opacity(0.12), lineWidth: 3).frame(width: 196, height: 196)
                 Circle().trim(from: 0, to: 0.6).stroke(accent, style: StrokeStyle(lineWidth: 5, lineCap: .round)).rotationEffect(.degrees(90)).frame(width: 196, height: 196)
-                Circle().fill(.clear).frame(width: 160, height: 160).glassEffect(.regular, in: .circle)
-                Circle().fill(T.ink.opacity(0.1)).frame(width: 62, height: 62)
+                Circle().fill(T.container).frame(width: 160, height: 160)
+                Circle().fill(T.highest).frame(width: 62, height: 62)
                 Text("OK").font(.system(size: 15, weight: .semibold)).foregroundStyle(T.dim)
                 ForEach(0..<4, id: \.self) { i in
                     Image(systemName: ["chevron.up", "chevron.right", "chevron.down", "chevron.left"][i]).font(.system(size: 15, weight: .semibold)).foregroundStyle(T.ink)
@@ -89,7 +89,7 @@ struct OnboardingView: View {
                         ForEach(0..<4, id: \.self) { c in
                             let i = r * 4 + c
                             if i < 7 { Circle().fill(Color(hex: colours[i])).frame(width: 56, height: 56) }
-                            else { Image(systemName: "square.grid.2x2").font(.system(size: 20)).foregroundStyle(T.ink).frame(width: 56, height: 56).glassEffect(.regular, in: .circle) }
+                            else { Image(systemName: "square.grid.2x2").font(.system(size: 20)).foregroundStyle(T.ink).frame(width: 56, height: 56).background(Circle().fill(T.key)) }
                         }
                     }
                 }

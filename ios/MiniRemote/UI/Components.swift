@@ -164,9 +164,8 @@ struct ConfirmSheet: View {
             WideButton(title: action, kind: danger ? .danger : .primary) { onConfirm(); dismiss() }
             WideButton(title: "Cancel", kind: .secondary) { dismiss() }
         }
-        .padding(24)
-        .presentationDetents([.height(300)])
-        .presentationDragIndicator(.visible)
+        .padding(24).padding(.top, 8)
+        .fitSheet()
     }
 }
 

@@ -104,7 +104,7 @@ struct HomeView: View {
     }
 
     private var topBar: some View {
-        GlassEffectContainer(spacing: 12) {
+        Group {
             HStack(spacing: 12) {
                 // The TV: a TV icon with the connection colour as a badge, and its name. As tall as
                 // the power key; as wide as the name needs, within limits.
@@ -124,9 +124,10 @@ struct HomeView: View {
                     .padding(.leading, 7).padding(.trailing, 16)
                     .frame(minWidth: 150, maxWidth: 236, minHeight: 52, maxHeight: 52, alignment: .leading)
                     .fixedSize(horizontal: true, vertical: false)
-                    .glassEffect(.regular.interactive(), in: .capsule)
+                    .background(Capsule().fill(T.high))
+                    .depth(Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(Pressable())
                 .coach("tv")
                 .accessibilityLabel(vm.active.map { "TV: \($0.name), \(linkWord(vm.link))" } ?? "Choose a TV")
                 Spacer(minLength: 0)
@@ -228,15 +229,11 @@ struct GlassKey: View {
                 if let word { Text(word).font(.system(size: 16, weight: .medium)) }
                 if let caption { Text(caption).font(.system(size: 9, weight: .semibold)).tracking(0.8).foregroundStyle(T.dim) }
             }
-            .foregroundStyle(T.ink)
-            .opacity(enabled ? 1 : 0.32)
+            .foregroundStyle(T.ink.opacity(enabled ? 1 : 0.32))
             .frame(width: size, height: size)
-            .background(active ? Circle().fill(T.ink.opacity(0.18)) : nil)
             .contentShape(Circle())
         }
-        .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .circle)
-        .depth(Circle())
+        .buttonStyle(KeyCircle(active: active))
         .accessibilityLabel(label)
         .accessibilityAddTraits(active ? .isSelected : [])
         .accessibilityHint(enabled ? "" : "Not available right now")
@@ -292,7 +289,7 @@ struct KeyPages: View {
     }
 
     private var mainKeys: some View {
-        GlassEffectContainer(spacing: 14) {
+        Group {
             VStack(spacing: 14) {
                 HStack(spacing: 14) {
                     k("arrow.uturn.backward", "Back", .back, icon: 21)
@@ -320,7 +317,7 @@ struct KeyPages: View {
     }
 
     private var moreKeys: some View {
-        GlassEffectContainer(spacing: 14) {
+        Group {
             VStack(spacing: 14) {
                 HStack(spacing: 14) {
                     k("gobackward.10", "Rewind", .rewind, icon: 21)
@@ -421,7 +418,7 @@ struct NavPad: View {
             }
         }
         .frame(height: 54)
-        .glassEffect(.regular, in: .capsule)
+        .background(Capsule().fill(T.high)).depth(Capsule())
     }
 }
 
@@ -546,7 +543,7 @@ struct DialFace: View {
         let well = size * 0.385
         let cs = size * 0.075
         ZStack {
-            Circle().fill(.clear).glassEffect(.regular, in: .circle).depth(Circle())
+            Circle().fill(T.container).depth(Circle())
             if offline {
                 VStack(spacing: 8) {
                     Image(systemName: "tv").font(.system(size: size * 0.13)).foregroundStyle(T.dim)
@@ -565,7 +562,7 @@ struct DialFace: View {
                             .foregroundStyle(pad.lit == arrows[i].0 ? T.ink : T.dim).offset(arrows[i].2)
                     }
                 }
-                Circle().fill(T.ink.opacity(pad.wellDown ? 0.2 : 0.1)).frame(width: well, height: well)
+                Circle().fill(pad.wellDown ? T.pressed : T.highest).frame(width: well, height: well)
                     .scaleEffect(pad.wellDown ? 0.97 : 1)
                 Group {
                     if pad.two { TwoHint(key: pad.twoKey, big: 26) }
@@ -603,7 +600,8 @@ struct TrackpadFace: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 32).fill(.clear).glassEffect(.regular, in: .rect(cornerRadius: 32)).depth(RoundedRectangle(cornerRadius: 32))
+            RoundedRectangle(cornerRadius: 32, style: .continuous).fill(T.container).depth(RoundedRectangle(cornerRadius: 32, style: .continuous))
+            if !offline { TrackDots(pad: pad, width: width, height: height) }
             if offline {
                 VStack(spacing: 6) {
                     Image(systemName: "tv").font(.system(size: 34)).foregroundStyle(T.dim)
@@ -631,7 +629,7 @@ struct Numpad: View {
     @ObservedObject var vm: RemoteModel
     var body: some View {
         let rows: [[String]] = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["L", "0", "K"]]
-        GlassEffectContainer(spacing: 12) {
+        Group {
             VStack(spacing: 12) {
                 ForEach(rows, id: \.self) { r in
                     HStack(spacing: 14) {
@@ -652,7 +650,7 @@ struct Numpad: View {
                                 .contentShape(Capsule())
                             }
                             .buttonStyle(.plain)
-                            .glassEffect(.regular.interactive(), in: .capsule)
+                            .background(Capsule().fill(T.key)).depth(Capsule())
                             .accessibilityLabel(c == "L" ? "Channel list" : (c == "K" ? "OK" : c))
                         }
                     }
@@ -662,3 +660,66 @@ struct Numpad: View {
     }
 }
 
+
+
+/** A round key: the key colour, a step lighter (and a touch smaller) while pressed or on; dims when it can't be used. */
+struct KeyCircle: ButtonStyle {
+    var active = false
+    @Environment(\.isEnabled) private var on
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(Circle().fill(configuration.isPressed || active ? T.container : T.key))
+            .depth(Circle())
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .animation(configuration.isPressed ? .easeOut(duration: 0.07) : .spring(response: 0.3, dampingFraction: 0.55), value: configuration.isPressed)
+    }
+}
+
+/** Any tappable surface: a touch smaller while pressed. */
+struct Pressable: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+/**
+ * The trackpad's dot grid: dots near the finger grow brighter and larger and lean towards it,
+ * with a soft glow under the finger; at rest they're a faint even grid.
+ */
+struct TrackDots: View {
+    let pad: PadState
+    let width: CGFloat
+    let height: CGFloat
+    var body: some View {
+        Canvas { ctx, size in
+            let step: CGFloat = 22, r: CGFloat = 1.4
+            let t = pad.touch
+            if let t {
+                ctx.fill(Path(ellipseIn: CGRect(x: t.x - 90, y: t.y - 90, width: 180, height: 180)),
+                         with: .radialGradient(Gradient(colors: [T.ink.opacity(0.10), .clear]), center: t, startRadius: 0, endRadius: 90))
+            }
+            var y = step / 2 + (size.height.truncatingRemainder(dividingBy: step)) / 2
+            while y < size.height {
+                var x = step / 2 + (size.width.truncatingRemainder(dividingBy: step)) / 2
+                while x < size.width {
+                    var p = CGPoint(x: x, y: y)
+                    var f: CGFloat = 0
+                    if let t {
+                        let d = hypot(t.x - x, t.y - y)
+                        f = max(0, 1 - d / 90)
+                        p = CGPoint(x: x + (t.x - x) * 0.14 * f, y: y + (t.y - y) * 0.14 * f)
+                    }
+                    let rr = r * (1 + 0.9 * f)
+                    ctx.fill(Path(ellipseIn: CGRect(x: p.x - rr, y: p.y - rr, width: rr * 2, height: rr * 2)), with: .color(T.ink.opacity(0.09 + 0.55 * f)))
+                    x += step
+                }
+                y += step
+            }
+        }
+        .frame(width: width, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .allowsHitTesting(false)
+        .animation(.easeOut(duration: 0.25), value: pad.touch == nil)
+    }
+}

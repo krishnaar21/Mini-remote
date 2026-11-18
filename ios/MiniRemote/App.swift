@@ -191,8 +191,8 @@ private struct CodeSheet: View {
             if let e = prompt.error { Text(e).font(.system(size: 13)).foregroundStyle(Color(hex: 0xFF8A8A)) }
             WideButton(title: "Pair", enabled: code.count == 6) { vm.answerCode(code) }
         }
-        .padding(24)
-        .presentationDetents([.height(340)])
+        .padding(24).padding(.top, 8)
+        .fitSheet()
     }
 }
 

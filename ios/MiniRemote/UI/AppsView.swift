@@ -175,27 +175,26 @@ private struct QuickOptions: View {
     var body: some View {
         let pinned = vm.shortcuts.filter(\.pinned)
         let i = pinned.firstIndex { $0.id == s.id } ?? 0
-        List {
-            Section {
-                HStack(spacing: 14) {
-                    AppTile(s: s, size: 52, square: true).frame(width: 52)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(s.name).font(.system(size: 17, weight: .semibold)).foregroundStyle(T.ink)
-                        Text("Quick access · place \(i + 1) of \(pinned.count)").font(.system(size: 13)).foregroundStyle(T.sub)
-                    }
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 14) {
+                AppTile(s: s, size: 52, square: true).frame(width: 52)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(s.name).font(.system(size: 18, weight: .semibold)).foregroundStyle(T.ink)
+                    Text("Quick access · place \(i + 1) of \(pinned.count)").font(.system(size: 13)).foregroundStyle(T.sub)
                 }
             }
-            Section {
-                Button { vm.launch(s); dismiss() } label: { Label("Open on TV", systemImage: "play.rectangle") }
-                if i > 0 { Button { vm.movePinned(s, -1) } label: { Label("Move earlier", systemImage: "arrow.left") } }
-                if i < pinned.count - 1 { Button { vm.movePinned(s, 1) } label: { Label("Move later", systemImage: "arrow.right") } }
-                Button { vm.setPinned(s, false); dismiss() } label: { Label("Remove from quick access", systemImage: "minus.circle") }
-                if s.added { Button(role: .destructive) { vm.removeShortcut(s); dismiss() } label: { Label("Delete", systemImage: "trash") } }
+            .padding(.top, 22)
+            SCard {
+                SRow(symbol: "play.rectangle", title: "Open on TV", trailing: nil) { vm.launch(s); dismiss() }
+                if i > 0 { SLine(); SRow(symbol: "arrow.left", title: "Move earlier", trailing: nil) { vm.movePinned(s, -1) } }
+                if i < pinned.count - 1 { SLine(); SRow(symbol: "arrow.right", title: "Move later", trailing: nil) { vm.movePinned(s, 1) } }
+                SLine()
+                SRow(symbol: "minus.circle", title: "Remove from quick access", trailing: nil) { vm.setPinned(s, false); dismiss() }
+                if s.added { SLine(); SRow(symbol: "trash", title: "Delete", tile: Color(hex: 0x8E2B2B), trailing: nil) { vm.removeShortcut(s); dismiss() } }
             }
         }
-        .tint(T.ink)
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
+        .padding(.horizontal, 20).padding(.bottom, 24)
+        .fitSheet()
     }
 }
 
@@ -283,7 +282,6 @@ private struct AppSheet: View {
     @State private var confirm = false
 
     var body: some View {
-        ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 16) {
                     ZStack {
@@ -313,10 +311,8 @@ private struct AppSheet: View {
                 }
                 if let del = entry.delete { WideButton(title: "Delete from this list", kind: .danger) { del(); dismiss() } }
             }
-            .padding(24)
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+            .padding(24).padding(.top, 8)
+        .fitSheet()
         .sheet(isPresented: $confirm) {
             let install = entry.installed == false
             ConfirmSheet(title: install ? "Install \(entry.name)?" : "Uninstall \(entry.name)?",
@@ -347,7 +343,6 @@ private struct AddSheet: View {
 
     var body: some View {
         let brand = vm.active?.brand
-        ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Add to Apps").font(.system(size: 18, weight: .semibold)).foregroundStyle(T.ink).frame(maxWidth: .infinity)
                 Picker("Type", selection: $kind) { Text("TV channel").tag(ShortcutKind.channel); Text("App").tag(ShortcutKind.app) }
@@ -367,11 +362,9 @@ private struct AddSheet: View {
                     vm.addShortcut(kind, name, value, pin: pin); dismiss()
                 }
             }
-            .padding(24)
-        }
+            .padding(24).padding(.top, 8)
         .onAppear { kind = start }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        .fitSheet()
     }
 
     private func field(_ label: String, _ text: Binding<String>, _ placeholder: String) -> some View {

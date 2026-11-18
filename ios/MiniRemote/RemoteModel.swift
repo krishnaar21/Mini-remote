@@ -850,10 +850,9 @@ extension RemoteModel {
         guard link == .ready, let n = nowOn, !n.name.isEmpty, n.name != "Home" else { return nil }
         var name = n.name
         if name.contains("."), !name.contains(" ") {
-            guard let known = Catalog.apps.first(where: { $0.ids.values.contains(name) })?.name ?? tvApps.first(where: { $0.id == name })?.name else {
-                return name.lowercased().contains("launcher") ? nil : name
-            }
-            name = known
+            if name.lowercased().contains("launcher") { return nil }
+            name = Catalog.apps.first(where: { $0.ids.values.contains(name) })?.name ?? tvApps.first(where: { $0.id == name })?.name
+                ?? (n.live ? "Live TV" : prettyPackage(name))
         }
         func t(_ ms: Int) -> String { let s = ms / 1000; return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60) }
         if let p = n.positionMs, let d = n.durationMs, d > 0 { return "\(name) · \(t(p)) / \(t(d))" }
@@ -879,4 +878,13 @@ extension RemoteModel {
 
     /** Opens the apps screen in adding mode: tapping an app adds it; is quick access full? */
     var quickFull: Bool { shortcuts.filter(\.pinned).count >= maxPinned }
+}
+
+/** A readable name for an app the catalogue doesn't know: "com.example.tv.coolplayer" → "Coolplayer". */
+func prettyPackage(_ pkg: String) -> String {
+    let skip: Set<String> = ["com", "org", "net", "in", "tv", "android", "app", "apps", "leanback", "atv", "androidtv", "google", "player", "main", "ui", "mobile", "release"]
+    let parts = pkg.split(separator: ".").map(String.init)
+    let pick = parts.reversed().first { !skip.contains($0.lowercased()) && $0.count > 1 } ?? parts.last ?? pkg
+    let spaced = pick.replacingOccurrences(of: "_", with: " ").replacingOccurrences(of: "-", with: " ")
+    return spaced.prefix(1).uppercased() + spaced.dropFirst()
 }
