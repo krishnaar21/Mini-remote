@@ -32,15 +32,33 @@ object Discovery {
             .firstOrNull { HostValidator.isPrivateIPv4(it) }
             ?.substringBeforeLast('.')
 
-    suspend fun scan(): List<Device> = withContext(Dispatchers.IO) {
+    /** The ports that give a TV away: Roku, Samsung, LG, Android / Google TV. */
+    private val tvPorts = listOf(8060, 8001, 3000, 6466)
+
+    /**
+     * Two passes, so empty addresses cost almost nothing: first a quick knock on the TV ports
+     * of every address (all at once, 300 ms each), then a proper look only at the addresses
+     * that answered. Each TV is reported through [onFound] the moment it's identified.
+     */
+    suspend fun scan(onFound: (Device) -> Unit = {}): List<Device> = withContext(Dispatchers.IO) {
         val prefix = localPrefix() ?: return@withContext emptyList()
-        val gate = Semaphore(48)
+        val gate = Semaphore(128)
         coroutineScope {
             (1..254).map { n ->
-                async { gate.withPermit { probe("$prefix.$n") } }
+                async {
+                    val host = "$prefix.$n"
+                    val open = gate.withPermit {
+                        coroutineScope { tvPorts.map { p -> async { p.takeIf { knock(host, it) } } }.awaitAll().filterNotNull().toSet() }
+                    }
+                    if (open.isEmpty()) null else probe(host, open)?.also(onFound)
+                }
             }.awaitAll().filterNotNull()
         }
     }
+
+    private fun knock(host: String, port: Int): Boolean = runCatching {
+        Socket().use { it.connect(InetSocketAddress(host, port), 300); true }
+    }.getOrDefault(false)
 
     private fun get(url: String): String? = runCatching {
         Net.probe.newCall(Request.Builder().url(url).build()).execute().use { if (it.isSuccessful) it.body?.string() else null }
@@ -50,19 +68,19 @@ object Discovery {
         Socket().use { it.connect(InetSocketAddress(host, port), 500); true }
     }.getOrDefault(false)
 
-    private fun probe(host: String): Device? {
-        get("http://$host:8060/query/device-info")?.let { xml ->
+    private fun probe(host: String, open: Set<Int> = tvPorts.toSet()): Device? {
+        if (8060 in open) get("http://$host:8060/query/device-info")?.let { xml ->
             val name = Regex("<user-device-name>(.*?)</user-device-name>").find(xml)?.groupValues?.get(1)
                 ?: Regex("<friendly-device-name>(.*?)</friendly-device-name>").find(xml)?.groupValues?.get(1)
                 ?: "Roku"
             return Device("roku-$host", name.ifBlank { "Roku" }, host, Brand.ROKU)
         }
-        get("http://$host:8001/api/v2/")?.let { json ->
+        if (8001 in open) get("http://$host:8001/api/v2/")?.let { json ->
             val name = runCatching { JSONObject(json).getJSONObject("device").optString("name") }.getOrNull()
             return Device("samsung-$host", name?.ifBlank { null } ?: "Samsung TV", host, Brand.SAMSUNG)
         }
-        if (open(host, 3000) && open(host, 3001)) return Device("lg-$host", nameOf(host, Brand.LG) ?: "LG TV", host, Brand.LG)
-        if (open(host, 6466) && open(host, 6467)) return Device("android_tv-$host", nameOf(host, Brand.ANDROID_TV) ?: "Google TV", host, Brand.ANDROID_TV)
+        if (3000 in open && open(host, 3001)) return Device("lg-$host", nameOf(host, Brand.LG) ?: "LG TV", host, Brand.LG)
+        if (6466 in open && open(host, 6467)) return Device("android_tv-$host", nameOf(host, Brand.ANDROID_TV) ?: "Google TV", host, Brand.ANDROID_TV)
         return null
     }
 

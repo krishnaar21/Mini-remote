@@ -173,14 +173,16 @@ fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ic
  * numbers and input, and in apps volume down / up, mute and input.
  */
 @Composable
-fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, openKeys: () -> Unit, openMore: () -> Unit = {}, openApps: () -> Unit = {}) {
+fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, openKeys: () -> Unit, openMore: () -> Unit = {}, openApps: () -> Unit = {}, pager0: androidx.compose.foundation.pager.PagerState? = null) {
     val tv = vm.nowOn?.live == true
     val k = 68.dp
     var sleep by remember { mutableStateOf(false) }
     if (sleep) SleepSheet(vm, accent) { sleep = false }
     // Two pages of eight: swipe across the circles for playback, sleep timer and the TV's keys.
     val pages = if (vm.settings.appsIn == "more") 2 else 3
-    val pager = androidx.compose.foundation.pager.rememberPagerState { pages }
+    // The page dots live at the bottom of the screen (Shell), so the pager state comes from there.
+    val own = androidx.compose.foundation.pager.rememberPagerState { pages }
+    val pager = pager0 ?: own
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
     androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.width(k * 4 + 14.dp * 3), beyondViewportPageCount = 1, pageSpacing = 24.dp) { page ->
@@ -206,16 +208,6 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
             StripKey(accent, "More: keys, inputs and apps", k, ico = Ico.MORE, onClick = openMore)
         }
     }
-    }
-    // Which page: two dots (tap one to jump).
-    Row(Modifier.padding(top = 10.dp).height(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        repeat(pages) { i ->
-            val sel = pager.currentPage == i
-            Box(
-                Modifier.size(if (sel) 7.dp else 6.dp).clip(CircleShape).background(if (sel) T.Ink.copy(alpha = 0.85f) else T.Ink.copy(alpha = 0.25f))
-                    .clickable(onClickLabel = listOf("main keys", "more keys", "apps")[i]) { scope.launch { pager.animateScrollToPage(i) } },
-            )
-        }
     }
     }
 }

@@ -499,7 +499,11 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val hosts = devices.map { it.host }.toSet()
-                found = Discovery.scan().filter { it.host !in hosts }
+                // Each TV shows up as soon as it's found, not when the whole scan ends.
+                val all = Discovery.scan { d ->
+                    if (d.host !in hosts) viewModelScope.launch { if (found.none { it.host == d.host }) found = found + d }
+                }
+                found = all.filter { it.host !in hosts }
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 found = emptyList()
             } finally { scanning = false }

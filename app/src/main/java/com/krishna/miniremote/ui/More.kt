@@ -70,13 +70,11 @@ fun MoreSheet(vm: RemoteVM, accent: Color, openApps: () -> Unit = {}, onClose: (
             // Quick access, when it lives here (Settings › Remote › Quick access).
             if (vm.settings.appsIn == "more") {
                 SectionTitle("Quick access")
-                Box(Modifier.fillMaxWidth().padding(top = 12.dp), contentAlignment = Alignment.Center) {
-                    AppsPage(vm, accent, 64.dp) { onClose(); openApps() }
-                }
+                AppSquares(vm) { onClose(); openApps() }
             }
 
             // Keys not on Home's pages: subtitles, audio, channel list, menu; colour keys under them.
-            Column(Modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(Modifier.padding(top = 22.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     listOf(Triple(RemoteKey.SUBTITLES, Ico.CC, "Subtitles"), Triple(RemoteKey.AUDIO, Ico.AUDIO, "Audio"),
                         Triple(RemoteKey.CH_LIST, Ico.LIST, "Channels"), Triple(RemoteKey.MENU, Ico.MORE, "Menu"),
@@ -101,7 +99,7 @@ fun MoreSheet(vm: RemoteVM, accent: Color, openApps: () -> Unit = {}, onClose: (
                 SectionTitle("Inputs")
                 Group {
                     val now = vm.nowOn?.name.orEmpty()
-                    Column(Modifier.padding(vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.padding(vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         vm.inputs.chunked(2).forEach { pair ->
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 pair.forEach { input ->
@@ -181,6 +179,39 @@ private fun MediaBar(vm: RemoteVM) {
                     .semantics { contentDescription = label },
                 contentAlignment = Alignment.Center,
             ) { LineIcon(ico, if (on) T.Ink else T.Ink.copy(alpha = 0.3f), 22.dp) }
+        }
+    }
+}
+
+/**
+ * Quick access in More: rounded squares the size of the key tiles (4 across, 68 dp tall),
+ * up to seven apps and All apps.
+ */
+@Composable
+private fun AppSquares(vm: RemoteVM, openApps: () -> Unit) {
+    val pinned = vm.shortcuts.filter { it.pinned }.take(7)
+    val ready = vm.active != null && vm.link == com.krishna.miniremote.Link.READY
+    val shape = RoundedCornerShape(18.dp)
+    val cells: List<Any?> = pinned + List((7 - pinned.size).coerceAtLeast(0)) { null } + "all"
+    Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        cells.chunked(4).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                row.forEach { cell ->
+                    val m = Modifier.weight(1f).height(68.dp)
+                    when (cell) {
+                        is com.krishna.miniremote.Shortcut -> AppCircle(vm, cell, 68.dp, shape, m) { if (ready) vm.launch(cell) else vm.explain(RemoteKey.HOME) }
+                        "all" -> Box(m.clip(shape).background(M.High).clickable(role = Role.Button, onClickLabel = "all apps", onClick = openApps)
+                            .semantics(mergeDescendants = true) { contentDescription = "All apps" }, contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                LineIcon(Ico.GRID, T.Ink, 20.dp)
+                                Text("All apps", color = Muted, fontSize = 11.sp, lineHeight = 13.sp, modifier = Modifier.padding(top = 3.dp))
+                            }
+                        }
+                        else -> Box(m.clip(shape).border(1.dp, Color.White.copy(alpha = 0.10f), shape).clickable(onClickLabel = "add apps", onClick = openApps),
+                            contentAlignment = Alignment.Center) { LineIcon(Ico.PLUS, T.Ink.copy(alpha = 0.3f), 16.dp) }
+                    }
+                }
+            }
         }
     }
 }

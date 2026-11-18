@@ -100,6 +100,7 @@ fun HomeScreen(
     onTray: (open: Boolean) -> Unit,
     openMore: () -> Unit = {},
     openApps: () -> Unit = {},
+    keyPager: androidx.compose.foundation.pager.PagerState? = null,
 ) {
     val scope = rememberCoroutineScope()
     val pendingOk = remember { arrayOfNulls<Job>(1) }
@@ -266,7 +267,7 @@ fun HomeScreen(
     val keysBlock: @Composable () -> Unit = {
         when (layout) {
             HomeLayout.CARDS -> FourKeys(vm, accent, openKeys)
-            HomeLayout.STRIP -> KeyRows(vm, accent, numpad, onNumpad, openKeys, openMore, openApps)
+            HomeLayout.STRIP -> KeyRows(vm, accent, numpad, onNumpad, openKeys, openMore, openApps, keyPager)
         }
     }
 

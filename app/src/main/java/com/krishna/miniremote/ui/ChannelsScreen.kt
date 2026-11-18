@@ -488,7 +488,10 @@ private fun QuickTile(s: Shortcut, accent: Color, icon: String?, logoOn: Boolean
 
 /** A quick access app as one of Home's circles: its logo on its colour; tap to open it on the TV. */
 @Composable
-internal fun AppCircle(vm: RemoteVM, s: Shortcut, size: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
+internal fun AppCircle(
+    vm: RemoteVM, s: Shortcut, size: androidx.compose.ui.unit.Dp,
+    shape: androidx.compose.ui.graphics.Shape = CircleShape, modifier: Modifier? = null, onClick: () -> Unit,
+) {
     val cat = if (s.kind == ShortcutKind.APP && s.brand == null) Catalog.byKey(s.value) else null
     val bg = when {
         s.kind == ShortcutKind.CHANNEL -> ChannelBg
@@ -498,7 +501,7 @@ internal fun AppCircle(vm: RemoteVM, s: Shortcut, size: androidx.compose.ui.unit
     val ink = cat?.let { Color(it.ink) } ?: Color.White
     val icon = s.icon ?: vm.tvApps.firstOrNull { it.name.equals(s.name, true) }?.icon
     Box(
-        Modifier.size(size).clip(CircleShape).background(bg)
+        (modifier ?: Modifier.size(size)).clip(shape).background(bg)
             .clickable(onClickLabel = "open ${s.name}", role = Role.Button, onClick = onClick)
             .semantics { contentDescription = s.name },
         contentAlignment = Alignment.Center,

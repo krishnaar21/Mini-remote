@@ -1,5 +1,6 @@
 package com.krishna.miniremote.ui
 
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -115,6 +116,8 @@ fun AppShell(vm: RemoteVM) {
     val accent = accentColor(vm.settings.accentHex)
     /** The apps screen, slid up over the remote (from All apps on Home's third page). */
     var apps by remember { mutableStateOf(false) }
+    /** Home's pages of circles: their dots sit at the bottom of the screen. */
+    val keyPager = rememberPagerState { if (vm.settings.appsIn == "more") 2 else 3 }
     val scope = rememberCoroutineScope()
     var sheet by remember { mutableStateOf<Page?>(null) }
     var keys by remember { mutableStateOf(false) }
@@ -189,17 +192,34 @@ fun AppShell(vm: RemoteVM) {
                                 onTray = { open -> if (open != tray) vm.feel.fire(com.krishna.miniremote.Feel.TICK); tray = open },
                                 openMore = { more = true },
                                 openApps = { apps = true },
+                                keyPager = keyPager,
                             )
                         }
+                    }
+                    // Which page of circles: a pill for the one showing, dots for the others.
+                    if (!apps) PagePills(keyPager.pageCount, keyPager.currentPage, accent,
+                        listOf("Main keys", "More keys", "Apps"), Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp)) { i ->
+                        vm.feel.fire(com.krishna.miniremote.Feel.TICK); scope.launch { keyPager.animateScrollToPage(i) }
                     }
                     androidx.compose.animation.AnimatedVisibility(
                         apps,
                         enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.tween(320)) { it },
                         exit = androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(260)) { it },
                     ) {
-                        Column(Modifier.fillMaxSize().background(T.Bg)) {
-                            // A close bar on top: the apps screen is a sheet over the remote.
-                            Box(Modifier.fillMaxWidth().height(44.dp).clickable(onClickLabel = "back to the remote") { apps = false }, contentAlignment = Alignment.Center) {
+                        // Pull down from the top bar to close: the screen follows your finger, and
+                        // goes back up if you let go early.
+                        var pull by remember { mutableStateOf(0f) }
+                        val shown by androidx.compose.animation.core.animateFloatAsState(pull, label = "pull")
+                        val close = with(androidx.compose.ui.platform.LocalDensity.current) { 120.dp.toPx() }
+                        Column(Modifier.fillMaxSize().graphicsLayer { translationY = shown }.background(T.Bg)) {
+                            Box(Modifier.fillMaxWidth().height(52.dp)
+                                .pointerInput(Unit) {
+                                    detectVerticalDragGestures(
+                                        onDragEnd = { if (pull > close) apps = false; pull = 0f },
+                                        onDragCancel = { pull = 0f },
+                                    ) { c, dy -> c.consume(); pull = (pull + dy).coerceAtLeast(0f) }
+                                }
+                                .clickable(onClickLabel = "back to the remote") { apps = false }, contentAlignment = Alignment.Center) {
                                 Box(Modifier.size(width = 36.dp, height = 4.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.25f)))
                             }
                             Box(Modifier.weight(1f)) { ChannelsScreen(vm, accent, openDevices = { sheet = Page.Devices }) }
@@ -249,6 +269,22 @@ fun TrayPill(open: Boolean, accent: Color, onToggle: (Boolean) -> Unit) {
         LineIcon(Ico.SPEAKER, if (open) accent else T.Ink, 18.dp)
         Text("Vol · Ch", color = if (open) accent else T.Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         LineIcon(if (open) Ico.DOWN else Ico.UP, T.Dim, 14.dp, stroke = 2.2f)
+    }
+}
+
+/** Page dots: a pill in the accent colour for the page showing, dots for the others; tap to go. */
+@Composable
+fun PagePills(n: Int, page: Int, accent: Color, names: List<String>, modifier: Modifier = Modifier, onPick: (Int) -> Unit) {
+    Row(modifier.height(40.dp).selectableGroup(), verticalAlignment = Alignment.CenterVertically) {
+        repeat(n) { i ->
+            val sel = i == page
+            val w by androidx.compose.animation.core.animateDpAsState(if (sel) 18.dp else 6.dp, label = "pill")
+            Box(
+                Modifier.height(24.dp).clip(CircleShape).selectable(sel, role = Role.Tab) { onPick(i) }
+                    .semantics { contentDescription = names.getOrElse(i) { "Page ${i + 1}" } }.padding(horizontal = 3.dp),
+                contentAlignment = Alignment.Center,
+            ) { Box(Modifier.size(w, 6.dp).clip(CircleShape).background(if (sel) accent else Color(0xFF7C7C82))) }
+        }
     }
 }
 
