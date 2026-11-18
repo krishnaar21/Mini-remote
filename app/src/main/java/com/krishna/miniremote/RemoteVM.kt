@@ -376,6 +376,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 adapter = a
                 refreshVolume(0)
                 link = Link.READY
+                fetchName(d) // a saved TV still called "Google TV" / "LG TV" gets its own name
                 redials = 0
                 // Remember the TV's network address so it can be woken later.
                 if (d.mac == null) viewModelScope.launch { runCatching { a.macAddress() }.getOrNull()?.let { m -> updateDevice(d.id) { it.copy(mac = m) } } }
@@ -448,7 +449,18 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         if (!HostValidator.isPrivateIPv4(h)) return "Enter a home-network address like 192.168.1.20." to null
         val d = Device("${brand.name.lowercase()}-$h", brand.label, h, brand)
         addAndSelect(d)
+        fetchName(d)
         return null to d
+    }
+
+    /** Replaces a placeholder name ("LG TV", "Google TV"…) with the name set on the TV, when it says. */
+    private fun fetchName(d: Device) {
+        if (!Discovery.generic(d.name)) return
+        viewModelScope.launch {
+            val n = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Discovery.nameOf(d.host, d.brand) } ?: return@launch
+            val cur = devices.firstOrNull { it.id == d.id } ?: return@launch
+            if (Discovery.generic(cur.name)) updateDevice(d.id) { it.copy(name = n) }
+        }
     }
 
     fun rename(id: String, name: String) {
