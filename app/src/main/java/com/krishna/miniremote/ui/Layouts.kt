@@ -186,6 +186,14 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
     androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.width(k * 4 + 14.dp * 3), beyondViewportPageCount = 1, pageSpacing = 24.dp) { page ->
+    // No hard cut at the edges: the page leaving fades and shrinks a little, the one coming in
+    // fades up, so they blend as you swipe.
+    Box(Modifier.graphicsLayer {
+        val off = kotlin.math.abs((pager.currentPage - page) + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
+        alpha = (1f - off * 1.4f).coerceIn(0f, 1f)
+        val sc = 1f - 0.08f * off
+        scaleX = sc; scaleY = sc
+    }) {
     if (page == 2) AppsPage(vm, accent, k, openApps) else
     if (page == 1) KeyPage2(vm, accent, k) { sleep = true } else
     Column(verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -207,6 +215,7 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
             }
             StripKey(accent, "More: keys, inputs and apps", k, ico = Ico.MORE, onClick = openMore)
         }
+    }
     }
     }
     }
