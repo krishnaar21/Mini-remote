@@ -532,6 +532,10 @@ private struct SettingsSheets: View {
                 } footer: {
                     Text("Your app version, iPhone and TV type are added so it's easier to help. Nothing else is sent.")
                 }
+                Section {
+                    Button { set { $0.toured = false }; dismiss() } label: { Label("Take the tour", systemImage: "hand.point.up.left") }
+                    Button { set { $0.onboarded = false; $0.toured = false }; dismiss() } label: { Label("Show the welcome again", systemImage: "sparkles") }
+                }
             case "backup":
                 Section { header("Backup & restore", "Settings, quick access and channels in one file. TVs pair again on a new iPhone.") }
                 Section {
@@ -618,5 +622,5 @@ private struct LicensesPage: View {
 }
 
 /** Where Help & feedback goes: an email address (when set), else new issues on GitHub. */
-let SUPPORT_EMAIL = ""
+let SUPPORT_EMAIL = "iamyourdev123@gmail.com"
 let SUPPORT_ISSUES = "https://github.com/krishnaar21/mini-remote/issues/new"

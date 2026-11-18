@@ -80,6 +80,9 @@ struct Settings: Codable, Equatable {
     var theme = "dark"
     var profileName = ""
     var profileEmail = ""
+    /** The welcome pages and the guided tour have been seen. */
+    var onboarded = false
+    var toured = false
 }
 
 extension Settings {
@@ -103,6 +106,8 @@ extension Settings {
         theme = try c.decodeIfPresent(String.self, forKey: .theme) ?? theme
         profileName = try c.decodeIfPresent(String.self, forKey: .profileName) ?? profileName
         profileEmail = try c.decodeIfPresent(String.self, forKey: .profileEmail) ?? profileEmail
+        onboarded = try c.decodeIfPresent(Bool.self, forKey: .onboarded) ?? onboarded
+        toured = try c.decodeIfPresent(Bool.self, forKey: .toured) ?? toured
     }
 }
 

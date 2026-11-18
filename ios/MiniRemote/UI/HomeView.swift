@@ -127,12 +127,14 @@ struct HomeView: View {
                     .glassEffect(.regular.interactive(), in: .capsule)
                 }
                 .buttonStyle(.plain)
+                .coach("tv")
                 .accessibilityLabel(vm.active.map { "TV: \($0.name), \(linkWord(vm.link))" } ?? "Choose a TV")
                 Spacer(minLength: 0)
                 GlassKey(symbol: "power", label: "Power", size: 52, icon: 19) {
                     // Off (not reachable): wake it. On: ask before turning it off.
                     if vm.active == nil { openDevices() } else if vm.link != .ready { vm.wake() } else { askPower = true }
                 }
+                .coach("power")
             }
         }
     }
@@ -179,6 +181,7 @@ struct HomeView: View {
             touch(.dial, ring: connected).frame(width: outer, height: outer)
         }
         .frame(width: outer, height: outer)
+        .coach("dial")
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Direction pad")
         .accessibilityActions {
@@ -280,6 +283,7 @@ struct KeyPages: View {
         .scrollIndicators(.hidden)
         .scrollPosition(id: $page)
         .frame(width: KEYROW_W + 40, height: KEY * 2 + 14)
+        .coach("keys")
     }
 
     private func k(_ sym: String, _ label: String, _ key: RemoteKey, icon: CGFloat = 21, quiet: Bool = false) -> GlassKey {

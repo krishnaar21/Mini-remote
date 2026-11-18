@@ -63,12 +63,27 @@ struct ContentView: View {
                     vm.feel.fire(.tick)
                     withAnimation(.easeInOut(duration: 0.3)) { keyPage = ((keyPage ?? 0) + 1) % pages }
                 }
+                .coach("pills")
             }
             .animation(.easeOut(duration: 0.16), value: vm.toast)
             .frame(width: KEYROW_W)
             .padding(.bottom, 4)
         }
+        // The guided tour, over the remote (after the welcome pages).
+        .overlayPreferenceValue(CoachKey.self) { anchors in
+            if vm.settings.onboarded && !vm.settings.toured && !showDevices && !showMore && !showKeys && apps == nil {
+                GeometryReader { g in
+                    CoachTour(rects: anchors.mapValues { g[$0] }, accent: accent) {
+                        var s = vm.settings; s.toured = true; vm.update(s)
+                        if vm.active == nil { showDevices = true }
+                    }
+                }
+            }
+        }
         .id(vm.settings.theme + (scheme == .dark ? "-d" : "-l"))
+        .fullScreenCover(isPresented: Binding(get: { !vm.settings.onboarded }, set: { _ in })) {
+            OnboardingView(accent: accent) { var s = vm.settings; s.onboarded = true; vm.update(s) }
+        }
         .tint(accent)
         .sheet(isPresented: $showDevices) { DevicesSheet(vm: vm, accent: accent, start: startRoute) }
         .sheet(isPresented: $showKeys, onDismiss: { keysFromTv = false; keysVoice = false }) { KeyboardSheet(vm: vm, accent: accent, openSearch: !keysFromTv, startVoice: keysVoice) }
@@ -119,6 +134,8 @@ extension ContentView {
             switch s {
             case "more": showMore = true
             case "sleep": showSleep = true
+            case "welcome": var st = vm.settings; st.onboarded = false; vm.update(st)
+            case "tour": var st = vm.settings; st.toured = false; vm.update(st)
             case "page2": keyPage = 1
             case "page3": keyPage = 2
             case "light": var st = vm.settings; st.theme = "light"; vm.update(st)

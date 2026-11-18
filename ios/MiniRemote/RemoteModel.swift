@@ -726,6 +726,7 @@ extension RemoteModel {
         activeId = "demo"
         link = .ready
         settings.controlStyle = trackpad ? "trackpad" : "dial"
+        settings.onboarded = true; settings.toured = true
         settings.layout = cards ? "cards" : "strip"
         tvVolume = TvVolume(level: 24, max: 100, muted: false)
         nowOn = live ? NowOn(name: "Live TV", live: true) : NowOn(name: "Netflix", live: false, positionMs: 1_204_000, durationMs: 2_710_000)

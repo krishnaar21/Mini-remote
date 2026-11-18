@@ -39,7 +39,7 @@ jobs:
           xcrun simctl install "$UDID" "$APP"
           mkdir -p shots
           i=1
-          for s in home page2 page3 live trackpad more sleep keys apps devices settings light navy auto; do
+          for s in welcome tour home page2 page3 more sleep keys apps settings light navy; do
             xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
             SIMCTL_CHILD_SHOT=$s xcrun simctl launch "$UDID" "$BID"
             sleep 6
