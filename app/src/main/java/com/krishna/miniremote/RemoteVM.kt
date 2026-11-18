@@ -797,4 +797,14 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         if (link != Link.READY) { connect(d); viewModelScope.launch { repeat(60) { if (link == Link.READY) { press(k, quiet = true); return@launch }; delay(100) } } }
         else press(k, quiet = true)
     }
+
+    /** A launcher shortcut: opens that Quick access app once the TV is connected. */
+    fun launchWhenReady(id: String) {
+        val s = shortcuts.firstOrNull { it.id == id } ?: return
+        viewModelScope.launch {
+            if (link != Link.READY) { active?.let { if (link != Link.CONNECTING) connect(it) } }
+            repeat(100) { if (link == Link.READY) { launch(s); return@launch }; delay(100) }
+            say("Couldn't reach the TV")
+        }
+    }
 }

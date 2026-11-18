@@ -652,7 +652,9 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
     Group {
     LayoutPicker(s.layout, accent) { vm.update(s.copy(layout = it)) }
     SegRow("Control", listOf("dial" to "Dial", "trackpad" to "Trackpad"), s.controlStyle) { vm.update(s.copy(controlStyle = it)) }
-    ToggleRow("Volume keys", "Phone keys change TV volume", s.volumeKeys, last = true) { vm.update(s.copy(volumeKeys = it)) }
+    ToggleRow("Volume keys", "Phone keys change TV volume", s.volumeKeys) { vm.update(s.copy(volumeKeys = it)) }
+    ToggleRow("Auto keyboard", "Opens when the TV asks for text", s.autoKeyboard) { vm.update(s.copy(autoKeyboard = it)) }
+    ToggleRow("Notification remote", "Volume and play in the background", s.notifRemote, last = true) { vm.update(s.copy(notifRemote = it)) }
     }
     if (openGestures != null) {
         Group {
@@ -1153,7 +1155,7 @@ internal fun PrivacyPage(vm: RemoteVM) {
         Divider()
         InfoBlock("Voice", "The mic listens only while you tap it in Search. Speech is turned into text on the phone where possible (otherwise by the phone's speech service); only the text goes to your TV. Nothing is saved.")
         Divider()
-        InfoBlock("Permissions", "Network, microphone (voice search, while listening), vibration, notifications, installing updates. No location, contacts or files.")
+        InfoBlock("Permissions", "Network, microphone (voice search and talking to the TV, only while listening), vibration, notifications (updates, the remote), installing updates. No location, contacts or files.")
     }
     var ask by remember { mutableStateOf<String?>(null) }
     Btn("Forget all TVs", kind = 1) { ask = "tvs" }

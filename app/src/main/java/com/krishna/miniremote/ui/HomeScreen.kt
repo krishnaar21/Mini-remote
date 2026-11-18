@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -215,9 +216,8 @@ fun HomeScreen(
     }
     val padOnly = if (deck == Deck.NUMPAD) (if (vm.settings.controlStyle == "trackpad") Deck.TRACKPAD else Deck.DIAL) else deck
 
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-      Column(Modifier.weight(1f).padding(horizontal = 16.dp).padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        // Top, as on the Apple TV Remote: mute · TV picker · power, inset from the screen edges.
+    // Top, as on the Apple TV Remote: mute · TV picker · power, inset from the screen edges.
+    val topBar: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 20.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             KeyButton(accent, "Mute", Modifier.size(52.dp), state = if (vm.muted) "Muted" else null, pressedScale = 1f, onPress = { vm.press(RemoteKey.MUTE) }) { c, _ ->
                 LineIcon(if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, c, 22.dp)
@@ -230,11 +230,12 @@ fun HomeScreen(
                 LineIcon(Ico.POWER, c, 22.dp)
             }
         }
-
-        NowPlaying(vm)
+    }
+    val cards = androidx.compose.foundation.pager.rememberPagerState { 3 }
+    // The middle: the cards (Cards) or the dial in its ring (Black).
+    val middle: @Composable (Modifier) -> Unit = { m ->
         when (layout) {
-            HomeLayout.CARDS -> {
-                val cards = androidx.compose.foundation.pager.rememberPagerState { 3 }
+            HomeLayout.CARDS -> Column(m, horizontalAlignment = Alignment.CenterHorizontally) {
                 androidx.compose.foundation.pager.HorizontalPager(
                     cards, Modifier.weight(1f).fillMaxWidth().padding(top = 8.dp).then(a11y),
                     pageSpacing = 12.dp, beyondViewportPageCount = 1,
@@ -254,18 +255,40 @@ fun HomeScreen(
                     }
                 }
                 CardDots(3, cards.currentPage) { scope.launch { cards.animateScrollToPage(it) } }
-                Spacer(Modifier.height(8.dp))
-                FourKeys(vm, accent, openKeys)
             }
-
-            HomeLayout.STRIP -> {
-                ringArea(Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp).then(a11y))
-                Box(Modifier.padding(top = 10.dp, bottom = 26.dp)) { KeyRows(vm, accent, numpad, onNumpad, openKeys, openMore) }
-            }
-
+            HomeLayout.STRIP -> ringArea(m.padding(vertical = 8.dp).then(a11y))
         }
-      }
-        Spacer(Modifier.height(NAV_H + 28.dp))
+    }
+    val keysBlock: @Composable () -> Unit = {
+        when (layout) {
+            HomeLayout.CARDS -> FourKeys(vm, accent, openKeys)
+            HomeLayout.STRIP -> KeyRows(vm, accent, numpad, onNumpad, openKeys, openMore)
+        }
+    }
+
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        if (maxWidth > maxHeight) {
+            // Landscape (phone on its side, tablets): the pad on the left, keys on the right.
+            Row(Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(bottom = NAV_H + 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    topBar()
+                    NowPlaying(vm)
+                    middle(Modifier.weight(1f).fillMaxWidth())
+                }
+                Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) { keysBlock() }
+            }
+        } else {
+            // Portrait; on a tablet the remote keeps a phone's width, centred.
+            Column(Modifier.fillMaxHeight().widthIn(max = 480.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.weight(1f).padding(horizontal = 16.dp).padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    topBar()
+                    NowPlaying(vm)
+                    middle(Modifier.weight(1f).fillMaxWidth())
+                    Box(Modifier.padding(top = if (layout == HomeLayout.CARDS) 8.dp else 10.dp, bottom = if (layout == HomeLayout.STRIP) 26.dp else 0.dp)) { keysBlock() }
+                }
+                Spacer(Modifier.height(NAV_H + 28.dp))
+            }
+        }
     }
 }
 

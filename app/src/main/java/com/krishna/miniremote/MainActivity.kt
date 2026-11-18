@@ -34,6 +34,10 @@ class MainActivity : ComponentActivity() {
     private val askNotifications = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) {}
 
     private fun handle(intent: android.content.Intent?) {
+        when (intent?.action) {
+            Outside.ACTION_LAUNCH -> { intent.getStringExtra(Outside.EXTRA_SHORTCUT)?.let { vm.launchWhenReady(it) }; intent.action = null }
+            Outside.ACTION_WAKE -> { vm.wake(); intent.action = null }
+        }
         if (intent?.getBooleanExtra(Updater.EXTRA_INSTALL, false) == true) {
             intent.removeExtra(Updater.EXTRA_INSTALL)
             vm.installFromNotification()
@@ -47,8 +51,21 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        Outside.hide(this)
         vm.maybeCheckForUpdate()
         vm.autoConnect()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // In the background with a TV connected: volume and play keys in a notification.
+        val d = vm.active
+        if (!isChangingConfigurations && vm.settings.notifRemote && d != null && vm.link == Link.READY) Outside.show(this, d.name, vm.playing)
+    }
+
+    override fun onDestroy() {
+        if (isFinishing) Outside.hide(this)
+        super.onDestroy()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
@@ -63,9 +80,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        Outside.vm = java.lang.ref.WeakReference(vm)
         handle(intent)
         // Android 13+: ask once so a ready update can show a notification.
-        if (vm.settings.autoUpdate && android.os.Build.VERSION.SDK_INT >= 33 &&
+        if ((vm.settings.autoUpdate || vm.settings.notifRemote) && android.os.Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
         ) askNotifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         setContent {
@@ -87,6 +105,8 @@ class MainActivity : ComponentActivity() {
             ) {
                 AppShell(vm)
             }
+            // Long-press the app icon: Quick access apps and Turn on TV.
+            androidx.compose.runtime.LaunchedEffect(vm.shortcuts) { Outside.publishShortcuts(this@MainActivity, vm.shortcuts) }
             // Window flags are a side effect, so apply them after composition rather than during it.
             val keepAwake = vm.settings.keepAwake
             SideEffect {
