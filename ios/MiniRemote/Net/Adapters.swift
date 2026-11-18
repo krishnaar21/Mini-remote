@@ -27,6 +27,10 @@ protocol RemoteAdapter: AnyObject {
     func tuneChannel(_ number: String) async throws
     func search(_ query: String) async throws
     func nowOn() async throws -> NowOn
+    /** Runs the search typed in the TV's box (Enter); by default the OK key. */
+    func submit() async throws
+    /** Empties the TV's text box, including what was there before we typed. */
+    func clearBox(_ known: Int) async throws
     func close()
 }
 
@@ -44,6 +48,8 @@ extension RemoteAdapter {
     func launchApp(_ id: String) async throws { throw UserFacing("Opening apps isn't supported on this TV yet", unsupported: true) }
     func openStore(_ id: String) async throws { throw UserFacing("Install and remove apps from the TV's app store", unsupported: true) }
     func nowOn() async throws -> NowOn { throw UserFacing("This TV can't say what's on screen", unsupported: true) }
+    func submit() async throws { try await send(.ok) }
+    func clearBox(_ known: Int) async throws { for _ in 0..<known { try await backspace() } }
 
     /** Types the number's digits; the TV switches after a moment. */
     func tuneChannel(_ number: String) async throws {

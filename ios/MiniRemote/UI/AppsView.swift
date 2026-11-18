@@ -22,6 +22,8 @@ final class AppEntry: Identifiable {
     var version: String? = nil
     var installed: Bool? = nil
     var pinned = false
+    /** Its quick access entry, when it has one. */
+    var pinnedAs: Shortcut? = nil
     var storeId: String? = nil
     var open: () -> Void = {}
     var pin: () -> Void = {}
@@ -30,16 +32,21 @@ final class AppEntry: Identifiable {
     init(id: String, name: String, bg: Color, ink: Color) { self.id = id; self.name = name; self.bg = bg; self.ink = ink }
 }
 
-/** Apps and channels: quick access on top (drag tiles there), then the TV's apps, popular apps and channels. */
+/**
+ * Apps and channels: what's on the TV, then the catalogue's other apps as "Not on your TV",
+ * added apps and channels. Opened from a + place (picking), tapping an app adds it to quick
+ * access and tapping it again shows its quick access options; it closes once quick access is full.
+ */
 struct AppsView: View {
     @ObservedObject var vm: RemoteModel
     let accent: Color
+    var picking = false
     let openDevices: () -> Void
+    var onFull: () -> Void = {}
 
     @State private var details: AppEntry?
     @State private var adding: ShortcutKind?
-    @State private var dragging: AppEntry?
-    @State private var overSlot = false
+    @State private var options: Shortcut?
 
     private var ready: Bool { vm.active != nil && vm.link == .ready }
     private func needTv() -> Bool { if !ready { openDevices(); return true }; return false }
@@ -49,7 +56,7 @@ struct AppsView: View {
         return vm.tvApps.map { a in
             let pin = vm.pinnedTvApp(a)
             let e = AppEntry(id: "tv:\(a.id)", name: a.name, bg: tileColor(a.name), ink: .white)
-            e.icon = a.icon; e.version = a.version; e.installed = true; e.pinned = pin != nil
+            e.icon = a.icon; e.version = a.version; e.installed = true; e.pinned = pin != nil; e.pinnedAs = pin
             e.storeId = brand == .ROKU ? a.id : nil
             e.open = { vm.launchApp(a.name, a.id) }; e.pin = { vm.pinTvApp(a) }; e.unpin = { if let p = pin { vm.setPinned(p, false) } }
             return e
@@ -61,7 +68,7 @@ struct AppsView: View {
         return Catalog.apps.filter { brand == nil || $0.ids[brand!] != nil }.map { c in
             let pin = vm.pinnedCatalog(c)
             let e = AppEntry(id: "cat:\(c.key)", name: c.name, bg: Color(hex: c.bg), ink: Color(hex: c.ink))
-            e.vendor = c.vendor.isEmpty ? nil : c.vendor; e.installed = vm.installed(c); e.pinned = pin != nil
+            e.vendor = c.vendor.isEmpty ? nil : c.vendor; e.installed = vm.installed(c); e.pinned = pin != nil; e.pinnedAs = pin
             if let b = brand, b == .ROKU || b == .ANDROID_TV { e.storeId = c.ids[b] }
             e.open = { vm.launchCatalog(c) }; e.pin = { vm.pinCatalog(c) }; e.unpin = { if let p = pin { vm.setPinned(p, false) } }
             return e
@@ -71,7 +78,7 @@ struct AppsView: View {
     private func shortcutEntries(_ kind: ShortcutKind) -> [AppEntry] {
         vm.shortcuts.filter { $0.kind == kind && (kind == .channel || $0.added) }.map { s in
             let e = AppEntry(id: "s:\(s.id)", name: s.name, bg: kind == .channel ? channelBg : tileColor(s.name), ink: .white)
-            e.badge = kind == .channel ? s.value : s.brand?.label; e.pinned = s.pinned
+            e.badge = kind == .channel ? s.value : s.brand?.label; e.pinned = s.pinned; e.pinnedAs = s.pinned ? s : nil
             if kind == .app, let b = s.brand, (b == .ROKU || b == .ANDROID_TV), !s.value.contains("://") { e.storeId = s.value }
             e.open = { vm.launch(s) }; e.pin = { vm.setPinned(s, true) }; e.unpin = { vm.setPinned(s, false) }
             e.delete = { vm.removeShortcut(s) }
@@ -79,113 +86,116 @@ struct AppsView: View {
         }
     }
 
-    var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        Text("Apps").font(.system(size: 30, weight: .semibold)).foregroundStyle(T.ink).accessibilityAddTraits(.isHeader)
-                        Spacer()
-                        RoundKey(symbol: "arrow.clockwise", label: "Reload the TV's apps", size: 44, iconSize: 17, accent: accent) { vm.refreshApps(force: true) }
-                        RoundKey(symbol: "plus", label: "Add a channel or app", size: 44, iconSize: 17, accent: accent) { adding = .channel }
-                    }
-                    .padding(.top, 14).id("top")
-                    Group {
-                        if let d = vm.active {
-                            Text(ready ? "On \(shortName(d.name, d.brand.label))" : "\(shortName(d.name, d.brand.label)) · \(linkWord(vm.link).isEmpty ? "Not connected" : linkWord(vm.link))")
-                                .foregroundStyle(ready ? T.ok : T.muted)
-                        } else { Text("Add a TV to open apps and channels").foregroundStyle(T.muted) }
-                    }
-                    .font(.system(size: 13.5)).padding(.top, 4)
-                    .onTapGesture { if !ready { openDevices() } }
+    /** Adding mode: the first tap adds the app, a second shows its quick access options. */
+    private func pick(_ e: AppEntry) {
+        if let s = e.pinnedAs { options = s; return }
+        e.pin(); vm.feel.fire(.success)
+        if vm.quickFull { DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { onFull() } }
+    }
+    private func tap(_ e: AppEntry) { if picking { pick(e) } else { details = e } }
 
-                    SectionTitle(text: "Quick access")
-                    quickAccess
-                    if !vm.tvApps.isEmpty || vm.appsLoading {
-                        SectionTitle(text: "On your TV")
-                        if vm.tvApps.isEmpty { ProgressView().tint(accent).padding(.vertical, 8) }
-                        grid(entries) { e in details = e }
-                    }
-                    SectionTitle(text: vm.tvApps.isEmpty ? "Apps" : "Popular apps")
-                    grid(popular) { e in details = e }
-                    let added = shortcutEntries(.app)
-                    if !added.isEmpty { SectionTitle(text: "Added apps"); grid(added) { e in details = e } }
-                    SectionTitle(text: "TV channels")
-                    let channels = shortcutEntries(.channel)
-                    if channels.isEmpty {
-                        Text("Add the channels you watch, like 101 · Star Sports. Tapping one tunes the TV to it.")
-                            .font(.system(size: 12.5)).foregroundStyle(T.muted)
-                    } else { grid(channels) { e in if !needTv() { e.open() } } }
-                    HStack(spacing: 12) {
-                        WideButton(title: "Add a channel", kind: .secondary) { adding = .channel }
-                        WideButton(title: "Add an app", kind: .secondary) { adding = .app }
-                    }
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text(picking ? "Add to quick access" : "Apps").font(.system(size: picking ? 24 : 30, weight: .semibold)).foregroundStyle(T.ink).accessibilityAddTraits(.isHeader)
+                    Spacer()
+                    RoundKey(symbol: "arrow.clockwise", label: "Reload the TV's apps", size: 44, iconSize: 17, accent: accent) { vm.refreshApps(force: true) }
+                    RoundKey(symbol: "plus", label: "Add a channel or app", size: 44, iconSize: 17, accent: accent) { adding = .channel }
                 }
-                .padding(.horizontal, 20).padding(.bottom, 80)
+                .padding(.top, 18)
+                Group {
+                    if picking {
+                        Text("Tap apps to add them. Tap one again for its options.").foregroundStyle(T.muted)
+                    } else if let d = vm.active {
+                        Text(ready ? "On \(shortName(d.name, d.brand.label))" : "\(shortName(d.name, d.brand.label)) · \(linkWord(vm.link).isEmpty ? "Not connected" : linkWord(vm.link))")
+                            .foregroundStyle(ready ? T.ok : T.muted)
+                    } else { Text("Add a TV to open apps and channels").foregroundStyle(T.muted) }
+                }
+                .font(.system(size: 13.5)).padding(.top, 4)
+                .onTapGesture { if !ready && !picking { openDevices() } }
+
+                if !vm.tvApps.isEmpty || vm.appsLoading {
+                    SectionTitle(text: "On your TV")
+                    if vm.tvApps.isEmpty { ProgressView().tint(accent).padding(.vertical, 8) }
+                    grid(entries)
+                    // The catalogue's other apps: suggestions, to get from the TV's store.
+                    let missing = popular.filter { $0.installed == false }
+                    if !missing.isEmpty {
+                        SectionTitle(text: "Not on your TV")
+                        Text("Tap one to get it from the TV's store.").font(.system(size: 12.5)).foregroundStyle(T.muted).padding(.bottom, 6)
+                        grid(missing)
+                    }
+                } else {
+                    SectionTitle(text: "Apps")
+                    grid(popular)
+                }
+                let added = shortcutEntries(.app)
+                if !added.isEmpty { SectionTitle(text: "Added apps"); grid(added) }
+                SectionTitle(text: "TV channels")
+                let channels = shortcutEntries(.channel)
+                if channels.isEmpty {
+                    Text("Add the channels you watch, like 101 · Star Sports. Tapping one tunes the TV to it.")
+                        .font(.system(size: 12.5)).foregroundStyle(T.muted)
+                } else { grid(channels) { e in if picking { pick(e) } else if !needTv() { e.open() } } }
+                HStack(spacing: 12) {
+                    WideButton(title: "Add a channel", kind: .secondary) { adding = .channel }
+                    WideButton(title: "Add an app", kind: .secondary) { adding = .app }
+                }
             }
-            .onChange(of: dragging?.id) { id in if id != nil { withAnimation { proxy.scrollTo("top", anchor: .top) } } }
+            .padding(.horizontal, 20).padding(.bottom, 40)
         }
+        .background(T.sheet)
         .sheet(item: $details) { e in
             AppSheet(entry: e, accent: accent, onOpen: { if !needTv() { e.open() } },
                      onStore: { if !needTv(), let id = e.storeId { vm.openStore(e.name, id) } })
         }
         .sheet(item: $adding) { k in AddSheet(vm: vm, accent: accent, start: k) }
+        .sheet(item: $options) { s in QuickOptions(vm: vm, s: s) }
     }
 
-    @ViewBuilder private var quickAccess: some View {
-        let pinned = vm.shortcuts.filter(\.pinned)
-        if dragging != nil {
-            dropSlot
-        } else if pinned.isEmpty {
-            Text("Long-press an app or channel and drag it here to keep it one tap away.").font(.system(size: 12.5)).foregroundStyle(T.muted)
-        } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
-                    ForEach(Array(pinned.enumerated()), id: \.element.id) { i, s in
-                        QuickTile(s: s, icon: s.icon ?? vm.tvApps.first { $0.name.caseInsensitiveCompare(s.name) == .orderedSame }?.icon)
-                            .onTapGesture { if !needTv() { vm.launch(s) } }
-                            .contextMenu {
-                                if i > 0 { Button("Move left") { vm.movePinned(s, -1) } }
-                                if i < pinned.count - 1 { Button("Move right") { vm.movePinned(s, 1) } }
-                                Button("Remove from quick access") { vm.setPinned(s, false) }
-                                if s.added { Button("Delete", role: .destructive) { vm.removeShortcut(s) } }
-                            }
-                    }
-                }
-                .padding(.vertical, 4)
-            }
-        }
-    }
-
-    /** Where a dragged app lands: a grey dashed box. Lights up while a tile is over it. */
-    private var dropSlot: some View {
-        Text(overSlot ? "Release to add" : "Drop app here")
-            .font(.system(size: 15, weight: .medium)).foregroundStyle(overSlot ? accent : T.dim)
-            .frame(maxWidth: .infinity).frame(height: 96)
-            .background(RoundedRectangle(cornerRadius: 20).fill(overSlot ? accent.opacity(0.12) : .clear))
-            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(overSlot ? accent : Color(hex: 0x8A8A8E), style: StrokeStyle(lineWidth: 2, dash: [10, 7])))
-            .onDrop(of: [.plainText], isTargeted: $overSlot) { _ in
-                if let e = dragging { if e.pinned { vm.say("Already in quick access") } else { e.pin(); vm.feel.fire(.success) } }
-                dragging = nil
-                return true
-            }
-    }
-
-    private func grid(_ items: [AppEntry], tap: @escaping (AppEntry) -> Void) -> some View {
+    private func grid(_ items: [AppEntry], tap custom: ((AppEntry) -> Void)? = nil) -> some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
             ForEach(items) { e in
                 Tile(e: e)
-                    .onTapGesture { tap(e) }
-                    .onDrag {
-                        dragging = e
-                        vm.feel.fire(.heavy)
-                        // If the drag is dropped somewhere else, put Quick access back after a while.
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 12) { if dragging === e { dragging = nil } }
-                        return NSItemProvider(object: e.id as NSString)
-                    }
+                    .onTapGesture { if let custom { custom(e) } else { tap(e) } }
+                    // Long-press: add to quick access (or its options), from anywhere.
+                    .onLongPressGesture { vm.feel.fire(.heavy); pick(e) }
             }
         }
         .padding(.top, 4)
+    }
+}
+
+/** A quick access app's options: open it, move it, take it out (or delete an added one). */
+private struct QuickOptions: View {
+    @ObservedObject var vm: RemoteModel
+    let s: Shortcut
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        let pinned = vm.shortcuts.filter(\.pinned)
+        let i = pinned.firstIndex { $0.id == s.id } ?? 0
+        List {
+            Section {
+                HStack(spacing: 14) {
+                    AppTile(s: s, size: 52, square: true).frame(width: 52)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(s.name).font(.system(size: 17, weight: .semibold)).foregroundStyle(T.ink)
+                        Text("Quick access · place \(i + 1) of \(pinned.count)").font(.system(size: 13)).foregroundStyle(T.sub)
+                    }
+                }
+            }
+            Section {
+                Button { vm.launch(s); dismiss() } label: { Label("Open on TV", systemImage: "play.rectangle") }
+                if i > 0 { Button { vm.movePinned(s, -1) } label: { Label("Move earlier", systemImage: "arrow.left") } }
+                if i < pinned.count - 1 { Button { vm.movePinned(s, 1) } label: { Label("Move later", systemImage: "arrow.right") } }
+                Button { vm.setPinned(s, false); dismiss() } label: { Label("Remove from quick access", systemImage: "minus.circle") }
+                if s.added { Button(role: .destructive) { vm.removeShortcut(s); dismiss() } label: { Label("Delete", systemImage: "trash") } }
+            }
+        }
+        .tint(T.ink)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
     }
 }
 

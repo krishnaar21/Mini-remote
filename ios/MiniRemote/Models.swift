@@ -72,6 +72,14 @@ struct Settings: Codable, Equatable {
     var layout = "strip"
     /** Open the typing sheet by itself when the TV focuses a text box (Android TV). */
     var autoKeyboard = true
+    /** Where quick access lives: "home" (pages of circles) or "more" (top of More). */
+    var appsIn = "home"
+    /** Close TV menus opened from here with Back after 10 s without use. */
+    var autoClose = true
+    /** "dark", "light", "navy" or "retro". */
+    var theme = "dark"
+    var profileName = ""
+    var profileEmail = ""
 }
 
 extension Settings {
@@ -90,6 +98,11 @@ extension Settings {
         let l = try c.decodeIfPresent(String.self, forKey: .layout) ?? layout
         layout = ["strip", "cards"].contains(l) ? l : "strip"
         autoKeyboard = try c.decodeIfPresent(Bool.self, forKey: .autoKeyboard) ?? autoKeyboard
+        appsIn = try c.decodeIfPresent(String.self, forKey: .appsIn) ?? appsIn
+        autoClose = try c.decodeIfPresent(Bool.self, forKey: .autoClose) ?? autoClose
+        theme = try c.decodeIfPresent(String.self, forKey: .theme) ?? theme
+        profileName = try c.decodeIfPresent(String.self, forKey: .profileName) ?? profileName
+        profileEmail = try c.decodeIfPresent(String.self, forKey: .profileEmail) ?? profileEmail
     }
 }
 

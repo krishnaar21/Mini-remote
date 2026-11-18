@@ -25,7 +25,6 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         UIRequiresFullScreen: true
-        UIUserInterfaceStyle: Dark
         ITSAppUsesNonExemptEncryption: false
         NSMicrophoneUsageDescription: Voice mode in Search, and holding OK to talk to your TV, use the microphone only while listening.
         NSSpeechRecognitionUsageDescription: Your words are turned into text (on this iPhone where possible) and typed on your TV.

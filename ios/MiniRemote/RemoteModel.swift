@@ -18,7 +18,17 @@ final class RemoteModel: ObservableObject {
     @Published private(set) var scanning = false
     @Published private(set) var found: [Device] = []
     @Published private(set) var lastError: String?
-    @Published private(set) var txCount = 0
+    @Published private(set) var txCount = 0 { didSet { lastTxAt = Date() } }
+    /** When the app last sent something to the TV (to tell its text boxes from the physical remote's). */
+    private var lastTxAt = Date.distantPast
+    /** When you last pressed, turned or typed anything here (menus close 10 s after). */
+    private var userAt = Date.distantPast
+    /** Rewind / forward: Play / Pause within 10 s confirms the seek with OK (Android TV). */
+    private var seekAt = Date.distantPast
+    /** A TV menu opened from here: when it closes unless used again, and what was on screen behind it. */
+    private var menuUntil: Date?
+    private var menuBehind: String?
+    private var menuTask: Task<Void, Never>?
     @Published private(set) var muted = false
     @Published private(set) var playing = false
     @Published private(set) var pairPrompt: PairPrompt?
@@ -35,9 +45,13 @@ final class RemoteModel: ObservableObject {
     /** Sleep timer: when the TV turns off. */
     @Published private(set) var sleepAt: Date?
     var sleepTask: Task<Void, Never>?
-    var voiceSession: (engine: AVAudioEngine, id: UInt64, adapter: AndroidTvAdapter)?
+    var voiceSession: (engine: AVAudioEngine, id: UInt64, adapter: AndroidTvAdapter, buffer: VoiceBuffer)?
+    /** Voice is streaming to the TV. */
+    @Published var listening = false
+    /** The TV didn't take the phone's voice: Search opens in Voice mode instead. */
+    @Published var voiceTyping = 0
 
-    let maxPinned = 8
+    let maxPinned = 15
     var active: Device? { devices.first { $0.id == activeId } }
     var localSeen: Bool { store.localSeen }
 
@@ -83,7 +97,10 @@ final class RemoteModel: ObservableObject {
                 guard let self, self.link == .ready, let a = self.adapter else { continue }
                 do {
                     if op.hasPrefix("\u{1}") { try await a.setText(String(op.dropFirst())) }
-                    else if op == "\u{8}" { try await a.backspace() } else { try await a.typeText(op) }
+                    else if op == "\u{8}" { try await a.backspace() }
+                    else if op == "\u{2}" { try await a.submit() }
+                    else if op.hasPrefix("\u{3}") { try await a.clearBox(Int(op.dropFirst()) ?? 0) }
+                    else { try await a.typeText(op) }
                     self.txCount += 1
                 } catch {
                     if !warned { warned = true; self.say((error as? UserFacing)?.message ?? "Couldn't type") }
@@ -105,10 +122,50 @@ final class RemoteModel: ObservableObject {
         if key == .playPause { playing.toggle() }
         nudgeVolume(key)
         if !quiet { say(key == .playPause ? (playing ? "Play" : "Pause") : key.word, key) }
+        userAt = Date()
+        watchMenu(key)
+        // Android TV players hold a rewind / forward in a seek preview until it's confirmed, and
+        // ignore Play / Pause meanwhile: within 10 s of seeking, Play / Pause sends OK instead.
+        if key == .rewind || key == .fastForward { seekAt = Date() }
+        if key == .playPause, d.brand == .ANDROID_TV, Date().timeIntervalSince(seekAt) < 10 {
+            seekAt = .distantPast; playing = true; keys?.yield(.ok); return
+        }
         keys?.yield(key)
     }
 
-    func scrubTick(_ key: RemoteKey) { feel.fire(.tick); nudgeVolume(key); keys?.yield(key) }
+    func scrubTick(_ key: RemoteKey) { userAt = Date(); menuUsed(); feel.fire(.tick); nudgeVolume(key); keys?.yield(key) }
+
+    /* ------------------------------------------------- idle TV menus */
+
+    private static let menuKeys: Set<RemoteKey> = [.settings, .input, .menu, .info, .guide, .chList, .subtitles, .audio]
+
+    /**
+     * A TV menu opened from here (settings, quick settings, inputs…) closes itself: 10 s with
+     * nothing done in the app and Back is pressed once. Back, Home or Power end the watch, and
+     * so does the screen behind changing (an input or app was picked and took the menu with it).
+     */
+    private func watchMenu(_ key: RemoteKey) {
+        if !settings.autoClose || key == .back || key == .home || key == .power { menuUntil = nil; menuTask?.cancel(); menuTask = nil; return }
+        if Self.menuKeys.contains(key) {
+            menuBehind = nowOn?.name
+            menuUntil = Date().addingTimeInterval(10)
+            if menuTask == nil {
+                menuTask = Task { [weak self] in
+                    while let self, let until = self.menuUntil, !Task.isCancelled {
+                        try? await Task.sleep(nanoseconds: 250_000_000)
+                        if let b = self.menuBehind, let n = self.nowOn?.name, n != b { self.menuUntil = nil; break }
+                        if Date() >= until, self.menuUntil == until {
+                            self.menuUntil = nil
+                            if self.link == .ready { self.keys?.yield(.back); self.say("Closed the TV's menu (unused for 10 s)") }
+                        }
+                    }
+                    self?.menuTask = nil
+                }
+            }
+        } else { menuUsed() }
+    }
+
+    private func menuUsed() { if menuUntil != nil { menuUntil = Date().addingTimeInterval(10) } }
 
     /** Moves the shown volume at once, then asks the TV for the real value a moment later. */
     private func nudgeVolume(_ key: RemoteKey) {
@@ -136,6 +193,7 @@ final class RemoteModel: ObservableObject {
     /** Mirrors an edit of the search box on the TV: deletes what changed, types what's new. */
     func liveType(_ old: String, _ new: String) {
         guard active != nil else { say("Choose a TV first"); return }
+        userAt = Date(); menuUsed()
         // Android TV takes the whole box at once (any characters).
         if adapter?.replacesText == true { textOps?.yield("\u{1}" + new); return }
         let o = Array(old), n = Array(new)
@@ -192,7 +250,11 @@ final class RemoteModel: ObservableObject {
                 self.tvVolume = nil
                 a.onVolume = { v in Task { @MainActor in self.tvVolume = v; self.muted = v.muted } }
                 a.onDropped = { [weak a] in Task { @MainActor in if let a { self.dropped(d, a) } } }
-                (a as? AndroidTvAdapter)?.onKeyboard = { Task { @MainActor in if self.settings.autoKeyboard { self.keyboardAsk += 1 } } }
+                // A text box got focus on the TV: the phone keyboard opens if the phone is what's
+                // driving it (something sent from here in the last 20 s), not the physical remote.
+                (a as? AndroidTvAdapter)?.onKeyboard = { Task { @MainActor in
+                    if self.settings.autoKeyboard && Date().timeIntervalSince(self.lastTxAt) < 20 { self.keyboardAsk += 1 }
+                } }
                 try await a.connect()
                 if Task.isCancelled { a.close(); return }
                 self.adapter = a
@@ -201,6 +263,7 @@ final class RemoteModel: ObservableObject {
                 self.refreshVolume(after: 0)
                 // Remember the TV's network address so it can be woken later.
                 if d.mac == nil { Task { if let m = await a.macAddress() { self.updateDevice(d.id) { $0.mac = m } } } }
+                self.fetchName(d)
                 if !quiet { self.feel.fire(.success) }
             } catch {
                 if Task.isCancelled { return }
@@ -265,7 +328,18 @@ final class RemoteModel: ObservableObject {
         guard HostValidator.isPrivateIPv4(h) else { return ("Enter a home-network address like 192.168.1.20.", nil) }
         let d = Device(id: "\(brand.rawValue.lowercased())-\(h)", name: brand.label, host: h, brand: brand)
         addAndSelect(d)
+        fetchName(d)
         return (nil, d)
+    }
+
+    /** Replaces a placeholder name ("LG TV", "Google TV"…) with the name set on the TV, when it says. */
+    func fetchName(_ d: Device) {
+        guard Discovery.generic(d.name) else { return }
+        Task { [weak self] in
+            guard let n = await Discovery.nameOf(d.host, d.brand), let self,
+                  let cur = self.devices.first(where: { $0.id == d.id }), Discovery.generic(cur.name) else { return }
+            self.updateDevice(d.id) { $0.name = n }
+        }
     }
 
     func rename(_ id: String, _ name: String) {
@@ -284,10 +358,16 @@ final class RemoteModel: ObservableObject {
     func scan() {
         guard !scanning else { return }
         scanning = true; found = []
+        let hosts = Set(devices.map(\.host))
         Task { [weak self] in
-            let list = await Discovery.scan()
+            // Each TV shows up as soon as it's found.
+            let list = await Discovery.scan { d in
+                Task { @MainActor in
+                    guard let self, !hosts.contains(d.host), !self.found.contains(where: { $0.host == d.host }) else { return }
+                    self.found.append(d)
+                }
+            }
             guard let self else { return }
-            let hosts = Set(self.devices.map(\.host))
             self.found = list.filter { !hosts.contains($0.host) }
             self.scanning = false
         }
@@ -312,9 +392,31 @@ final class RemoteModel: ObservableObject {
 
     /** Opens the TV's own search screen where the TV has a key for it (Roku, Android TV). */
     func openTvSearch() {
-        guard let a = adapter, link == .ready, let b = active?.brand, b == .ROKU || b == .ANDROID_TV else { return }
+        // Google TV's Search key starts the voice assistant, not a text box: Roku only.
+        guard let a = adapter, link == .ready, active?.brand == .ROKU else { return }
         Task { try? await a.send(.voice) }
     }
+
+    /** Android TV: search an app straight from the phone (YouTube, Play Store). */
+    var searchesApps: Bool { active?.brand == .ANDROID_TV }
+
+    func searchIn(_ whereTo: String, _ q: String) {
+        let s = q.trimmingCharacters(in: .whitespaces)
+        guard !s.isEmpty, let e = s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return }
+        let link = whereTo == "youtube" ? "https://www.youtube.com/results?search_query=\(e)" : "market://search?q=\(e)&c=apps"
+        say("Searching \(whereTo == "youtube" ? "YouTube" : "Play Store") for \(s)")
+        act("Couldn't search") { try await $0.launchApp(link) }
+    }
+
+    /** Runs the search: Roku searches for it; other TVs press Enter in their box (after the typing). */
+    func submitSearch(_ text: String) {
+        guard active != nil else { say("Choose a TV first"); return }
+        if active?.brand == .ROKU { search(text); return }
+        textOps?.yield("\u{2}")
+    }
+
+    /** Clears the TV's box: all of it, not only what was typed from here. */
+    func clearTvBox(_ typed: Int) { if active != nil { textOps?.yield("\u{3}\(typed)") } }
 
     func typeText(_ t: String) { act("Couldn't type") { try await $0.typeText(t) }; feel.fire(.success) }
     func backspace() { act("Couldn't delete") { try await $0.backspace() } }
@@ -402,6 +504,7 @@ final class RemoteModel: ObservableObject {
     }
 
     private func saveShortcuts(_ l: [Shortcut]) { shortcuts = l; store.saveShortcuts(l) }
+    func replaceShortcuts(_ l: [Shortcut]) { saveShortcuts(l) }
 
     private func roomToPin() -> Bool {
         if shortcuts.filter(\.pinned).count < maxPinned { return true }
@@ -446,7 +549,7 @@ final class RemoteModel: ObservableObject {
     func movePinned(_ s: Shortcut, _ by: Int) {
         var pinned = shortcuts.filter(\.pinned)
         guard let i = pinned.firstIndex(where: { $0.id == s.id }), pinned.indices.contains(i + by) else { return }
-        pinned.swapAt(i, i + by)
+        let item = pinned.remove(at: i); pinned.insert(item, at: i + by)
         saveShortcuts(pinned + shortcuts.filter { !$0.pinned })
     }
 
@@ -503,13 +606,20 @@ extension RemoteModel {
         }
     }
 
-    /** Hold OK on an Android TV: the iPhone's mic goes to the TV's Assistant while held. */
+    /**
+     * Voice to the TV's Assistant (Android TV): Search, answer the TV's voice session, then the
+     * iPhone's mic as 16-bit mono 8 kHz PCM in 20 KB messages (TVs ignore small ones). It stops
+     * when the TV hears the end of speech, when you let go / tap again, after 2.5 s of quiet once
+     * you've spoken, or at 12 s. If the TV doesn't open a session, Search opens in Voice mode.
+     */
     func voiceStart() {
-        guard let a = adapter as? AndroidTvAdapter, link == .ready else { press(.voice); return }
+        guard let d = active, link == .ready else { say("Choose a TV first"); return }
+        guard let a = adapter as? AndroidTvAdapter, d.brand == .ANDROID_TV else { press(.voice); return }
+        if voiceSession != nil { voiceStop(); return }
         Task {
             let granted = await AVAudioApplication.requestRecordPermission()
-            guard granted else { press(.voice); say("Allow the microphone to talk to the TV"); return }
-            guard let id = await a.voiceBegin() else { return }
+            guard granted else { say("Allow the microphone to talk to the TV"); return }
+            guard let id = await a.voiceBegin() else { voiceTyping += 1; return }
             do {
                 let session = AVAudioSession.sharedInstance()
                 try session.setCategory(.record, mode: .measurement, options: .duckOthers)
@@ -519,24 +629,33 @@ extension RemoteModel {
                 let inFmt = input.outputFormat(forBus: 0)
                 guard let outFmt = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 8000, channels: 1, interleaved: true),
                       let conv = AVAudioConverter(from: inFmt, to: outFmt) else { await a.voiceEnd(id); return }
-                input.installTap(onBus: 0, bufferSize: 2048, format: inFmt) { buf, _ in
-                    let cap = AVAudioFrameCount(Double(buf.frameLength) * 8000 / inFmt.sampleRate) + 16
+                let buf = VoiceBuffer()
+                input.installTap(onBus: 0, bufferSize: 2048, format: inFmt) { pcm, _ in
+                    let cap = AVAudioFrameCount(Double(pcm.frameLength) * 8000 / inFmt.sampleRate) + 16
                     guard let out = AVAudioPCMBuffer(pcmFormat: outFmt, frameCapacity: cap) else { return }
                     var fed = false
                     conv.convert(to: out, error: nil) { _, status in
                         if fed { status.pointee = .noDataNow; return nil }
-                        fed = true; status.pointee = .haveData; return buf
+                        fed = true; status.pointee = .haveData; return pcm
                     }
                     guard let ch = out.int16ChannelData, out.frameLength > 0 else { return }
-                    let data = Data(bytes: ch[0], count: Int(out.frameLength) * 2)
-                    Task { await a.voiceChunk(id, data) }
+                    let n = Int(out.frameLength)
+                    var sum: Double = 0
+                    for i in 0..<n { let v = Double(ch[0][i]); sum += v * v }
+                    let chunk = buf.add(Data(bytes: ch[0], count: n * 2), rms: (sum / Double(n)).squareRoot())
+                    if let chunk { Task { await a.voiceChunk(id, chunk) } }
                 }
                 try engine.start()
-                voiceSession = (engine, id, a)
+                voiceSession = (engine, id, a, buf)
+                listening = true
+                a.onVoiceDone = { [weak self] in Task { @MainActor in if self?.voiceSession?.id == id { self?.voiceStop() } } }
                 say("Listening…", .voice)
-                // Never more than 15 seconds.
-                try? await Task.sleep(nanoseconds: 15_000_000_000)
-                if voiceSession?.id == id { voiceStop() }
+                let start = Date()
+                while voiceSession?.id == id {
+                    try? await Task.sleep(nanoseconds: 200_000_000)
+                    let quiet = buf.heard && Date().timeIntervalSince(buf.lastLoud) > 2.5
+                    if quiet || Date().timeIntervalSince(start) > 12 { voiceStop(); break }
+                }
             } catch { await a.voiceEnd(id) }
         }
     }
@@ -544,10 +663,16 @@ extension RemoteModel {
     func voiceStop() {
         guard let v = voiceSession else { return }
         voiceSession = nil
+        listening = false
         v.engine.inputNode.removeTap(onBus: 0)
         v.engine.stop()
+        v.adapter.onVoiceDone = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        Task { await v.adapter.voiceEnd(v.id) }
+        let rest = v.buffer.flush()
+        Task {
+            if let rest { await v.adapter.voiceChunk(v.id, rest) }
+            await v.adapter.voiceEnd(v.id)
+        }
     }
 
     func loadInputs() {
@@ -605,7 +730,9 @@ extension RemoteModel {
         tvVolume = TvVolume(level: 24, max: 100, muted: false)
         nowOn = live ? NowOn(name: "Live TV", live: true) : NowOn(name: "Netflix", live: false, positionMs: 1_204_000, durationMs: 2_710_000)
         inputs = [TvInput(id: "h1", name: "HDMI 1 · PlayStation"), TvInput(id: "h2", name: "HDMI 2"), TvInput(id: "tv", name: "Antenna")]
-        shortcuts = [("netflix", "Netflix"), ("youtube", "YouTube"), ("prime", "Prime Video"), ("hotstar", "JioHotstar")].map {
+        shortcuts = [("netflix", "Netflix"), ("youtube", "YouTube"), ("prime", "Prime Video"), ("hotstar", "JioHotstar"),
+                     ("disney", "Disney+"), ("sonyliv", "SonyLIV"), ("zee5", "ZEE5"), ("spotify", "Spotify"),
+                     ("plex", "Plex"), ("hulu", "Hulu"), ("peacock", "Peacock")].map {
             Shortcut(id: "s-\($0.0)", kind: .app, name: $0.1, value: $0.0, pinned: true)
         }
         tvApps = [
@@ -616,3 +743,110 @@ extension RemoteModel {
     }
 }
 #endif
+
+
+/** Mic audio collected into the 20 KB pieces the TV wants (thread-safe: filled from the audio thread). */
+final class VoiceBuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+    private(set) var heard = false
+    private(set) var lastLoud = Date()
+
+    /** Adds audio; returns a full 20 KB piece when one is ready. */
+    func add(_ d: Data, rms: Double) -> Data? {
+        lock.lock(); defer { lock.unlock() }
+        if rms > 700 { heard = true; lastLoud = Date() }
+        data.append(d)
+        guard data.count >= AndroidTvAdapter.voiceChunkSize else { return nil }
+        let piece = data.prefix(AndroidTvAdapter.voiceChunkSize)
+        data.removeFirst(AndroidTvAdapter.voiceChunkSize)
+        return Data(piece)
+    }
+
+    /** What's left (padded when sent). */
+    func flush() -> Data? {
+        lock.lock(); defer { lock.unlock() }
+        defer { data = Data() }
+        return data.isEmpty ? nil : data
+    }
+}
+
+/* ------------------------------------------- what works right now */
+
+extension RemoteModel {
+    enum Screen { case home, app, live, unknown }
+
+    /** What the TV shows: its home screen, an app, or live TV (from what it reports). */
+    var screen: Screen {
+        guard link == .ready, let n = nowOn else { return .unknown }
+        if n.live { return .live }
+        if n.name.isEmpty { return .unknown }
+        let p = n.name.lowercased()
+        if n.name == "Home" || p.contains("launcher") { return .home }
+        return .app
+    }
+
+    /** Why [k] isn't available right now, in a few words for a toast; nil when it is. */
+    func whyNot(_ k: RemoteKey) -> String? {
+        guard let d = active else { return "Choose a TV first" }
+        if link == .connecting { return "Connecting to \(d.name)…" }
+        if link != .ready { return "\(d.name) isn't connected. Tap the TV at the top to connect." }
+        let playback: Set<RemoteKey> = [.playPause, .rewind, .fastForward]
+        let live: Set<RemoteKey> = [.chUp, .chDown, .guide, .chList]
+        let colours: Set<RemoteKey> = [.red, .green, .yellow, .blue]
+        switch screen {
+        case .home:
+            if playback.contains(k) { return "Playback keys work while something's playing" }
+            if k == .subtitles || k == .audio { return "\(k.word) works while something's playing" }
+            if k == .info { return "Info shows programme details on live TV" }
+            if live.contains(k) { return "Channel keys work on live TV" }
+            if colours.contains(k) { return "Colour keys work on live TV" }
+        case .app:
+            if live.contains(k) { return "Channel keys work on live TV" }
+            if colours.contains(k) { return "Colour keys work on live TV" }
+            if k == .info && d.brand == .ANDROID_TV { return "Info shows programme details on live TV" }
+        default: break
+        }
+        return nil
+    }
+
+    func can(_ k: RemoteKey) -> Bool { whyNot(k) == nil }
+
+    /** A dimmed key was tapped: say why. */
+    func explain(_ k: RemoteKey) { if let w = whyNot(k) { feel.fire(.error); say(w) } }
+
+    /** What's on the TV, for the line at the foot of the remote: "YouTube · 1:23 / 4:56". */
+    var nowLine: String? {
+        guard link == .ready, let n = nowOn, !n.name.isEmpty, n.name != "Home" else { return nil }
+        var name = n.name
+        if name.contains("."), !name.contains(" ") {
+            guard let known = Catalog.apps.first(where: { $0.ids.values.contains(name) })?.name ?? tvApps.first(where: { $0.id == name })?.name else {
+                return name.lowercased().contains("launcher") ? nil : name
+            }
+            name = known
+        }
+        func t(_ ms: Int) -> String { let s = ms / 1000; return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60) }
+        if let p = n.positionMs, let d = n.durationMs, d > 0 { return "\(name) · \(t(p)) / \(t(d))" }
+        return name
+    }
+
+    /* ------------------------------------------------ backup, restore */
+
+    /** Settings, quick access and channels as JSON (no TVs: they pair again on a new phone). */
+    func exportProfile() -> Data {
+        struct Profile: Encodable { let version = 1; let settings: Settings; let shortcuts: [Shortcut] }
+        let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return (try? enc.encode(Profile(settings: settings, shortcuts: shortcuts))) ?? Data()
+    }
+
+    func importProfile(_ data: Data) {
+        struct Profile: Decodable { let settings: Settings?; let shortcuts: [Shortcut]? }
+        guard let p = try? JSONDecoder().decode(Profile.self, from: data), p.settings != nil || p.shortcuts != nil else { say("That isn't a Mini Remote backup"); return }
+        if let s = p.settings { update(s) }
+        if let l = p.shortcuts { replaceShortcuts(l) }
+        feel.fire(.success); say("Backup restored")
+    }
+
+    /** Opens the apps screen in adding mode: tapping an app adds it; is quick access full? */
+    var quickFull: Bool { shortcuts.filter(\.pinned).count >= maxPinned }
+}

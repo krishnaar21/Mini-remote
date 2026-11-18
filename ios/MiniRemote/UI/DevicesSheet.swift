@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 enum Route: Hashable { case device(String), local, scan, manual, pair(String), settings, privacy, licenses, gestures }
 
@@ -266,137 +267,289 @@ private struct PairPage: View {
     }
 }
 
-/** Settings, grouped into cards. */
+/** A settings icon on its own rounded square (one calm colour for all). */
+struct IconTile: View {
+    let symbol: String
+    var body: some View {
+        Image(systemName: symbol).font(.system(size: 15, weight: .medium)).foregroundStyle(T.ink)
+            .frame(width: 30, height: 30).background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(T.highest))
+    }
+}
+
+/**
+ * Settings in the iPhone's own style: a profile row, then grouped rows with an icon, what's set
+ * on the right and a chevron. Rows with more to them open a sheet; switches flip in place.
+ */
 private struct SettingsPage: View {
     @ObservedObject var vm: RemoteModel
     let accent: Color
     @Binding var path: [Route]
+    @State private var open: String?
 
     private func set(_ change: (inout Settings) -> Void) { var s = vm.settings; change(&s); vm.update(s) }
     private func b(_ get: @escaping (Settings) -> Bool, _ put: @escaping (inout Settings, Bool) -> Void) -> Binding<Bool> {
         Binding(get: { get(vm.settings) }, set: { v in set { put(&$0, v) } })
     }
 
+    private func row(_ sym: String, _ title: String, _ value: String? = nil, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                IconTile(symbol: sym)
+                Text(title).foregroundStyle(T.ink)
+                Spacer()
+                if let value { Text(value).foregroundStyle(T.sub).lineLimit(1) }
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(T.sub)
+            }
+        }
+    }
+
+    private func toggle(_ sym: String, _ title: String, _ sub: String, _ on: Binding<Bool>) -> some View {
+        Toggle(isOn: on) {
+            HStack(spacing: 14) {
+                IconTile(symbol: sym)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title).foregroundStyle(T.ink)
+                    Text(sub).font(.system(size: 12.5)).foregroundStyle(T.sub)
+                }
+            }
+        }
+        .tint(accent)
+    }
+
     var body: some View {
-        Page {
-            SectionTitle(text: "Remote")
-            Card {
-                HStack {
-                    Text("Layout").foregroundStyle(T.ink)
-                    Spacer()
-                    Picker("Layout", selection: Binding(get: { vm.settings.layout }, set: { v in set { $0.layout = v } })) {
-                        Text("Black").tag("strip"); Text("Cards").tag("cards")
-                    }.pickerStyle(.segmented).frame(width: 190)
-                }
-                .padding(.vertical, 14)
-                RowDivider()
-                HStack {
-                    Text("Control").foregroundStyle(T.ink)
-                    Spacer()
-                    Picker("Control", selection: Binding(get: { vm.settings.controlStyle }, set: { v in set { $0.controlStyle = v } })) {
-                        Text("Dial").tag("dial"); Text("Trackpad").tag("trackpad")
-                    }.pickerStyle(.segmented).frame(width: 190)
-                }
-                .padding(.vertical, 14)
-                RowDivider()
-                ToggleRow(title: "Auto keyboard", sub: "Opens when the TV asks for text", on: b({ $0.autoKeyboard }, { $0.autoKeyboard = $1 }), accent: accent)
-            }
-            Text(vm.settings.layout == "cards" ? "Swipe the dots for the volume, channel and number cards." : "Black screen, volume ring, two rows of keys.")
-                .font(.system(size: 12.5)).foregroundStyle(T.muted).padding(.top, 8)
-            Card {
-                Button { path.append(.gestures) } label: {
-                    HStack {
+        let s = vm.settings
+        let apps = vm.shortcuts.filter(\.pinned).count
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+        List {
+            Section {
+                Button { open = "profile" } label: {
+                    HStack(spacing: 14) {
+                        Text(initialsOf(s.profileName)).font(.system(size: 19, weight: .semibold)).foregroundStyle(.white)
+                            .frame(width: 52, height: 52).background(Circle().fill(accent))
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Gestures").foregroundStyle(T.ink)
-                            Text("Swipes and taps, with demos").font(.system(size: 12.5)).foregroundStyle(T.muted)
+                            Text(s.profileName.isEmpty ? "Add your name" : s.profileName).font(.system(size: 17, weight: .medium)).foregroundStyle(s.profileName.isEmpty ? T.sub : T.ink)
+                            Text(s.profileEmail.isEmpty ? "\(vm.devices.count) TV\(vm.devices.count == 1 ? "" : "s") · \(apps) app\(apps == 1 ? "" : "s")" : s.profileEmail)
+                                .font(.system(size: 13)).foregroundStyle(T.sub)
                         }
-                        Spacer(); Image(systemName: "chevron.right").foregroundStyle(Color(hex: 0xA8A8AD))
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(T.sub)
                     }
-                    .padding(.vertical, 14)
+                    .padding(.vertical, 4)
                 }
             }
-            .padding(.top, 12)
-
-            SectionTitle(text: "Accent colour")
-            Card {
-                HStack {
-                    ForEach(0..<ACCENTS.count, id: \.self) { i in
-                        let name = ACCENTS[i].0, hex = ACCENTS[i].1
-                        let sel = vm.settings.accentHex.caseInsensitiveCompare(hex) == .orderedSame
-                        Circle().fill(Color(hexString: hex)).frame(width: 40, height: 40)
-                            .overlay(Circle().stroke(Color.white, lineWidth: sel ? 2 : 0).padding(-5))
-                            .frame(maxWidth: .infinity)
-                            .onTapGesture { set { $0.accentHex = hex } }
-                            .accessibilityLabel(name).accessibilityAddTraits(sel ? [.isSelected, .isButton] : .isButton)
-                    }
-                }
-                .padding(.vertical, 18)
+            Section {
+                row(s.controlStyle == "trackpad" ? "hand.draw" : "circle.circle", "Control", s.controlStyle == "trackpad" ? "Trackpad" : "Dial") { open = "control" }
+                row("square.grid.2x2", "Quick access", s.appsIn == "more" ? "More sheet" : "Home page") { open = "apps" }
+                row("hand.tap", "Gestures") { path.append(.gestures) }
             }
-
-            SectionTitle(text: "Haptics")
-            Card {
-                ToggleRow(title: "Haptics", sub: "Feedback on every press and scrub", on: b({ $0.haptics }, { $0.haptics = $1 }), accent: accent)
-                RowDivider()
-                segRow("Strength", HAPTIC_STRENGTHS, vm.settings.hapticStrength) { v in set { $0.hapticStrength = v } }
+            Section {
+                row("tv", "TV controls", "\([s.autoKeyboard, s.autoClose].filter { $0 }.count) of 2 on") { open = "tv" }
+                row("speaker.wave.2", "Touch & sound", [s.haptics ? "Haptics" : nil, s.sound ? "Sound" : nil].compactMap { $0 }.joined(separator: ", ").isEmpty ? "Off" : [s.haptics ? "Haptics" : nil, s.sound ? "Sound" : nil].compactMap { $0 }.joined(separator: ", ")) { open = "feel" }
             }
-            SectionTitle(text: "Sound")
-            Card {
-                ToggleRow(title: "Sound", sub: "Soft click with every press and scrub", on: b({ $0.sound }, { $0.sound = $1 }), accent: accent)
-                RowDivider()
-                segRow("Sound level", SOUND_LEVELS, vm.settings.soundLevel) { v in set { $0.soundLevel = v }; vm.feel.fire(.press) }
+            Section {
+                row("paintpalette", "Appearance", "\(Palettes.of(s.theme).label) · \(ACCENTS.first { $0.1.caseInsensitiveCompare(s.accentHex) == .orderedSame }?.0 ?? "Custom")") { open = "look" }
+                toggle("sun.max", "Keep screen on", "While the remote is open", b({ $0.keepAwake }, { $0.keepAwake = $1 }))
             }
-            SectionTitle(text: "Scrolling")
-            Card {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack { Text("Scrub distance").foregroundStyle(T.ink); Spacer(); Text("\(Int(vm.settings.scrubStep)) pt").foregroundStyle(accent) }
-                    Text("Shorter = faster scrolling").font(.system(size: 12.5)).foregroundStyle(T.muted)
-                    Slider(value: Binding(get: { vm.settings.scrubStep }, set: { v in set { $0.scrubStep = v.rounded() } }), in: 24...60, step: 2).tint(accent)
-                    HStack { Text("Fast"); Spacer(); Text("Slow") }.font(.system(size: 12)).foregroundStyle(T.muted)
-                }
-                .padding(.vertical, 14)
-            }
-            SectionTitle(text: "Screen")
-            Card { ToggleRow(title: "Keep screen on", sub: "While the remote is open", on: b({ $0.keepAwake }, { $0.keepAwake = $1 }), accent: accent) }
-
-            SectionTitle(text: "Privacy & data")
-            Card {
-                Button { path.append(.privacy) } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Privacy & data").foregroundStyle(T.ink)
-                            Text("What's stored, what goes online, erase data").font(.system(size: 12.5)).foregroundStyle(T.muted)
-                        }
-                        Spacer(); Image(systemName: "chevron.right").foregroundStyle(Color(hex: 0xA8A8AD))
-                    }
-                    .padding(.vertical, 14)
-                }
-            }
-            SectionTitle(text: "About")
-            Card {
-                Text("Mini Remote needs no account and has no ads, analytics or tracking.").font(.system(size: 13)).foregroundStyle(T.muted).padding(.top, 16)
-                Text("Roku, Samsung, LG, webOS, Android TV, Google TV and the app names shown are trademarks of their owners. Mini Remote is an independent app, not affiliated with or endorsed by them; it uses the TVs' remote-control interfaces on your own network.")
-                    .font(.system(size: 12)).foregroundStyle(T.muted).padding(.top, 10)
-                Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")")
-                    .font(.system(size: 13)).foregroundStyle(T.ink).padding(.top, 10).padding(.bottom, 6)
-                RowDivider()
-                Button { path.append(.licenses) } label: {
-                    HStack { Text("Open-source licences").foregroundStyle(T.ink); Spacer(); Image(systemName: "chevron.right").foregroundStyle(Color(hex: 0xA8A8AD)) }
-                        .padding(.vertical, 14)
-                }
+            Section {
+                row("externaldrive", "Backup & restore") { open = "backup" }
+                row("hand.raised", "Privacy & data") { path.append(.privacy) }
+                row("info.circle", "About", version) { open = "about" }
             }
         }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(T.sheet)
         .navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
+        .sheet(item: Binding(get: { open.map { Opened(id: $0) } }, set: { open = $0?.id })) { o in
+            SettingsSheets(vm: vm, accent: accent, which: o.id, openLicenses: { open = nil; path.append(.licenses) })
+        }
+    }
+    private struct Opened: Identifiable { let id: String }
+}
+
+func initialsOf(_ name: String) -> String {
+    let parts = name.split(separator: " ").prefix(2)
+    let s = parts.compactMap { $0.first }.map(String.init).joined().uppercased()
+    return s.isEmpty ? "?" : s
+}
+
+/** The sheets behind the settings rows: each a short list with its title on the left. */
+private struct SettingsSheets: View {
+    @ObservedObject var vm: RemoteModel
+    let accent: Color
+    let which: String
+    let openLicenses: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var email = ""
+    @State private var exporting = false
+    @State private var importing = false
+
+    private func set(_ change: (inout Settings) -> Void) { var s = vm.settings; change(&s); vm.update(s) }
+
+    private func choice(_ sym: String, _ title: String, _ sub: String, _ sel: Bool, _ pick: @escaping () -> Void) -> some View {
+        Button(action: pick) {
+            HStack(spacing: 14) {
+                Image(systemName: sym).font(.system(size: 15, weight: .medium)).foregroundStyle(.white)
+                    .frame(width: 30, height: 30).background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(accent))
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title).foregroundStyle(T.ink)
+                    Text(sub).font(.system(size: 12.5)).foregroundStyle(T.sub)
+                }
+                Spacer()
+                if sel { Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(accent) }
+            }
+        }
     }
 
-    private func segRow(_ title: String, _ opts: [(Double, String)], _ value: Double, _ pick: @escaping (Double) -> Void) -> some View {
-        HStack {
-            Text(title).foregroundStyle(T.ink)
-            Spacer()
-            Picker(title, selection: Binding(get: { value }, set: pick)) { ForEach(0..<opts.count, id: \.self) { i in Text(opts[i].1).tag(opts[i].0) } }
-                .pickerStyle(.segmented).frame(width: 210)
-        }
-        .padding(.vertical, 14)
+    private func header(_ title: String, _ sub: String) -> some View {
+        SheetTitle(title: title, sub: sub).listRowInsets(EdgeInsets(top: 8, leading: 4, bottom: 8, trailing: 4)).listRowBackground(Color.clear)
     }
+
+    var body: some View {
+        let s = vm.settings
+        List {
+            switch which {
+            case "profile":
+                Section { header("Profile", "Stays on this iPhone and in backups.") }
+                Section {
+                    TextField("Your name", text: $name).textContentType(.name).foregroundStyle(T.ink)
+                    TextField("Email (optional)", text: $email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().foregroundStyle(T.ink)
+                }
+                Section {
+                    Button("Save") {
+                        set { $0.profileName = String(name.trimmingCharacters(in: .whitespaces).prefix(30)); $0.profileEmail = email.trimmingCharacters(in: .whitespaces) }
+                        vm.say("Profile saved"); dismiss()
+                    }
+                    .disabled(!email.isEmpty && !(email.contains("@") && email.contains(".")))
+                }
+            case "control":
+                Section { header("Control", "What the middle of the remote is.") }
+                Section {
+                    choice("circle.circle", "Dial", "Ring with arrows, OK in the middle; turn the ring for volume", s.controlStyle == "dial") { set { $0.controlStyle = "dial" } }
+                    choice("hand.draw", "Trackpad", "Swipe to move, tap to select", s.controlStyle == "trackpad") { set { $0.controlStyle = "trackpad" } }
+                }
+            case "apps":
+                Section { header("Quick access", "Where your apps sit.") }
+                Section {
+                    choice("house", "Home page", "Two pages of circles: swipe across", s.appsIn != "more") { set { $0.appsIn = "home" } }
+                    choice("ellipsis", "More sheet", "At the top of More", s.appsIn == "more") { set { $0.appsIn = "more" } }
+                }
+            case "tv":
+                Section { header("TV controls", "How the iPhone works with the TV.") }
+                Section {
+                    Toggle(isOn: Binding(get: { vm.settings.autoKeyboard }, set: { v in set { $0.autoKeyboard = v } })) {
+                        VStack(alignment: .leading, spacing: 0) { Text("Auto keyboard").foregroundStyle(T.ink); Text("When the TV asks for text").font(.system(size: 12.5)).foregroundStyle(T.sub) }
+                    }.tint(accent)
+                    Toggle(isOn: Binding(get: { vm.settings.autoClose }, set: { v in set { $0.autoClose = v } })) {
+                        VStack(alignment: .leading, spacing: 0) { Text("Close idle TV menus").foregroundStyle(T.ink); Text("Back after 10 s without use").font(.system(size: 12.5)).foregroundStyle(T.sub) }
+                    }.tint(accent)
+                }
+            case "feel":
+                Section { header("Touch & sound", "How presses feel and sound.") }
+                Section {
+                    Toggle("Haptics", isOn: Binding(get: { vm.settings.haptics }, set: { v in set { $0.haptics = v } })).tint(accent)
+                    if s.haptics {
+                        Picker("Strength", selection: Binding(get: { vm.settings.hapticStrength }, set: { v in set { $0.hapticStrength = v } })) {
+                            ForEach(0..<HAPTIC_STRENGTHS.count, id: \.self) { i in Text(HAPTIC_STRENGTHS[i].1).tag(HAPTIC_STRENGTHS[i].0) }
+                        }.pickerStyle(.segmented)
+                    }
+                    Toggle("Sound", isOn: Binding(get: { vm.settings.sound }, set: { v in set { $0.sound = v } })).tint(accent)
+                    if s.sound {
+                        Picker("Level", selection: Binding(get: { vm.settings.soundLevel }, set: { v in set { $0.soundLevel = v }; vm.feel.fire(.press) })) {
+                            ForEach(0..<SOUND_LEVELS.count, id: \.self) { i in Text(SOUND_LEVELS[i].1).tag(SOUND_LEVELS[i].0) }
+                        }.pickerStyle(.segmented)
+                    }
+                }
+                Section {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack { Text("Scrub step").foregroundStyle(T.ink); Spacer(); Text("\(Int(s.scrubStep)) pt").foregroundStyle(accent) }
+                        Text("Distance per step when you swipe. Shorter is faster.").font(.system(size: 12.5)).foregroundStyle(T.sub)
+                        Slider(value: Binding(get: { vm.settings.scrubStep }, set: { v in set { $0.scrubStep = v.rounded() } }), in: 24...60, step: 2).tint(accent)
+                    }
+                }
+            case "look":
+                Section { header("Appearance", "Theme and colour.") }
+                Section("Theme") {
+                    HStack(spacing: 10) {
+                        ForEach(Palettes.all, id: \.key) { p in
+                            let sel = s.theme == p.key
+                            Button { set { $0.theme = p.key } } label: {
+                                VStack(spacing: 8) {
+                                    VStack(spacing: 6) {
+                                        Circle().fill(Color(hex: p.high)).frame(width: 30, height: 30).overlay(Circle().fill(Color(hex: p.highest)).frame(width: 12, height: 12))
+                                        HStack(spacing: 4) { ForEach(0..<3, id: \.self) { _ in Circle().fill(Color(hex: p.high)).frame(width: 8, height: 8) } }
+                                        Capsule().fill(accent).frame(width: 20, height: 3)
+                                    }
+                                    .frame(maxWidth: .infinity).frame(height: 80)
+                                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(hex: p.screen)))
+                                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(sel ? accent : Color(hex: p.line), lineWidth: sel ? 2 : 1))
+                                    Text(p.label).font(.system(size: 12.5)).foregroundStyle(sel ? T.ink : T.sub)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("\(p.label) theme").accessibilityAddTraits(sel ? .isSelected : [])
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+                Section("Accent colour") {
+                    HStack {
+                        ForEach(0..<ACCENTS.count, id: \.self) { i in
+                            let hex = ACCENTS[i].1
+                            let sel = s.accentHex.caseInsensitiveCompare(hex) == .orderedSame
+                            Circle().fill(Color(hexString: hex)).frame(width: 32, height: 32)
+                                .overlay(Circle().stroke(T.ink, lineWidth: sel ? 2 : 0).padding(-5))
+                                .frame(maxWidth: .infinity)
+                                .onTapGesture { set { $0.accentHex = hex } }
+                                .accessibilityLabel(ACCENTS[i].0).accessibilityAddTraits(sel ? [.isSelected, .isButton] : .isButton)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                }
+            case "backup":
+                Section { header("Backup & restore", "Settings, quick access and channels in one file. TVs pair again on a new iPhone.") }
+                Section {
+                    Button { exporting = true } label: { Label("Back up", systemImage: "square.and.arrow.up") }
+                    Button { importing = true } label: { Label("Restore", systemImage: "square.and.arrow.down") }
+                }
+            default:
+                Section { header("Mini Remote", "Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")") }
+                Section {
+                    Text("No account, no ads, no analytics or tracking.").foregroundStyle(T.ink)
+                    Text("Roku, Samsung, LG, webOS, Android TV, Google TV and the app names and logos shown are trademarks of their owners. Mini Remote is an independent app, not affiliated with or endorsed by them; it uses the TVs' remote-control interfaces on your own network.")
+                        .font(.system(size: 12.5)).foregroundStyle(T.sub)
+                    Button { openLicenses() } label: { Label("Open-source licences", systemImage: "doc.text") }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(T.sheet)
+        .tint(T.ink)
+        .presentationDetents(which == "look" || which == "feel" ? [.large] : [.medium, .large])
+        .presentationDragIndicator(.visible)
+        .onAppear { name = vm.settings.profileName; email = vm.settings.profileEmail }
+        .fileExporter(isPresented: $exporting, document: ProfileFile(data: vm.exportProfile()), contentType: .json,
+                      defaultFilename: "Mini Remote\(vm.settings.profileName.isEmpty ? "" : " - " + vm.settings.profileName)") { r in
+            if case .success = r { vm.say("Backup saved") }
+        }
+        .fileImporter(isPresented: $importing, allowedContentTypes: [.json, .plainText]) { r in
+            guard case .success(let url) = r else { return }
+            let ok = url.startAccessingSecurityScopedResource()
+            defer { if ok { url.stopAccessingSecurityScopedResource() } }
+            if let d = try? Data(contentsOf: url), d.count < 400_000 { vm.importProfile(d) } else { vm.say("Couldn't read that file") }
+        }
+    }
+}
+
+/** A backup as a document for the Files app. */
+struct ProfileFile: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+    let data: Data
+    init(data: Data) { self.data = data }
+    init(configuration: ReadConfiguration) throws { data = configuration.file.regularFileContents ?? Data() }
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
 }
 
 private struct PrivacyPage: View {

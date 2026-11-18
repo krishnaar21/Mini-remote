@@ -298,6 +298,12 @@ final class AndroidTvAdapter: RemoteAdapter {
     private var fieldCounter: UInt64 = 0
     private var currentApp: String?
     private var voiceWait: Once<UInt64>?
+    /** The TV heard the end of speech (it sends a voice payload back). */
+    var onVoiceDone: (() -> Void)?
+    /** Counters came from a RemoteImeBatchEdit (what androidtvremote2 uses), and when a text box last spoke up. */
+    private var fromBatch = false
+    private var fieldAt: Date = .distantPast
+    private var ourEditAt: Date = .distantPast
 
     init(host: String, pin: String?, onPin: @escaping (String) -> Void, askCode: @escaping (String?) async -> String?) {
         self.host = host; self.pin = pin; self.onPin = onPin; self.askCode = askCode
@@ -399,17 +405,30 @@ final class AndroidTvAdapter: RemoteAdapter {
                         let v = long(ping, 1) ?? 0
                         try await l.send(Pb.make { p in p.msg(9) { r in r.int(1, v) } })
                     } else if let k = sub(m, 20) {
-                        // RemoteImeKeyInject: the app in front (app_info.app_package).
-                        if let app = sub(k, 1).flatMap({ text($0, 12) }), !app.isEmpty { self?.currentApp = app }
-                        if let f = sub(k, 2).flatMap({ long($0, 1) }) { self?.fieldCounter = f }
+                        // RemoteImeKeyInject: the app in front (app_info.app_package); counters only until a batch edit gives them.
+                        if let info = sub(k, 1) {
+                            if let app = text(info, 12), !app.isEmpty { self?.currentApp = app }
+                            if self?.fromBatch == false, let c = long(info, 1) { self?.imeCounter = c }
+                        }
+                        if self?.fromBatch == false, let f = sub(k, 2).flatMap({ long($0, 1) }) { self?.fieldCounter = f }
                     } else if let b = sub(m, 21) {
+                        // RemoteImeBatchEdit: a text box is active, with the counters our edits must carry.
                         if let c = long(b, 1) { self?.imeCounter = c }
                         if let f = long(b, 2) { self?.fieldCounter = f }
+                        self?.fromBatch = true
+                        let now = Date()
+                        let fresh = now.timeIntervalSince(self?.fieldAt ?? now) > 4 && now.timeIntervalSince(self?.ourEditAt ?? now) > 4
+                        self?.fieldAt = now
+                        if fresh { self?.onKeyboard?() }
                     } else if let r = sub(m, 22) {
                         if let f = sub(r, 2).flatMap({ long($0, 1) }) { self?.fieldCounter = f }
-                        self?.onKeyboard?()
+                        let fresh = Date().timeIntervalSince(self?.fieldAt ?? Date()) > 4
+                        self?.fieldAt = Date()
+                        if fresh { self?.onKeyboard?() }
                     } else if let v = sub(m, 30) {
                         self?.voiceWait?.succeed(long(v, 1) ?? 0)
+                    } else if sub(m, 31) != nil {
+                        self?.onVoiceDone?()
                     } else if let v = sub(m, 50) {
                         // RemoteSetVolumeLevel: max (6), level (7), muted (8), sent whenever it changes.
                         let mx = Int(long(v, 6) ?? 0)
@@ -467,13 +486,23 @@ final class AndroidTvAdapter: RemoteAdapter {
         for c in codes { try await key(c) }
     }
 
-    func backspace() async throws { try await key(67) }
+    func backspace() async throws { ourEditAt = Date(); try await key(67) }
+    /** Enter: the TV's keyboard runs the search. */
+    func submit() async throws { ourEditAt = Date(); try await key(66) }
+    /** To the end of the box (Move end), then delete everything. */
+    func clearBox(_ known: Int) async throws {
+        ourEditAt = Date()
+        try await key(123)
+        for _ in 0..<(known + 40) { try await key(67) }
+    }
 
-    var replacesText: Bool { true }
+    /** New text is inserted at the cursor (as androidtvremote2's send_text); deletions are Delete keys. */
+    var replacesText: Bool { false }
 
-    /** Puts the whole text in the TV's focused box through its keyboard link (any characters). */
+    /** Inserts text in the TV's focused box through its keyboard link (any characters). */
     func setText(_ text: String) async throws {
         guard let l = link else { throw UserFacing("Not connected") }
+        ourEditAt = Date()
         let end = UInt64(max(0, text.count - 1))
         let ime = imeCounter, field = fieldCounter
         try await l.send(Pb.make { p in p.msg(21) { b in
@@ -503,7 +532,14 @@ final class AndroidTvAdapter: RemoteAdapter {
         try? await l.send(Pb.make { p in p.msg(30) { v in v.int(1, id) } })
         return id
     }
-    func voiceChunk(_ id: UInt64, _ pcm: Data) async { try? await link?.send(Pb.make { p in p.msg(31) { v in v.int(1, id); v.bytes(2, pcm) } }) }
+    /** Audio goes in 20 KB messages (TVs return nothing for small ones); a last short one is padded to 8 KB. */
+    static let voiceChunkSize = 20 * 1024
+    static let voiceMin = 8 * 1024
+    func voiceChunk(_ id: UInt64, _ pcm: Data) async {
+        var d = pcm
+        if d.count < Self.voiceMin { d.append(Data(count: Self.voiceMin - d.count)) }
+        try? await link?.send(Pb.make { p in p.msg(31) { v in v.int(1, id); v.bytes(2, d) } })
+    }
     func voiceEnd(_ id: UInt64) async { try? await link?.send(Pb.make { p in p.msg(32) { v in v.int(1, id) } }) }
 
     func close() {

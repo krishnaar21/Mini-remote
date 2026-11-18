@@ -4,32 +4,35 @@ enum Deck { case dial, trackpad, numpad }
 
 /** Width of the volume ring around the dial. */
 let RING_BAND: CGFloat = 26
+/** The rows of circles: 4 × 68 + 3 × 14. */
+let KEY: CGFloat = 68
+let KEYROW_W: CGFloat = 4 * 68 + 3 * 14
 
 /**
- * The Remote page, after the Apple TV Remote, in Liquid Glass: mute · TV · power on top, the
- * dial (with its volume ring) or trackpad in the middle, keys below. Two layouts, picked in
- * Settings: Black (ring, two rows of keys) and Cards (swipe between the pad, volume / channel
- * and numbers). OK: tap = OK, double tap = mute, hold = voice. Two fingers slide for volume and
- * channels; a two-finger double tap swaps dial and trackpad.
+ * The remote, in Liquid Glass: the TV (and what's on it) and power on top; the dial with its
+ * volume ring, or the trackpad, in the middle; pages of circles below (swipe across: the main
+ * keys, more keys, then quick access apps). OK: tap = OK, double tap = mute, hold = voice.
  */
 struct HomeView: View {
     @ObservedObject var vm: RemoteModel
     let accent: Color
     @Binding var numpad: Bool
+    @Binding var keyPage: Int?
     let openDevices: () -> Void
     let openKeys: () -> Void
     var openMore: () -> Void = {}
+    var openApps: (Bool) -> Void = { _ in }
+    var openSleep: () -> Void = {}
 
     @State private var pad = PadState()
     @State private var askPower = false
     @State private var pendingOk: Task<Void, Never>?
     @State private var lastTwoTap: TimeInterval = 0
-    @State private var card = 0
 
-    private var cards: Bool { vm.settings.layout == "cards" }
     private var style: Deck { vm.settings.controlStyle == "trackpad" ? .trackpad : .dial }
     private var deck: Deck { numpad ? .numpad : style }
     private var offline: Bool { vm.active == nil || vm.link == .error }
+    private var connected: Bool { vm.link == .ready }
     private var volText: String? { vm.tvVolume.map { $0.muted ? "Muted" : "\($0.level)" } }
 
     private func okTap() {
@@ -65,22 +68,20 @@ struct HomeView: View {
                 // Landscape (and iPad): the pad on the left, keys on the right.
                 HStack(spacing: 0) {
                     VStack(spacing: 0) {
-                        topBar.padding(.horizontal, 26).padding(.top, 12)
-                        NowPlayingLine(vm: vm)
-                        if cards { cardsMiddle } else { blackMiddle }
+                        topBar.padding(.horizontal, 20).padding(.top, 12)
+                        middle
                     }
                     .frame(maxWidth: .infinity)
-                    Group { if cards { FourKeys(vm: vm, openKeys: openKeys) } else { KeyRows(vm: vm, numpad: $numpad, openKeys: openKeys, openMore: openMore) } }
+                    KeyPages(vm: vm, accent: accent, numpad: $numpad, page: $keyPage, openKeys: openKeys, openMore: openMore, openApps: openApps, openSleep: openSleep)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .padding(.bottom, 40)
+                .padding(.bottom, 44)
             } else {
                 VStack(spacing: 0) {
-                    topBar.padding(.horizontal, 26).padding(.top, 20)
-                    NowPlayingLine(vm: vm)
-                    if cards { cardsMiddle; FourKeys(vm: vm, openKeys: openKeys).padding(.top, 6) }
-                    else { blackMiddle; KeyRows(vm: vm, numpad: $numpad, openKeys: openKeys, openMore: openMore).padding(.top, 10).padding(.bottom, 20) }
-                    Spacer().frame(height: 62)
+                    topBar.padding(.horizontal, 16).padding(.top, 30)
+                    middle.padding(.top, 14)
+                    KeyPages(vm: vm, accent: accent, numpad: $numpad, page: $keyPage, openKeys: openKeys, openMore: openMore, openApps: openApps, openSleep: openSleep)
+                        .padding(.top, 10).padding(.bottom, 56)
                 }
                 .frame(maxWidth: 480)
                 .frame(maxWidth: .infinity)
@@ -97,26 +98,37 @@ struct HomeView: View {
 
     /* ---------------------------------------------------------------- top */
 
+    private var statusColour: Color? {
+        guard vm.active != nil else { return nil }
+        switch vm.link { case .ready: return T.ok; case .connecting: return T.warn; default: return T.danger }
+    }
+
     private var topBar: some View {
         GlassEffectContainer(spacing: 12) {
-            HStack {
-                GlassKey(symbol: vm.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", label: "Mute", size: 52, icon: 19) { vm.press(.mute) }
-                Spacer(minLength: 12)
+            HStack(spacing: 12) {
+                // The TV: a TV icon with the connection colour as a badge, and its name. As tall as
+                // the power key; as wide as the name needs, within limits.
                 Button(action: openDevices) {
-                    HStack(spacing: 8) {
-                        if let d = vm.active {
-                            Circle().fill(vm.link == .ready ? T.ok : (vm.link == .connecting ? T.warn : T.danger)).frame(width: 7, height: 7)
-                            Text(shortName(d.name, d.brand.label)).lineLimit(1)
-                        } else { Text("Choose a TV") }
+                    HStack(spacing: 10) {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "tv").font(.system(size: 16, weight: .medium)).foregroundStyle(T.ink)
+                                .frame(width: 38, height: 38).background(Circle().fill(T.ink.opacity(0.08)))
+                            if let c = statusColour {
+                                Circle().fill(c).frame(width: 7, height: 7).padding(1.5).background(Circle().fill(T.high)).offset(x: -1, y: 2)
+                            }
+                        }
+                        Text(vm.active.map { shortName($0.name, $0.brand.label) } ?? "Choose a TV")
+                            .font(.system(size: 15, weight: .medium)).foregroundStyle(T.ink).lineLimit(1)
                         Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).foregroundStyle(T.dim)
                     }
-                    .font(.system(size: 15, weight: .medium)).foregroundStyle(.white)
-                    .padding(.leading, 16).padding(.trailing, 12).frame(height: 44)
+                    .padding(.leading, 7).padding(.trailing, 16)
+                    .frame(minWidth: 150, maxWidth: 236, minHeight: 52, maxHeight: 52, alignment: .leading)
+                    .fixedSize(horizontal: true, vertical: false)
                     .glassEffect(.regular.interactive(), in: .capsule)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(vm.active.map { "TV: \($0.name), \(linkWord(vm.link))" } ?? "Choose a TV")
-                Spacer(minLength: 12)
+                Spacer(minLength: 0)
                 GlassKey(symbol: "power", label: "Power", size: 52, icon: 19) {
                     // Off (not reachable): wake it. On: ask before turning it off.
                     if vm.active == nil { openDevices() } else if vm.link != .ready { vm.wake() } else { askPower = true }
@@ -125,45 +137,22 @@ struct HomeView: View {
         }
     }
 
-    /* -------------------------------------------------------------- black */
+    /* ------------------------------------------------------------ middle */
 
-    private var blackMiddle: some View {
-        VStack(spacing: 0) {
-            GeometryReader { g in
-                let s = min(g.size.width - 40 - RING_BAND * 2, g.size.height - RING_BAND * 2, 300)
-                Group {
-                    switch deck {
-                    case .numpad: Numpad(vm: vm).frame(width: min(g.size.width - 40, 320), height: min(g.size.height, 340))
-                    case .trackpad: trackpad(size: s + RING_BAND * 2)
-                    case .dial: dial(size: s, ring: true)
-                    }
+    private var middle: some View {
+        GeometryReader { g in
+            let s = min(g.size.width - 40 - RING_BAND * 2, g.size.height - RING_BAND * 2, 300)
+            Group {
+                switch deck {
+                case .numpad: Numpad(vm: vm).frame(width: min(g.size.width - 40, 320), height: min(g.size.height, 340))
+                case .trackpad: trackpad(size: min(g.size.width - 8, g.size.height, KEYROW_W))
+                case .dial: dial(size: s)
                 }
-                .frame(width: g.size.width, height: g.size.height)
             }
-            .padding(.vertical, 8)
+            .frame(width: g.size.width, height: g.size.height)
         }
+        .padding(.vertical, 8)
     }
-
-    /* -------------------------------------------------------------- cards */
-
-    private var cardsMiddle: some View {
-        VStack(spacing: 0) {
-            TabView(selection: $card) {
-                GeometryReader { g in
-                    let s = min(CARD_W, g.size.height, 340)
-                    Group { if style == .trackpad { trackpad(size: s) } else { dial(size: s, ring: false) } }
-                        .frame(width: g.size.width, height: g.size.height)
-                }.tag(0)
-                GlassCard { VolChCard(vm: vm, openMore: openMore) }.tag(1)
-                GlassCard { Numpad(vm: vm) }.tag(2)
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .padding(.top, 8)
-            CardDots(page: $card, count: 3)
-        }
-    }
-
-    /* -------------------------------------------------------- dial / pad */
 
     private func touch(_ mode: TouchPadView.Mode, ring: Bool) -> TouchPad {
         TouchPad(mode: mode, stepPx: CGFloat(vm.settings.scrubStep), offline: offline,
@@ -175,19 +164,19 @@ struct HomeView: View {
                  onVoiceEnd: { vm.voiceStop() }, state: $pad)
     }
 
-    private func dial(size s: CGFloat, ring: Bool) -> some View {
-        let outer = ring ? s + RING_BAND * 2 : s
+    /** The dial inside its volume ring; the ring shows (and turns) only while a TV is connected. */
+    private func dial(size s: CGFloat) -> some View {
+        let outer = s + RING_BAND * 2
         let center: String? = pad.turning ? (volText ?? "Volume") : nil
         return ZStack {
-            if ring {
-                VolumeRing(size: outer, accent: accent, level: vm.tvVolume.map { $0.muted ? 0 : Double($0.level) / Double(max(1, $0.max)) },
-                           value: volText, pad: pad)
-            }
-            DialFace(size: s, pad: pad, toast: center ?? vm.toast,
-                     toastSymbol: center != nil ? (vm.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                        : vm.toastKey.flatMap { keySymbol($0, muted: vm.muted, playing: vm.playing) },
+            VolumeRing(size: outer, accent: accent, level: vm.tvVolume.map { $0.muted ? 0 : Double($0.level) / Double(max(1, $0.max)) },
+                       value: volText, pad: pad)
+                .opacity(connected ? 1 : 0)
+                .animation(.easeOut(duration: 0.3), value: connected)
+            DialFace(size: s, pad: pad, toast: center,
+                     toastSymbol: center != nil ? (vm.muted ? "speaker.slash.fill" : "speaker.wave.2.fill") : nil,
                      offline: offline)
-            touch(.dial, ring: ring).frame(width: outer, height: outer)
+            touch(.dial, ring: connected).frame(width: outer, height: outer)
         }
         .frame(width: outer, height: outer)
         .accessibilityElement(children: .ignore)
@@ -196,11 +185,10 @@ struct HomeView: View {
             Button("OK") { vm.press(.ok) }; Button("Up") { vm.press(.up) }; Button("Down") { vm.press(.down) }
             Button("Left") { vm.press(.left) }; Button("Right") { vm.press(.right) }; Button("Mute") { vm.press(.mute) }
             Button("Volume up") { vm.press(.volUp) }; Button("Volume down") { vm.press(.volDown) }
-            Button("Voice search") { vm.press(.voice) }
         }
     }
 
-    /** The trackpad takes the dial's place and size. */
+    /** The trackpad lines up with the rows of circles under it. */
     private func trackpad(size s: CGFloat) -> some View {
         ZStack {
             TrackpadFace(width: s, height: s, pad: pad, offline: offline)
@@ -217,7 +205,7 @@ struct HomeView: View {
 
 /* ------------------------------------------------------------------ pieces */
 
-/** A round Liquid Glass key with an SF Symbol (or a short word) in white, and an optional caption. */
+/** A round Liquid Glass key with an SF Symbol (or a short word); dimmed (and explaining why) when it can't be used. */
 struct GlassKey: View {
     var symbol: String? = nil
     var word: String? = nil
@@ -226,75 +214,256 @@ struct GlassKey: View {
     var size: CGFloat = 62
     var icon: CGFloat = 21
     var active = false
+    var enabled = true
+    var onDisabled: () -> Void = {}
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button(action: { if enabled { action() } else { onDisabled() } }) {
             VStack(spacing: 1) {
                 if let symbol { Image(systemName: symbol).font(.system(size: icon, weight: .medium)) }
                 if let word { Text(word).font(.system(size: 16, weight: .medium)) }
                 if let caption { Text(caption).font(.system(size: 9, weight: .semibold)).tracking(0.8).foregroundStyle(T.dim) }
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(T.ink)
+            .opacity(enabled ? 1 : 0.32)
             .frame(width: size, height: size)
-            .background(active ? Circle().fill(.white.opacity(0.18)) : nil)
+            .background(active ? Circle().fill(T.ink.opacity(0.18)) : nil)
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .glassEffect(.regular.interactive(), in: .circle)
         .accessibilityLabel(label)
         .accessibilityAddTraits(active ? .isSelected : [])
+        .accessibilityHint(enabled ? "" : "Not available right now")
     }
 }
 
-/** Back, Home, Play / pause, Search. */
-struct FourKeys: View {
+/**
+ * Home's pages of circles, swiped across (the page leaving fades and shrinks a little as the
+ * next fades in): the main keys; more keys; then quick access apps (eight, then seven more
+ * and All apps). With quick access in More, only the first two.
+ */
+struct KeyPages: View {
     @ObservedObject var vm: RemoteModel
-    let openKeys: () -> Void
-    var size: CGFloat = 62
-    var body: some View {
-        GlassEffectContainer(spacing: 18) {
-            HStack(spacing: 18) {
-                GlassKey(symbol: "chevron.left", label: "Back", size: size, icon: 22) { vm.press(.back) }
-                GlassKey(symbol: "house", label: "Home", size: size) { vm.press(.home) }
-                GlassKey(symbol: vm.playing ? "pause.fill" : "play.fill", label: vm.playing ? "Pause" : "Play", size: size, icon: 20) { vm.press(.playPause) }
-                GlassKey(symbol: "magnifyingglass", label: "Search", size: size, action: openKeys)
-            }
-        }
-    }
-}
-
-/** Black layout: two rows. Volume is the ring; mute is at the top. */
-struct KeyRows: View {
-    @ObservedObject var vm: RemoteModel
+    let accent: Color
     @Binding var numpad: Bool
+    @Binding var page: Int?
     let openKeys: () -> Void
-    var openMore: () -> Void = {}
-    private let k: CGFloat = 68
+    let openMore: () -> Void
+    let openApps: (Bool) -> Void
+    let openSleep: () -> Void
+
+    private var count: Int { vm.settings.appsIn == "more" ? 2 : 4 }
+
     var body: some View {
+        ScrollView(.horizontal) {
+            LazyHStack(spacing: 0) {
+                ForEach(0..<count, id: \.self) { i in
+                    Group {
+                        switch i {
+                        case 0: mainKeys
+                        case 1: moreKeys
+                        default: AppsPage(vm: vm, accent: accent, part: i - 2, openApps: openApps)
+                        }
+                    }
+                    .frame(width: KEYROW_W + 40)
+                    .scrollTransition(.interactive, axis: .horizontal) { c, phase in
+                        c.opacity(1 - min(1, abs(phase.value) * 1.4)).scaleEffect(1 - 0.08 * abs(phase.value))
+                    }
+                    .id(i)
+                }
+            }
+            .scrollTargetLayout()
+        }
+        .scrollTargetBehavior(.paging)
+        .scrollIndicators(.hidden)
+        .scrollPosition(id: $page)
+        .frame(width: KEYROW_W + 40, height: KEY * 2 + 14)
+    }
+
+    private func k(_ sym: String, _ label: String, _ key: RemoteKey, icon: CGFloat = 21, quiet: Bool = false) -> GlassKey {
+        GlassKey(symbol: sym, label: label, size: KEY, icon: icon, enabled: vm.can(key), onDisabled: { vm.explain(key) }) { vm.press(key, quiet: quiet) }
+    }
+
+    private var mainKeys: some View {
         GlassEffectContainer(spacing: 14) {
             VStack(spacing: 14) {
                 HStack(spacing: 14) {
-                    GlassKey(symbol: "chevron.left", label: "Back", size: k, icon: 23) { vm.press(.back) }
-                    GlassKey(symbol: "house", label: "Home", size: k, icon: 22) { vm.press(.home) }
-                    GlassKey(symbol: vm.playing ? "pause.fill" : "play.fill", label: vm.playing ? "Pause" : "Play", size: k, icon: 21) { vm.press(.playPause) }
-                    GlassKey(symbol: "magnifyingglass", label: "Search", size: k, icon: 22, action: openKeys)
+                    k("chevron.left", "Back", .back, icon: 23)
+                    k("house", "Home", .home, icon: 22)
+                    k(vm.playing ? "pause.fill" : "play.fill", vm.playing ? "Pause" : "Play", .playPause)
+                    GlassKey(symbol: "magnifyingglass", label: "Search", size: KEY, icon: 22, enabled: vm.can(.home), onDisabled: { vm.explain(.home) }, action: openKeys)
                 }
                 HStack(spacing: 14) {
-                    // Live TV: channels and numbers. Apps: volume and mute.
+                    // Live TV: channels and numbers. Apps: volume and the voice assistant.
                     if vm.nowOn?.live == true {
-                        GlassKey(symbol: "minus", caption: "CH", label: "Channel down", size: k, icon: 18) { vm.press(.chDown) }
-                        GlassKey(symbol: "plus", caption: "CH", label: "Channel up", size: k, icon: 18) { vm.press(.chUp) }
-                        GlassKey(word: "123", label: "Number pad", size: k, active: numpad) { numpad.toggle() }
+                        GlassKey(symbol: "minus", caption: "CH", label: "Channel down", size: KEY, icon: 18, enabled: vm.can(.chDown), onDisabled: { vm.explain(.chDown) }) { vm.press(.chDown) }
+                        GlassKey(symbol: "plus", caption: "CH", label: "Channel up", size: KEY, icon: 18, enabled: vm.can(.chUp), onDisabled: { vm.explain(.chUp) }) { vm.press(.chUp) }
+                        GlassKey(word: "123", label: "Number pad", size: KEY, active: numpad, enabled: vm.can(.n0), onDisabled: { vm.explain(.n0) }) { numpad.toggle() }
                     } else {
-                        GlassKey(symbol: "minus", caption: "VOL", label: "Volume down", size: k, icon: 18) { vm.press(.volDown, quiet: true) }
-                        GlassKey(symbol: "plus", caption: "VOL", label: "Volume up", size: k, icon: 18) { vm.press(.volUp, quiet: true) }
-                        GlassKey(symbol: vm.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", label: "Mute", size: k, icon: 20, active: vm.muted) { vm.press(.mute) }
+                        k("speaker.wave.1.fill", "Volume down", .volDown, icon: 19, quiet: true)
+                        k("speaker.wave.3.fill", "Volume up", .volUp, icon: 19, quiet: true)
+                        GlassKey(symbol: "mic.fill", label: "Voice assistant", size: KEY, icon: 21, active: vm.listening, enabled: vm.can(.home), onDisabled: { vm.explain(.home) }) { vm.voiceStart() }
                     }
-                    GlassKey(symbol: "ellipsis", label: "More: keys, inputs, sleep timer", size: k, icon: 20, action: openMore)
+                    GlassKey(symbol: "ellipsis", label: "More: keys, inputs and apps", size: KEY, icon: 20, action: openMore)
                 }
             }
         }
+    }
+
+    private var moreKeys: some View {
+        GlassEffectContainer(spacing: 14) {
+            VStack(spacing: 14) {
+                HStack(spacing: 14) {
+                    k("backward.fill", "Rewind", .rewind, icon: 19)
+                    k("forward.fill", "Fast forward", .fastForward, icon: 19)
+                    k(vm.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", vm.muted ? "Unmute" : "Mute", .mute, icon: 19)
+                    // Sleep: the minutes left while it counts down.
+                    TimelineView(.periodic(from: .now, by: 15)) { t in
+                        let left = vm.sleepAt.map { max(1, Int(ceil($0.timeIntervalSince(t.date) / 60))) }
+                        GlassKey(symbol: left == nil ? "moon.zzz" : nil, word: left.map { "\($0)m" },
+                                 label: left.map { "Sleep timer, \($0) minutes left" } ?? "Sleep timer", size: KEY, icon: 21, active: left != nil,
+                                 enabled: vm.can(.power), onDisabled: { vm.explain(.power) }, action: openSleep)
+                    }
+                }
+                HStack(spacing: 14) {
+                    k("info.circle", "Info", .info)
+                    k("list.bullet.rectangle", "Guide", .guide)
+                    k("rectangle.portrait.and.arrow.right", "Input", .input, icon: 20)
+                    k("slider.horizontal.3", "TV settings", .settings, icon: 20)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A page of quick access circles: eight apps on the first, seven more and All apps (always
+ * the very last place) on the second. Empty places are faint rings with a +. Drag an app onto
+ * another to move it there.
+ */
+struct AppsPage: View {
+    @ObservedObject var vm: RemoteModel
+    let accent: Color
+    let part: Int
+    let openApps: (Bool) -> Void
+
+    /** Index into the pinned list, nil for an empty place, -1 for All apps. */
+    static func cells(_ count: Int, _ part: Int) -> [Int?] {
+        part == 0 ? (0..<8).map { $0 < count ? $0 : nil } : (8..<15).map { $0 < count ? $0 : nil } + [-1]
+    }
+
+    var body: some View {
+        let pinned = vm.shortcuts.filter(\.pinned)
+        let cells = Self.cells(pinned.count, part)
+        let ready = vm.active != nil && vm.link == .ready
+        VStack(spacing: 14) {
+            ForEach(0..<2, id: \.self) { r in
+                HStack(spacing: 14) {
+                    ForEach(0..<4, id: \.self) { c in
+                        let cell = cells[r * 4 + c]
+                        if cell == -1 {
+                            GlassKey(symbol: "square.grid.2x2", label: "All apps", size: KEY, icon: 21) { openApps(false) }
+                        } else if let i = cell {
+                            let s = pinned[i]
+                            AppTile(s: s, size: KEY)
+                                .onTapGesture { if ready { vm.launch(s) } else { vm.explain(.home) } }
+                                .draggable(s.id)
+                                .dropDestination(for: String.self) { ids, _ in
+                                    guard let id = ids.first, let from = pinned.firstIndex(where: { $0.id == id }), from != i else { return false }
+                                    vm.movePinned(pinned[from], i - from); vm.feel.fire(.tick)
+                                    return true
+                                }
+                        } else {
+                            Button { openApps(true) } label: {
+                                Image(systemName: "plus").font(.system(size: 16, weight: .medium)).foregroundStyle(T.ink.opacity(0.3))
+                                    .frame(width: KEY, height: KEY)
+                                    .overlay(Circle().strokeBorder(T.ink.opacity(0.1), lineWidth: 1))
+                                    .contentShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Add apps")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Back · ◀ · ▲ · OK · ▼ · ▶ in one capsule, for sheets that cover the dial (More, Search). */
+struct NavPad: View {
+    @ObservedObject var vm: RemoteModel
+    var body: some View {
+        let keys: [(RemoteKey, String?)] = [(.back, "arrow.uturn.backward"), (.left, "chevron.left"), (.up, "chevron.up"), (.ok, nil), (.down, "chevron.down"), (.right, "chevron.right")]
+        HStack(spacing: 0) {
+            ForEach(0..<keys.count, id: \.self) { i in
+                let (k, sym) = keys[i]
+                Button { if vm.can(k) { vm.press(k) } else { vm.explain(k) } } label: {
+                    Group {
+                        if let sym { Image(systemName: sym).font(.system(size: 18, weight: .semibold)) }
+                        else { Text("OK").font(.system(size: 13, weight: .semibold)).frame(width: 38, height: 38).background(Circle().fill(T.ink.opacity(0.12))) }
+                    }
+                    .foregroundStyle(T.ink.opacity(vm.can(k) ? 1 : 0.3))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(k.word)
+                if i == 0 { Rectangle().fill(T.ink.opacity(0.08)).frame(width: 1, height: 24) }
+            }
+        }
+        .frame(height: 54)
+        .glassEffect(.regular, in: .capsule)
+    }
+}
+
+/** Page dots: a pill in the accent colour for the page showing; tap anywhere on them for the next page (and round again). */
+struct PagePills: View {
+    let count: Int
+    let page: Int
+    let accent: Color
+    let next: () -> Void
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<count, id: \.self) { i in
+                Capsule().fill(i == page ? accent : T.dotOff).frame(width: i == page ? 18 : 6, height: 6)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: page)
+        .padding(.horizontal, 10).frame(height: 40).contentShape(Rectangle())
+        .onTapGesture(perform: next)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Page \(page + 1) of \(count)")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Shows the next page")
+    }
+}
+
+/** Text that scrolls round when it's wider than its space. */
+struct Marquee: View {
+    let text: String
+    var font: Font = .system(size: 13)
+    var color: Color = T.dim
+    @State private var w: CGFloat = 0
+    @State private var box: CGFloat = 0
+    @State private var go = false
+    var body: some View {
+        GeometryReader { g in
+            let over = w > g.size.width
+            HStack(spacing: 40) {
+                Text(text).font(font).foregroundStyle(color).fixedSize()
+                    .background(GeometryReader { t in Color.clear.onAppear { w = t.size.width } .onChange(of: text) { _, _ in w = t.size.width } })
+                if over { Text(text).font(font).foregroundStyle(color).fixedSize() }
+            }
+            .offset(x: over && go ? -(w + 40) : 0)
+            .animation(over && go ? .linear(duration: Double(w + 40) / 30).delay(1.2).repeatForever(autoreverses: false) : .default, value: go)
+            .onAppear { box = g.size.width; go = true }
+            .onChange(of: text) { _, _ in go = false; DispatchQueue.main.async { go = true } }
+        }
+        .clipped()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(text)
     }
 }
 
@@ -312,7 +481,7 @@ struct VolumeRing: View {
     var body: some View {
         let r = size / 2 - RING_BAND / 2
         ZStack {
-            Circle().stroke(.white.opacity(0.14), lineWidth: 3).frame(width: r * 2, height: r * 2)
+            Circle().stroke(T.ink.opacity(0.14), lineWidth: 3).frame(width: r * 2, height: r * 2)
             if let level {
                 Circle().trim(from: 0, to: max(0.001, level))
                     .stroke(accent, style: StrokeStyle(lineWidth: 4, lineCap: .round))
@@ -328,7 +497,7 @@ struct VolumeRing: View {
             }
             if let value, !pad.turning {
                 Text(value).font(.system(size: 12, weight: .medium)).foregroundStyle(T.dim)
-                    .padding(.horizontal, 8).background(Capsule().fill(.black))
+                    .padding(.horizontal, 8).background(Capsule().fill(T.screen))
                     .offset(y: r)
             }
         }
@@ -352,8 +521,8 @@ struct TwoHint: View {
                     default: return ("chevron.backward.2", "Channel")
                     }
                 }()
-                Image(systemName: sym).font(.system(size: big, weight: .medium)).foregroundStyle(.white)
-                Text(word).font(.system(size: 14, weight: .medium)).foregroundStyle(.white)
+                Image(systemName: sym).font(.system(size: big, weight: .medium)).foregroundStyle(T.ink)
+                Text(word).font(.system(size: 14, weight: .medium)).foregroundStyle(T.ink)
             }
         }
     }
@@ -386,22 +555,22 @@ struct DialFace: View {
                         (.right, "chevron.right", CGSize(width: size * 0.39, height: 0))]
                     ForEach(0..<4, id: \.self) { i in
                         Image(systemName: arrows[i].1).font(.system(size: cs, weight: .semibold))
-                            .foregroundStyle(pad.lit == arrows[i].0 ? .white : T.dim).offset(arrows[i].2)
+                            .foregroundStyle(pad.lit == arrows[i].0 ? T.ink : T.dim).offset(arrows[i].2)
                     }
                 }
-                Circle().fill(.white.opacity(pad.wellDown ? 0.2 : 0.1)).frame(width: well, height: well)
+                Circle().fill(T.ink.opacity(pad.wellDown ? 0.2 : 0.1)).frame(width: well, height: well)
                     .scaleEffect(pad.wellDown ? 0.97 : 1)
                 Group {
                     if pad.two { TwoHint(key: pad.twoKey, big: 26) }
                     else if let toast {
                         VStack(spacing: 4) {
-                            if let s = toastSymbol { Image(systemName: s).font(.system(size: 22, weight: .medium)).foregroundStyle(.white) }
-                            Text(toast).font(.system(size: pad.turning ? 22 : 12.5, weight: .medium)).foregroundStyle(.white)
+                            if let s = toastSymbol { Image(systemName: s).font(.system(size: 22, weight: .medium)).foregroundStyle(T.ink) }
+                            Text(toast).font(.system(size: pad.turning ? 22 : 12.5, weight: .medium)).foregroundStyle(T.ink)
                                 .multilineTextAlignment(.center).padding(.horizontal, 10)
                         }
                         .frame(width: well)
                     } else {
-                        Text("OK").font(.system(size: 17, weight: .semibold)).tracking(1).foregroundStyle(pad.wellDown ? .white : T.dim)
+                        Text("OK").font(.system(size: 17, weight: .semibold)).tracking(1).foregroundStyle(pad.wellDown ? T.ink : T.dim)
                     }
                 }
             }
@@ -441,89 +610,12 @@ struct TrackpadFace: View {
                     (.up, "chevron.up", .top), (.down, "chevron.down", .bottom), (.left, "chevron.left", .leading), (.right, "chevron.right", .trailing)]
                 ForEach(0..<4, id: \.self) { i in
                     Image(systemName: arrows[i].1).font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(.white).opacity(near(arrows[i].0))
+                        .foregroundStyle(T.ink).opacity(near(arrows[i].0))
                         .padding(18).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: arrows[i].2)
                 }
             }
         }
         .frame(width: width, height: height)
-    }
-}
-
-/** Width of the Cards layout's cards: the same as the row of four keys under them. */
-let CARD_W: CGFloat = 4 * 62 + 3 * 18
-
-/** A Liquid Glass card for the Cards layout: lined up with the keys, 24pt inside. */
-struct GlassCard<Content: View>: View {
-    @ViewBuilder let content: () -> Content
-    var body: some View {
-        GeometryReader { g in
-            content()
-                .padding(24)
-                .frame(width: CARD_W, height: min(g.size.height - 16, 360))
-                .glassEffect(.regular, in: .rect(cornerRadius: 28))
-                .frame(width: g.size.width, height: g.size.height)
-        }
-    }
-}
-
-/** Two tall rockers (volume, channel), with mute, input and guide under them. */
-struct VolChCard: View {
-    @ObservedObject var vm: RemoteModel
-    var openMore: () -> Void = {}
-    var body: some View {
-        VStack(spacing: 22) {
-            HStack(spacing: 28) { // 80 + 28 = 54 + 54
-                Rocker(word: "VOL", up: { vm.press(.volUp, quiet: true) }, down: { vm.press(.volDown, quiet: true) })
-                Rocker(word: "CH", up: { vm.press(.chUp) }, down: { vm.press(.chDown) })
-            }
-            GlassEffectContainer(spacing: 16) {
-                HStack(spacing: 54) { // under the rockers' centres
-                    GlassKey(symbol: "rectangle.portrait.and.arrow.right", label: "Input", size: 54, icon: 19) { vm.press(.input) }
-                    GlassKey(symbol: "ellipsis", label: "More", size: 54, icon: 19, action: openMore)
-                }
-            }
-        }
-    }
-}
-
-/** + on top, the word in the middle, − below; both ends repeat while held. */
-struct Rocker: View {
-    let word: String
-    let up: () -> Void
-    let down: () -> Void
-    var body: some View {
-        VStack(spacing: 0) {
-            RepeatKey(action: up) { Image(systemName: "plus").font(.system(size: 20, weight: .medium)).frame(maxWidth: .infinity, maxHeight: .infinity) }
-                .accessibilityLabel(word == "VOL" ? "Volume up" : "Channel up")
-            Text(word).font(.system(size: 12, weight: .semibold)).tracking(1).foregroundStyle(T.dim).accessibilityHidden(true)
-            RepeatKey(action: down) { Image(systemName: "minus").font(.system(size: 20, weight: .medium)).frame(maxWidth: .infinity, maxHeight: .infinity) }
-                .accessibilityLabel(word == "VOL" ? "Volume down" : "Channel down")
-        }
-        .foregroundStyle(.white)
-        .frame(width: 80, height: 210)
-        .clipShape(Capsule())
-        .glassEffect(.regular.interactive(), in: .capsule)
-    }
-}
-
-/** Small dots for the cards: tap one, or swipe across them. */
-struct CardDots: View {
-    @Binding var page: Int
-    let count: Int
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<count, id: \.self) { i in
-                Capsule().fill(i == page ? T.dim : Color(hex: 0x5A5A60)).frame(width: i == page ? 14 : 5, height: 5)
-                    .frame(width: 20, height: 30).contentShape(Rectangle())
-                    .onTapGesture { withAnimation { page = i } }
-                    .accessibilityLabel(["Remote", "Volume and channels", "Numbers"][i])
-                    .accessibilityAddTraits(i == page ? [.isSelected, .isButton] : .isButton)
-            }
-        }
-        .gesture(DragGesture(minimumDistance: 12).onEnded { v in
-            withAnimation { page = max(0, min(count - 1, page + (v.translation.width < 0 ? 1 : -1))) }
-        })
     }
 }
 
@@ -548,7 +640,7 @@ struct Numpad: View {
                                     if c == "L" { Image(systemName: "list.bullet") } else { Text(c == "K" ? "OK" : c) }
                                 }
                                 .font(.system(size: c == "K" || c == "L" ? 17 : 22, weight: .medium, design: .rounded))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(T.ink)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 .contentShape(Capsule())
                             }
@@ -563,33 +655,3 @@ struct Numpad: View {
     }
 }
 
-/** What's on the TV, in one quiet line under the top bar (Roku adds position and length). */
-struct NowPlayingLine: View {
-    @ObservedObject var vm: RemoteModel
-    private var name: String? {
-        guard let raw = vm.nowOn?.name, !raw.isEmpty, raw != "Home", vm.link == .ready else { return nil }
-        if raw.contains("."), !raw.contains(" ") {
-            return Catalog.apps.first { $0.ids.values.contains(raw) }?.name ?? vm.tvApps.first { $0.id == raw }?.name
-        }
-        return raw
-    }
-    private func t(_ ms: Int) -> String {
-        let s = ms / 1000
-        return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
-    }
-    var body: some View {
-        VStack(spacing: 4) {
-            if let name {
-                let p = vm.nowOn?.positionMs, d = vm.nowOn?.durationMs
-                Text(p != nil && (d ?? 0) > 0 ? "\(name) · \(t(p!)) / \(t(d!))" : name)
-                    .font(.system(size: 12.5)).foregroundStyle(T.dim).lineLimit(1)
-                if let p, let d, d > 0 {
-                    Capsule().fill(.white.opacity(0.15)).frame(width: 140, height: 2)
-                        .overlay(alignment: .leading) { Capsule().fill(T.dim).frame(width: 140 * min(1, CGFloat(p) / CGFloat(d)), height: 2) }
-                }
-            }
-        }
-        .frame(height: 30)
-        .accessibilityElement(children: .combine)
-    }
-}

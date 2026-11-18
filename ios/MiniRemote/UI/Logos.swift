@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CoreImage
 
 /**
  * App logos for Quick access and the app tiles: the app's own website icon (apple-touch-icon,
@@ -52,5 +53,146 @@ struct SiteLogo<Fallback: View>: View {
             if let image { Image(uiImage: image).resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius: 14)) } else { fallback() }
         }
         .task(id: site) { if let site { image = await Logos.icon(site: site) } }
+    }
+}
+
+/* ------------------------------------------------ App Store icons */
+
+extension Logos {
+    /** Apple App Store ids for catalog apps, with a word the listing's name must contain (so a wrong id can't show another app). */
+    static let store: [String: (Int, String)] = [
+        "netflix": (363590051, "netflix"), "youtube": (544007664, "youtube"), "prime": (545519333, "prime"),
+        "hotstar": (934459219, "hotstar"), "disney": (1446075923, "disney"), "sonyliv": (587794258, "sony"),
+        "zee5": (743691886, "zee"), "spotify": (324684580, "spotify"), "appletv": (1174078549, "tv"),
+        "ytmusic": (1017492454, "music"), "plex": (383457673, "plex"), "hulu": (376510438, "hulu"),
+        "max": (971265422, "max"), "peacock": (1508186374, "peacock"), "paramount": (530168168, "paramount"),
+        "tubi": (886445756, "tubi"), "pluto": (751712884, "pluto"),
+    ]
+
+    /** The app's official icon from its App Store listing (iTunes lookup), cached on disk. */
+    static func storeIcon(_ key: String) async -> UIImage? {
+        guard let (id, word) = store[key] else { return nil }
+        let k = "ios-\(id)" as NSString
+        if let m = mem.object(forKey: k) { return m }
+        let file = dir.appendingPathComponent("ios-\(id).png")
+        if let d = try? Data(contentsOf: file), let img = UIImage(data: d) { mem.setObject(img, forKey: k); return img }
+        for country in ["in", "us"] {
+            guard let u = URL(string: "https://itunes.apple.com/lookup?id=\(id)&country=\(country)"),
+                  let (data, _) = try? await URLSession.shared.data(from: u),
+                  let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let item = (o["results"] as? [[String: Any]])?.first,
+                  (item["trackName"] as? String)?.lowercased().contains(word) == true,
+                  let art = item["artworkUrl512"] as? String, art.hasPrefix("https://"), art.contains("mzstatic.com") else { continue }
+            let small = (art as NSString).deletingLastPathComponent + "/256x256bb.png"
+            for url in [small, art] {
+                guard let iu = URL(string: url), let (img, resp) = try? await URLSession.shared.data(from: iu),
+                      (resp as? HTTPURLResponse)?.statusCode == 200, img.count < 600_000, let ui = UIImage(data: img) else { continue }
+                try? img.write(to: file)
+                mem.setObject(ui, forKey: k)
+                return ui
+            }
+        }
+        return nil
+    }
+
+    /** The best icon for a catalog app: App Store first, then its website. */
+    static func best(_ key: String) async -> UIImage? {
+        if let s = await storeIcon(key) { return s }
+        if let site = sites[key] { return await icon(site: site) }
+        return nil
+    }
+
+    /** How an icon sits on a tile: its edges stretched out (plain edges), or as a smaller plate (busy or see-through edges). */
+    enum Fit { case extend(UIImage), plate }
+
+    private static let ctx = CIContext()
+
+    /**
+     * Prepares an icon for a [side]-point tile: the icon at three quarters of the tile, with its
+     * own edge pixels stretched to the tile's edge (Core Image's clamp), so its background
+     * carries on. Icons with see-through corners or artwork reaching the edge are left as plates.
+     */
+    static func fit(_ img: UIImage, side: CGFloat, scale: CGFloat) -> Fit {
+        guard let cg = img.cgImage, let stats = edgeStats(cg), stats.opaque, !stats.busy else { return .plate }
+        let inset = CGFloat(min(cg.width, cg.height)) * 0.035
+        let src = CIImage(cgImage: cg).cropped(to: CGRect(x: inset, y: inset, width: CGFloat(cg.width) - 2 * inset, height: CGFloat(cg.height) - 2 * inset))
+        let px = side * scale
+        let k = px * 0.74 / src.extent.width
+        let moved = src.transformed(by: CGAffineTransform(translationX: -src.extent.minX, y: -src.extent.minY))
+            .clampedToExtent()
+            .transformed(by: CGAffineTransform(scaleX: k, y: k))
+            .transformed(by: CGAffineTransform(translationX: (px - src.extent.width * k) / 2, y: (px - src.extent.height * k) / 2))
+            .cropped(to: CGRect(x: 0, y: 0, width: px, height: px))
+        guard let out = ctx.createCGImage(moved, from: CGRect(x: 0, y: 0, width: px, height: px)) else { return .plate }
+        return .extend(UIImage(cgImage: out, scale: scale, orientation: .up))
+    }
+
+    /** Corners opaque? Border one plain colour (low spread of brightness)? */
+    private static func edgeStats(_ cg: CGImage) -> (opaque: Bool, busy: Bool)? {
+        let w = 64, h = 64
+        var px = [UInt8](repeating: 0, count: w * h * 4)
+        guard let c = CGContext(data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        c.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        func at(_ x: Int, _ y: Int) -> (Double, Double) {
+            let i = (y * w + x) * 4
+            let l = (0.299 * Double(px[i]) + 0.587 * Double(px[i + 1]) + 0.114 * Double(px[i + 2])) / 255
+            return (l, Double(px[i + 3]) / 255)
+        }
+        let i = 3
+        let corners = [at(i, i), at(w - 1 - i, i), at(i, h - 1 - i), at(w - 1 - i, h - 1 - i)]
+        let opaque = corners.allSatisfy { $0.1 > 0.8 }
+        var lum: [Double] = []
+        for t in 0...15 {
+            let x = i + (w - 2 * i - 1) * t / 15, y = i + (h - 2 * i - 1) * t / 15
+            lum += [at(x, i).0, at(x, h - 1 - i).0, at(i, y).0, at(w - 1 - i, y).0]
+        }
+        let m = lum.reduce(0, +) / Double(lum.count)
+        let sd = (lum.map { ($0 - m) * ($0 - m) }.reduce(0, +) / Double(lum.count)).squareRoot()
+        return (opaque, sd > 0.16)
+    }
+}
+
+/**
+ * A quick access app as a tile (circle on Home, rounded square in More): its official icon,
+ * edges extended to fill the tile; or the icon as a plate on the app's colour; or initials.
+ */
+struct AppTile: View {
+    let s: Shortcut
+    let size: CGFloat
+    var square = false
+    @Environment(\.displayScale) private var scale
+    @State private var fit: Logos.Fit?
+    @State private var image: UIImage?
+
+    var body: some View {
+        let cat = s.kind == .app && s.brand == nil ? Catalog.byKey(s.value) : (s.kind == .app ? Catalog.apps.first { $0.name.caseInsensitiveCompare(s.name) == .orderedSame } : nil)
+        let base = s.kind == .channel ? Color(hex: 0x263042) : (cat.map { Color(hex: $0.bg) } ?? Color(hex: 0x3A3A3F))
+        // Near-black tiles would vanish on a dark remote: lift them to a dark grey.
+        let bg = !Look.p.light && (cat?.bg ?? 0x3A3A3F) < 0x181818 ? T.high : base
+        let shape = square ? AnyShape(RoundedRectangle(cornerRadius: 18, style: .continuous)) : AnyShape(Circle())
+        ZStack {
+            shape.fill(bg)
+            switch fit {
+            case .extend(let img): Image(uiImage: img).resizable().scaledToFill()
+            case .plate: if let image { Image(uiImage: image).resizable().scaledToFit().frame(width: size * 0.64, height: size * 0.64).clipShape(RoundedRectangle(cornerRadius: size * 0.15, style: .continuous)) }
+            case nil:
+                Text(s.kind == .channel ? s.value : String(s.name.prefix(2)).uppercased())
+                    .font(.system(size: size * 0.26, weight: .bold, design: s.kind == .channel ? .monospaced : .default))
+                    .foregroundStyle(cat.map { Color(hex: $0.ink) } ?? .white)
+            }
+        }
+        .frame(width: square ? nil : size, height: size)
+        .frame(maxWidth: square ? .infinity : nil)
+        .clipShape(shape)
+        .contentShape(shape)
+        .task(id: s.id) {
+            guard let key = cat?.key, let img = await Logos.best(key) else { return }
+            image = img
+            fit = Logos.fit(img, side: size, scale: scale)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(s.name)
+        .accessibilityAddTraits(.isButton)
     }
 }
