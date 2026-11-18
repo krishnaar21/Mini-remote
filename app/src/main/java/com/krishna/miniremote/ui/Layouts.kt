@@ -85,7 +85,9 @@ private const val RING_STEP = 18f
  * While turning, an accent arc follows the finger. Touches inside the dial go to [content].
  */
 @Composable
-fun RingDial(dial: Dp, accent: Color, level: Float? = null, value: String? = null, onStep: (up: Boolean) -> Unit, content: @Composable (turning: Boolean) -> Unit) {
+fun RingDial(dial: Dp, accent: Color, level: Float? = null, value: String? = null, ring: Boolean = true, onStep: (up: Boolean) -> Unit, content: @Composable (turning: Boolean) -> Unit) {
+    // The volume ring shows (and turns) only while a TV is connected.
+    val ringA by animateFloatAsState(if (ring) 1f else 0f, tween(300), label = "ringA")
     val shown by animateFloatAsState(level ?: 0f, tween(160), label = "lvl")
     val step by rememberUpdatedState(onStep)
     var start by remember { mutableFloatStateOf(0f) }
@@ -101,7 +103,8 @@ fun RingDial(dial: Dp, accent: Color, level: Float? = null, value: String? = nul
                     CustomAccessibilityAction("Volume down") { step(false); true },
                 )
             }
-            .pointerInput(dial) {
+            .pointerInput(dial, ring) {
+                if (!ring) return@pointerInput
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     val c = Offset(size.width / 2f, size.height / 2f)
@@ -128,12 +131,13 @@ fun RingDial(dial: Dp, accent: Color, level: Float? = null, value: String? = nul
                 }
             }
             .drawBehind {
+                if (ringA <= 0f) return@drawBehind
                 val r = dial.toPx() / 2f + RING_BAND.toPx() / 2f
                 val tl = Offset(center.x - r, center.y - r)
                 val sz = Size(r * 2, r * 2)
-                drawCircle(M.Highest.copy(alpha = 0.55f), r, style = Stroke(3.dp.toPx()))
+                drawCircle(M.Highest.copy(alpha = 0.55f * ringA), r, style = Stroke(3.dp.toPx()))
                 // The TV's real volume, from the bottom, clockwise.
-                if (level != null) { if (shown > 0f) drawArc(accent, 90f, 360f * shown, false, tl, sz, style = Stroke(4.dp.toPx(), cap = StrokeCap.Round)) }
+                if (level != null) { if (shown > 0f) drawArc(accent.copy(alpha = ringA), 90f, 360f * shown, false, tl, sz, style = Stroke(4.dp.toPx(), cap = StrokeCap.Round)) }
                 else if (glow > 0f && sweep != 0f) drawArc(accent.copy(alpha = glow), start, sweep, false, tl, sz,
                     style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
             },
@@ -141,7 +145,7 @@ fun RingDial(dial: Dp, accent: Color, level: Float? = null, value: String? = nul
     ) {
         content(turning)
         // At rest the number sits at the foot of the ring; while turning it shows in the middle (see content).
-        if (value != null && !turning) Box(Modifier.align(Alignment.BottomCenter).clip(CircleShape).background(Color.Black).padding(horizontal = 8.dp)) {
+        if (value != null && !turning && ring) Box(Modifier.align(Alignment.BottomCenter).clip(CircleShape).background(Color.Black).padding(horizontal = 8.dp)) {
             Text(value, color = T.Dim, fontSize = 12.sp, fontWeight = FontWeight.Medium)
         }
     }

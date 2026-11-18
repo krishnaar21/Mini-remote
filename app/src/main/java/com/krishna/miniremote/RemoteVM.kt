@@ -328,7 +328,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     private val menuKeys = setOf(RemoteKey.SETTINGS, RemoteKey.INPUT, RemoteKey.MENU, RemoteKey.INFO, RemoteKey.GUIDE,
         RemoteKey.CH_LIST, RemoteKey.SUBTITLES, RemoteKey.AUDIO)
     private var menuJob: Job? = null
-    private val menuIdle = 15_000L
+    private val menuIdle = 8_000L
 
     /**
      * A TV menu opened from here closes itself: after 15 s with nothing sent from the app
@@ -356,7 +356,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                     if (behind != null && nowBehind != null && nowBehind != behind) return@launch
                     if (link != Link.READY) return@launch
                     queue.trySend(RemoteKey.BACK)
-                    say("Closed the TV's menu (no use for 15 s)")
+                    say("Closed the TV's menu (no use for 8 s)")
                 }
             }
         }

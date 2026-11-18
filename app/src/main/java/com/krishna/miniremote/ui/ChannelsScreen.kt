@@ -1,5 +1,6 @@
 package com.krishna.miniremote.ui
 
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import android.graphics.BitmapFactory
 import android.util.LruCache
@@ -496,7 +497,7 @@ internal fun AppCircle(
         val slug = if (s.kind == ShortcutKind.CHANNEL) null else cat?.logo ?: Logos.slugFor(s.name)
         val pkg = if (s.kind == ShortcutKind.CHANNEL) null else ((cat ?: Catalog.apps.firstOrNull { it.name.equals(s.name, true) })?.let { Catalog.iconPkg(it) }
             ?: if (s.brand == Brand.ANDROID_TV) s.value.takeIf { "://" !in it } else null)
-        val logo: @Composable () -> Unit = { AppLogo(slug, ink, size * 0.46f, vm.settings.logos, cat?.site, pkg, short) }
+        val logo: @Composable () -> Unit = { AppLogo(slug, ink, size * 0.46f, vm.settings.logos, cat?.site, pkg, bleed = true, fallback = short) }
         if (icon != null) TvIcon(icon, Modifier.fillMaxSize().padding(10.dp), logo) else logo()
     }
 }
@@ -545,7 +546,7 @@ private fun OptionsMenu(open: Boolean, onDismiss: () -> Unit, items: List<Pair<S
  * Simple Icons doesn't carry (JioHotstar, Prime Video…). [fallback] while loading, when off, or if neither exists.
  */
 @Composable
-private fun AppLogo(slug: String?, ink: Color, size: androidx.compose.ui.unit.Dp, enabled: Boolean, site: String? = null, pkg: String? = null, fallback: @Composable () -> Unit) {
+private fun AppLogo(slug: String?, ink: Color, size: androidx.compose.ui.unit.Dp, enabled: Boolean, site: String? = null, pkg: String? = null, bleed: Boolean = false, fallback: @Composable () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val px = with(LocalDensity.current) { size.roundToPx() }
     val hex = String.format("%06X", ink.toArgb() and 0xFFFFFF)
@@ -564,6 +565,10 @@ private fun AppLogo(slug: String?, ink: Color, size: androidx.compose.ui.unit.Dp
     }
     val b = bmp
     if (b == null) fallback()
+    // On a quick access circle or square the real icon is the whole tile, edge to edge (a touch
+    // larger, so the icon's own corners fall outside the shape): no tile colour around it.
+    else if (real && bleed) Image(b, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+        modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = 1.08f; scaleY = 1.08f })
     // The real app icon fills its tile (as square as the tile allows), with app-icon corners.
     else if (real) Image(b, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
         modifier = Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true).padding(6.dp).clip(RoundedCornerShape(16.dp)))

@@ -209,7 +209,7 @@ fun HomeScreen(
             val v = vm.tvVolume
             // The trackpad lines up with the two rows of keys under it (4 × 68 + 3 × 14).
             if (deck == Deck.TRACKPAD) { val tw = minOf(maxWidth - 8.dp, maxHeight, KEYROW_W); trackpadAt(tw, tw) } else
-            RingDial(s, accent, level = v?.let { if (it.muted) 0f else it.level.toFloat() / it.max }, value = v?.let { if (it.muted) "Muted" else "${it.level}" }, onStep = { up -> vm.scrubTick(if (up) RemoteKey.VOL_UP else RemoteKey.VOL_DOWN) }) { turning -> dialAt(s, true, if (turning) v?.let { if (it.muted) "Muted" else "${it.level}" } ?: "Volume" else null) }
+            RingDial(s, accent, level = v?.let { if (it.muted) 0f else it.level.toFloat() / it.max }, value = v?.let { if (it.muted) "Muted" else "${it.level}" }, ring = vm.link == Link.READY, onStep = { up -> vm.scrubTick(if (up) RemoteKey.VOL_UP else RemoteKey.VOL_DOWN) }) { turning -> dialAt(s, true, if (turning) v?.let { if (it.muted) "Muted" else "${it.level}" } ?: "Volume" else null) }
         }
     }
     val a11y = Modifier.semantics {
@@ -308,7 +308,7 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
     }
     Box(modifier.padding(end = 12.dp), contentAlignment = Alignment.CenterStart) {
         Row(
-            Modifier.heightIn(min = 54.dp).widthIn(min = 236.dp).clip(CircleShape).background(M.High)
+            Modifier.heightIn(min = 54.dp).widthIn(min = 150.dp, max = 236.dp).clip(CircleShape).background(M.High)
                 .clickable(onClickLabel = "choose a TV", role = Role.Button, onClick = openDevices)
                 .semantics(mergeDescendants = true) {
                     contentDescription = d?.let { "TV: ${it.name}" } ?: "Choose a TV"
@@ -332,7 +332,6 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
                     modifier = Modifier.padding(top = 3.dp).widthIn(max = 200.dp).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 1500)
                         .semantics { contentDescription = "On the TV: $playing" })
             }
-            Spacer(Modifier.weight(1f, fill = false))
             LineIcon(Ico.DOWN, T.Dim, 15.dp, stroke = 2.2f)
         }
     }
