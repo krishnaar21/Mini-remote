@@ -835,4 +835,57 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
             else -> true
         }
     }
+
+    /* ------------------------------------------------------------- profile */
+
+    /**
+     * The profile as a file: your name, every setting, Quick access and the app icon. Paired
+     * TVs aren't in it: their pairing keys belong to this phone (pair again on another one).
+     */
+    fun exportProfile(appIcon: String): String {
+        val st = settings
+        val o = org.json.JSONObject()
+            .put("app", "Mini Remote").put("kind", "profile").put("version", 1)
+            .put("name", st.profileName).put("appIcon", appIcon)
+            .put("settings", org.json.JSONObject()
+                .put("haptics", st.haptics).put("hapticStrength", st.hapticStrength.toDouble())
+                .put("sound", st.sound).put("soundLevel", st.soundLevel.toDouble())
+                .put("accentHex", st.accentHex).put("scrubStepDp", st.scrubStepDp.toDouble())
+                .put("keepAwake", st.keepAwake).put("autoUpdate", st.autoUpdate)
+                .put("controlStyle", st.controlStyle).put("layout", st.layout)
+                .put("volumeKeys", st.volumeKeys).put("logos", st.logos)
+                .put("autoKeyboard", st.autoKeyboard).put("notifRemote", st.notifRemote))
+            .put("shortcuts", org.json.JSONArray(Shortcut.listToJson(shortcuts)))
+        return o.toString(2)
+    }
+
+    /** Applies a profile file; returns its app icon (or null if the file isn't a profile). */
+    fun importProfile(text: String): String? = runCatching {
+        val o = org.json.JSONObject(text)
+        require(o.optString("kind") == "profile" && o.optString("app") == "Mini Remote")
+        val j = o.optJSONObject("settings") ?: org.json.JSONObject()
+        val d = settings
+        fun f(k: String, def: Float) = if (j.has(k)) j.getDouble(k).toFloat() else def
+        val next = d.copy(
+            profileName = o.optString("name", d.profileName).take(30),
+            haptics = j.optBoolean("haptics", d.haptics),
+            hapticStrength = f("hapticStrength", d.hapticStrength).let { v -> HAPTIC_STRENGTHS.firstOrNull { it.first == v }?.first ?: d.hapticStrength },
+            sound = j.optBoolean("sound", d.sound),
+            soundLevel = f("soundLevel", d.soundLevel).let { v -> SOUND_LEVELS.firstOrNull { it.first == v }?.first ?: d.soundLevel },
+            accentHex = j.optString("accentHex", d.accentHex).let { h -> ACCENTS.firstOrNull { it.second.equals(h, true) }?.second ?: d.accentHex },
+            scrubStepDp = f("scrubStepDp", d.scrubStepDp).coerceIn(24f, 60f),
+            keepAwake = j.optBoolean("keepAwake", d.keepAwake),
+            autoUpdate = j.optBoolean("autoUpdate", d.autoUpdate),
+            controlStyle = j.optString("controlStyle", d.controlStyle).takeIf { it == "dial" || it == "trackpad" } ?: d.controlStyle,
+            layout = j.optString("layout", d.layout).takeIf { it == "strip" || it == "cards" } ?: d.layout,
+            volumeKeys = j.optBoolean("volumeKeys", d.volumeKeys),
+            logos = j.optBoolean("logos", d.logos),
+            autoKeyboard = j.optBoolean("autoKeyboard", d.autoKeyboard),
+            notifRemote = j.optBoolean("notifRemote", d.notifRemote),
+        )
+        update(next)
+        o.optJSONArray("shortcuts")?.let { saveShortcuts(Shortcut.listFromJson(it.toString()).take(60)) }
+        say("Profile loaded")
+        o.optString("appIcon").ifEmpty { "dial" }
+    }.getOrElse { say("That file isn't a Mini Remote profile"); null }
 }

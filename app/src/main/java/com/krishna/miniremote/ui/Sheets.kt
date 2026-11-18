@@ -652,31 +652,22 @@ internal fun Modifier.matchParentSizeCompat(): Modifier = this.fillMaxWidth().he
 @Composable
 internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, openLicenses: (() -> Unit)? = null, openPrivacy: (() -> Unit)? = null, openGestures: (() -> Unit)? = null) {
     val s = vm.settings
-    SectionTitle("Remote")
-    Group {
-    LayoutPicker(s.layout, accent) { vm.update(s.copy(layout = it)) }
-    SegRow("Control", listOf("dial" to "Dial", "trackpad" to "Trackpad"), s.controlStyle) { vm.update(s.copy(controlStyle = it)) }
-    ToggleRow("Volume keys", "Phone keys change TV volume", s.volumeKeys) { vm.update(s.copy(volumeKeys = it)) }
-    ToggleRow("Auto keyboard", "Opens when the TV asks for text", s.autoKeyboard) { vm.update(s.copy(autoKeyboard = it)) }
-    ToggleRow("Notification remote", "Volume and play in the background", s.notifRemote, last = true) { vm.update(s.copy(notifRemote = it)) }
-    }
-    if (openGestures != null) {
-        Group {
-            Row(
-                Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable(role = Role.Button, onClick = openGestures).padding(vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Gestures", color = T.Ink, fontSize = 15.sp)
-                    Text("Swipes and taps, with demos", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
-                }
-                Chevron()
-            }
-        }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+
+    // Profile: your name, and everything you've set up, saved to a file (and loaded back).
+    ProfileCard(vm, accent)
+
+    Fold("Remote", "${if (s.layout == "cards") "Cards" else "Black"} · ${if (s.controlStyle == "trackpad") "Trackpad" else "Dial"}", startOpen = true) {
+        LayoutPicker(s.layout, accent) { vm.update(s.copy(layout = it)) }
+        SegRow("Control", listOf("dial" to "Dial", "trackpad" to "Trackpad"), s.controlStyle) { vm.update(s.copy(controlStyle = it)) }
+        ToggleRow("Volume keys", "Phone keys change TV volume", s.volumeKeys) { vm.update(s.copy(volumeKeys = it)) }
+        ToggleRow("Auto keyboard", "Opens when the TV asks for text", s.autoKeyboard) { vm.update(s.copy(autoKeyboard = it)) }
+        ToggleRow("Notification remote", "Volume and play in the background", s.notifRemote, last = openGestures == null) { vm.update(s.copy(notifRemote = it)) }
+        if (openGestures != null) LinkRow("Gestures", "Swipes and taps, with demos", last = true, onClick = openGestures)
     }
 
-    SectionTitle("App icon")
-    Group {
+    Fold("Look", "${com.krishna.miniremote.AppIcon.all.firstOrNull { it.first == com.krishna.miniremote.AppIcon.current(ctx) }?.second ?: "Dial"} icon · ${ACCENTS.firstOrNull { it.second.equals(s.accentHex, true) }?.first ?: "Accent"}") {
+        Text("App icon", color = T.Ink, fontSize = 15.sp, modifier = Modifier.padding(top = 16.dp))
         val ctx = androidx.compose.ui.platform.LocalContext.current
         var icon by remember { mutableStateOf(com.krishna.miniremote.AppIcon.current(ctx)) }
         Row(Modifier.fillMaxWidth().selectableGroup().padding(vertical = 18.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -702,11 +693,8 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
                 }
             }
         }
-    }
-    Hint("Adaptive: your launcher's icon shape and themed (monochrome) icons apply.", top = 8)
-
-    SectionTitle("Accent colour")
-    Group {
+            Divider()
+        Text("Accent colour", color = T.Ink, fontSize = 15.sp, modifier = Modifier.padding(top = 16.dp))
     Row(Modifier.fillMaxWidth().selectableGroup().padding(vertical = 18.dp), horizontalArrangement = Arrangement.SpaceBetween) {
         ACCENTS.forEach { (name, hex) ->
             val sel = s.accentHex.equals(hex, true)
@@ -722,21 +710,13 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
             }
         }
     }
-    }
-    Hint("Used for keys and highlights.", top = 8)
+        }
 
-    SectionTitle("Haptics")
-    Group {
-    ToggleRow("Haptics", "On every press", s.haptics) { vm.update(s.copy(haptics = it)) }
-    SegRow("Strength", HAPTIC_STRENGTHS, s.hapticStrength, last = true) { vm.update(s.copy(hapticStrength = it)) }
-    }
-    SectionTitle("Sound")
-    Group {
-    ToggleRow("Sound", "Click on press", s.sound) { vm.update(s.copy(sound = it)) }
-    SegRow("Level", SOUND_LEVELS, s.soundLevel, last = true) { vm.update(s.copy(soundLevel = it)); vm.feel.fire(com.krishna.miniremote.Feel.PRESS) }
-    }
-    SectionTitle("Scrolling")
-    Group {
+    Fold("Feel", listOf(if (s.haptics) "Haptics" else null, if (s.sound) "Sound" else null).filterNotNull().joinToString(" · ").ifEmpty { "Quiet" }) {
+        ToggleRow("Haptics", "On every press", s.haptics) { vm.update(s.copy(haptics = it)) }
+        if (s.haptics) SegRow("Strength", HAPTIC_STRENGTHS, s.hapticStrength) { vm.update(s.copy(hapticStrength = it)) }
+        ToggleRow("Sound", "Click on press", s.sound) { vm.update(s.copy(sound = it)) }
+        if (s.sound) SegRow("Level", SOUND_LEVELS, s.soundLevel) { vm.update(s.copy(soundLevel = it)); vm.feel.fire(com.krishna.miniremote.Feel.PRESS) }
     Column(Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 2.dp)) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
@@ -753,33 +733,12 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
             Text("Slow", color = Muted, fontSize = 12.sp)
         }
     }
-    }
-    SectionTitle("Apps")
-    Group {
-    ToggleRow("App logos", "Download logos", s.logos, last = true) { vm.update(s.copy(logos = it)) }
-    }
-    SectionTitle("Screen")
-    Group {
-    ToggleRow("Stay awake", "While open", s.keepAwake, last = true) { vm.update(s.copy(keepAwake = it)) }
-    }
-
-    if (manage != null) {
-    SectionTitle("Devices")
-    Group {
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 68.dp).clickable(role = Role.Button, onClick = manage).padding(vertical = 16.dp, horizontal = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text("TVs", color = T.Ink, fontSize = 15.sp)
-            Text("${vm.devices.size} saved", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
         }
-        Chevron()
-    }
-    }
-    }
-    SectionTitle("Updates")
-    Group {
+
+    Fold("General", listOf(if (s.autoUpdate) "Auto updates" else "Updates off", "${vm.devices.size} TV${if (vm.devices.size == 1) "" else "s"}").joinToString(" · ")) {
+        ToggleRow("App logos", "Download logos", s.logos) { vm.update(s.copy(logos = it)) }
+        ToggleRow("Stay awake", "While open", s.keepAwake) { vm.update(s.copy(keepAwake = it)) }
+        if (manage != null) { LinkRow("TVs", "${vm.devices.size} saved", onClick = manage) }
     ToggleRow("Auto updates", "Notify when ready", s.autoUpdate) {
         vm.update(s.copy(autoUpdate = it)); if (it) vm.checkForUpdate()
     }
@@ -813,35 +772,16 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
         }
         Chevron()
     }
-    }
-    if (openPrivacy != null) {
-        SectionTitle("Privacy & data")
-        Group {
-            Row(
-                Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable(role = Role.Button, onClick = openPrivacy).padding(vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Privacy & data", color = T.Ink, fontSize = 15.sp)
-                    Text("Storage, network, erase", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
-                }
-                Chevron()
-            }
-        }
+            if (openPrivacy != null) { Divider(); LinkRow("Privacy & data", "Storage, network, erase", last = true, onClick = openPrivacy) }
     }
 
-    SectionTitle("About")
-    Group {
+    val version = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "dev" }
+    Fold("About", "Version $version") {
     Text("Mini Remote needs no account and has no ads, analytics or tracking.",
         color = Muted, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 16.dp))
     Text("Roku, Samsung, LG, webOS, Android TV, Google TV and the app names and logos shown are trademarks of their owners. " +
         "Mini Remote is an independent app, not affiliated with or endorsed by them; it uses the TVs' published or documented remote-control interfaces on your own network.",
         color = Muted, fontSize = 12.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 10.dp))
-    // Lets you tell builds apart: CI numbers every build (0.2.<run>).
-    val ctx = androidx.compose.ui.platform.LocalContext.current
-    val version = remember {
-        runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "dev"
-    }
     Text("Version $version", color = T.Ink, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
     if (openLicenses != null) {
         Divider()
@@ -853,6 +793,98 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
             Chevron()
         }
     } else Spacer(Modifier.height(10.dp))
+        }
+}
+
+/**
+ * A settings section as one card that folds: the title and a one-line summary of what's set,
+ * and the rows when open. Remembered while Settings stays open.
+ */
+@Composable
+internal fun Fold(title: String, summary: String, startOpen: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+    var open by androidx.compose.runtime.saveable.rememberSaveable(title) { mutableStateOf(startOpen) }
+    val turn by androidx.compose.animation.core.animateFloatAsState(if (open) 180f else 0f, label = "fold")
+    Column(Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(20.dp)).background(M.Container)) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 64.dp)
+                .clickable(onClickLabel = if (open) "collapse $title" else "expand $title", role = Role.Button) { open = !open }
+                .semantics { stateDescription = if (open) "Expanded" else "Collapsed"; heading() }
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(title, color = T.Ink, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                if (!open) Text(summary, color = Muted, fontSize = 12.5.sp, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
+            }
+            Box(Modifier.graphicsLayer { rotationZ = turn }) { LineIcon(Ico.DOWN, T.Dim, 18.dp, stroke = 2.2f) }
+        }
+        androidx.compose.animation.AnimatedVisibility(open, enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()) {
+            Column(Modifier.fillMaxWidth()) {
+                Divider()
+                Column(Modifier.padding(horizontal = 16.dp), content = content)
+            }
+        }
+    }
+}
+
+/** A row that opens another page. */
+@Composable
+internal fun LinkRow(title: String, sub: String, last: Boolean = false, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable(role = Role.Button, onClick = onClick).padding(vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = T.Ink, fontSize = 15.sp)
+            Text(sub, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
+        }
+        Chevron()
+    }
+    if (!last) Divider()
+}
+
+/** Profile: name and initials, and the whole setup saved to (or loaded from) a file. */
+@Composable
+internal fun ProfileCard(vm: RemoteVM, accent: Color) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val s = vm.settings
+    var name by remember(s.profileName) { mutableStateOf(s.profileName) }
+    val save = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) runCatching {
+            ctx.contentResolver.openOutputStream(uri)?.use { it.write(vm.exportProfile(com.krishna.miniremote.AppIcon.current(ctx)).toByteArray()) }
+            vm.say("Profile saved")
+        }.onFailure { vm.say("Couldn't save the profile") }
+    }
+    val load = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val text = runCatching { ctx.contentResolver.openInputStream(uri)?.use { it.readBytes().take(400_000).toByteArray().decodeToString() } }.getOrNull()
+            if (text == null) vm.say("Couldn't read that file")
+            else vm.importProfile(text)?.let { icon -> if (icon != com.krishna.miniremote.AppIcon.current(ctx)) com.krishna.miniremote.AppIcon.set(ctx, icon) }
+        }
+    }
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(20.dp)).background(M.Container).padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Avatar(initials(name), accent, 52.dp)
+            Column(Modifier.weight(1f)) {
+                BasicTextField(
+                    name, { name = it.take(30) }, singleLine = true,
+                    textStyle = TextStyle(color = T.Ink, fontSize = 17.sp, fontWeight = FontWeight.Medium, fontFamily = Inter),
+                    cursorBrush = SolidColor(T.Ink),
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { vm.update(s.copy(profileName = name.trim())) }),
+                    modifier = Modifier.fillMaxWidth().onFocusChanged { if (!it.isFocused && name.trim() != s.profileName) vm.update(s.copy(profileName = name.trim())) }
+                        .semantics { contentDescription = "Your name" },
+                    decorationBox = { inner -> Box { if (name.isEmpty()) Text("Your name", color = Muted, fontSize = 17.sp); inner() } },
+                )
+                Text("Settings, Quick access and icon. Saved on this phone.", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 3.dp))
+            }
+        }
+        Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(Modifier.weight(1f)) { Btn("Save to file", kind = 1) { save.launch("Mini Remote profile${if (s.profileName.isNotBlank()) " - " + s.profileName else ""}.json") } }
+            Box(Modifier.weight(1f)) { Btn("Load file", kind = 1) { load.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) } }
+        }
+        Text("Paired TVs stay on this phone (their keys can't move). Pair once on a new phone.", color = Muted, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 10.dp))
     }
 }
 
