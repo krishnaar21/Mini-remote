@@ -564,6 +564,21 @@ private fun OptionsMenu(open: Boolean, onDismiss: () -> Unit, items: List<Pair<S
 internal val LiftGrey get() = Look.p.high
 internal fun liftDark(c: Color): Color = if (!Look.p.light && c.luminance() < 0.02f) LiftGrey else c
 
+/** True when an icon's border isn't one plain colour (artwork or gradients reach the edge). */
+private fun busyEdges(b: ImageBitmap): Boolean = runCatching {
+    val bm = b.asAndroidBitmap()
+    val w = bm.width; val h = bm.height; val i = (minOf(w, h) * 0.05f).toInt().coerceAtLeast(1)
+    val lum = ArrayList<Float>()
+    for (t in 0..15) {
+        val x = i + (w - 2 * i - 1) * t / 15; val y = i + (h - 2 * i - 1) * t / 15
+        listOf(bm.getPixel(x, i), bm.getPixel(x, h - 1 - i), bm.getPixel(i, y), bm.getPixel(w - 1 - i, y)).forEach { c ->
+            lum += (0.299f * android.graphics.Color.red(c) + 0.587f * android.graphics.Color.green(c) + 0.114f * android.graphics.Color.blue(c)) / 255f
+        }
+    }
+    val m = lum.average().toFloat()
+    kotlin.math.sqrt(lum.map { (it - m) * (it - m) }.average()).toFloat() > 0.16f
+}.getOrDefault(false)
+
 /** The average colour just inside an icon's corners (null when they're see-through). */
 private fun edgeColour(b: ImageBitmap): Color? = runCatching {
     val bm = b.asAndroidBitmap()
@@ -602,7 +617,13 @@ private fun AppLogo(slug: String?, ink: Color, size: androidx.compose.ui.unit.Dp
         // pixels are stretched outward to the tile's edge, so its background simply carries on
         // (gradients too) instead of a band of another colour.
         val opaque = remember(b) { edgeColour(b) != null }
-        if (opaque) {
+        val busy = remember(b) { busyEdges(b) }
+        if (opaque && busy) Box(Modifier.fillMaxSize().background(liftDark(edgeColour(b) ?: Color.Black)), contentAlignment = Alignment.Center) {
+            // Artwork runs right to the edge (SonyLIV): stretching it would streak, so the icon
+            // sits a little smaller as a rounded square on its own average edge colour.
+            Image(b, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(0.64f).clip(RoundedCornerShape(24)))
+        } else if (opaque) {
             val src = remember(b) {
                 val ab = b.asAndroidBitmap()
                 val i = (minOf(ab.width, ab.height) * 0.035f).toInt() // trim soft, anti-aliased edges
