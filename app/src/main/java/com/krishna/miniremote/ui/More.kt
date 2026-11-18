@@ -56,7 +56,8 @@ fun MoreSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
         onDismissRequest = onClose, sheetState = st, containerColor = SheetBg, contentColor = T.Ink,
         shape = SheetShape, scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
     ) {
-        Column(Modifier.navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
+        Column(Modifier.navigationBarsPadding()) {
+        Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp)) {
             Text("More", color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             val what = when (vm.screen) {
                 RemoteVM.Screen.HOME -> "On the home screen: playback and channel keys are off."
@@ -68,7 +69,7 @@ fun MoreSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
 
             // 1 · Controls: every key in one card (5 across), colour keys under them.
             // Playback as one bar (no circles), then the other keys as labelled tiles.
-            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 MediaBar(vm)
                 listOf(
                     listOf(Triple(RemoteKey.SUBTITLES, Ico.CC, "Subtitles"), Triple(RemoteKey.AUDIO, Ico.AUDIO, "Audio"),
@@ -82,7 +83,7 @@ fun MoreSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
                 }
                 val colours = listOf(RemoteKey.RED to Color(0xFFE5484D), RemoteKey.GREEN to Color(0xFF30A46C), RemoteKey.YELLOW to Color(0xFFF5D90A), RemoteKey.BLUE to Color(0xFF3E63DD))
                 if (colours.any { vm.adapterHas(it.first) }) {
-                    Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         colours.forEach { (k, c) ->
                             val on = vm.can(k)
                             Box(
@@ -156,6 +157,38 @@ fun MoreSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
                             contentAlignment = Alignment.Center,
                         ) { Text(if (m < 60) "$m min" else "${m / 60}${if (m % 60 == 30) ".5" else ""} h", color = if (vm.can(RemoteKey.POWER)) T.Ink else Muted, fontSize = 13.sp, fontWeight = FontWeight.Medium) }
                     }
+                }
+            }
+        }
+        // Always at hand, under the scrolling keys: move around and select without going back Home.
+        Box(Modifier.fillMaxWidth().background(SheetBg).padding(horizontal = 24.dp).padding(top = 8.dp, bottom = 16.dp)) { NavPad(vm) }
+        }
+    }
+}
+
+/**
+ * A compact navigation bar: Back · ◀ · ▲ · OK · ▼ · ▶. Used where the dial isn't on screen
+ * (More, Search) so you can move around the TV and select without leaving.
+ */
+@Composable
+internal fun NavPad(vm: RemoteVM) {
+    val keys = listOf(
+        RemoteKey.BACK to Ico.BACK, RemoteKey.LEFT to Ico.LEFT, RemoteKey.UP to Ico.UP,
+        RemoteKey.OK to null, RemoteKey.DOWN to Ico.DOWN, RemoteKey.RIGHT to Ico.RIGHT,
+    )
+    Row(Modifier.fillMaxWidth().height(54.dp).clip(CircleShape).background(M.High), verticalAlignment = Alignment.CenterVertically) {
+        keys.forEachIndexed { i, (k, ico) ->
+            val on = vm.can(k)
+            val c = if (on) T.Ink else T.Ink.copy(alpha = 0.3f)
+            if (i == 1) Box(Modifier.width(1.dp).height(24.dp).background(Color.White.copy(alpha = 0.08f)))
+            Box(
+                Modifier.weight(1f).fillMaxHeight().clickable(role = Role.Button, onClickLabel = k.word) { if (on) vm.press(k) else vm.explain(k) }
+                    .semantics { contentDescription = k.word },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (ico != null) LineIcon(ico, c, 21.dp)
+                else Box(Modifier.size(38.dp).clip(CircleShape).background(Color.White.copy(alpha = if (on) 0.12f else 0.05f)), contentAlignment = Alignment.Center) {
+                    Text("OK", color = c, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

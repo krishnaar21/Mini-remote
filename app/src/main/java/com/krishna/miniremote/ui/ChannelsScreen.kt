@@ -225,7 +225,7 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
                 Hint("Long-press an app and drag it here.", top = 6)
             } else {
                 // Two rows of four (Quick access holds eight).
-                Column(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
                     pinned.chunked(4).forEachIndexed { r, row ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             row.forEachIndexed { c, s ->

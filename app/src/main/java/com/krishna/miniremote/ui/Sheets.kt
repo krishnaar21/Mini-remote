@@ -1106,12 +1106,28 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, openSearch: Boolean = true, start
                             voice.on && text.isNotEmpty() -> text
                             voice.on -> "Speak now"
                             voice.error != null -> voice.error!!
+                            vm.searchesApps -> "Typed into the box selected on the TV. Use the arrows to pick one, or search an app below."
                             else -> "Typed on the TV as you go."
                         },
                         color = if (voice.on && (voice.partial.isNotEmpty() || text.isNotEmpty())) T.Ink else Muted,
                         fontSize = if (voice.on) 16.sp else 12.5.sp,
                         modifier = Modifier.fillMaxWidth().padding(top = 12.dp, start = 4.dp).semantics { liveRegion = LiveRegionMode.Polite },
                     )
+                    if (!voice.on && vm.searchesApps) {
+                        Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Search in", color = Muted, fontSize = 12.5.sp)
+                            listOf("youtube" to "YouTube", "play" to "Play Store").forEach { (w, label) ->
+                                val ok = text.isNotBlank()
+                                Box(
+                                    Modifier.height(34.dp).clip(CircleShape).background(M.High)
+                                        .clickable(role = Role.Button, enabled = ok) { vm.searchIn(w, text); onClose() }
+                                        .padding(horizontal = 14.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) { Text(label, color = if (ok) T.Ink else Muted, fontSize = 13.sp, fontWeight = FontWeight.Medium) }
+                            }
+                        }
+                        Box(Modifier.padding(top = 12.dp)) { NavPad(vm) }
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (voice.on) {
                             Box(Modifier.weight(1f)) { Btn("Clear", kind = 1) { change("") } }

@@ -200,6 +200,7 @@ class AndroidTvAdapter(
     @Volatile private var fieldAt = 0L
     @Volatile private var fieldWait: CompletableDeferred<Unit>? = null
     @Volatile private var ourEditAt = 0L
+    @Volatile private var awaitBox = false
     /** The TV decided the speech is over (sent back a voice payload). */
     @Volatile var onVoiceDone: (() -> Unit)? = null
     override var onKeyboard: (() -> Unit)? = null
@@ -387,7 +388,7 @@ class AndroidTvAdapter(
      * session is answered and closed right away, which leaves the search screen with its keyboard.
      */
     override suspend fun openSearch() {
-        fieldAt = 0L // the search box will be a new text box: typing waits for it
+        fieldAt = 0L; awaitBox = true // the search box will be a new text box: typing waits for it
         withContext(Dispatchers.IO) {
             val f = io ?: error("Not connected")
             f.send(Pb().apply { msg(10) { int(1, 84); int(2, 1) } }.toBytes()) // down
@@ -451,7 +452,8 @@ class AndroidTvAdapter(
         val f = io ?: error("Not connected")
         // No text box seen yet (search still opening): wait up to 3 s for the TV to report it,
         // so the letters land in the box with its current counters.
-        if (fieldAt == 0L) {
+        if (awaitBox && fieldAt == 0L) {
+            awaitBox = false
             val w = CompletableDeferred<Unit>().also { fieldWait = it }
             kotlinx.coroutines.withTimeoutOrNull(3000) { w.await() }
             fieldWait = null

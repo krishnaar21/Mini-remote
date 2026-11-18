@@ -597,6 +597,9 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     fun openTvSearch() {
         val a = adapter ?: return
         if (link != Link.READY) return
+        // Google TV's Search key starts the voice assistant, not a text box: leave the screen as
+        // it is and type into whatever box is selected (or search an app from the panel).
+        if (a is com.krishna.miniremote.net.AndroidTvAdapter) return
         viewModelScope.launch { runCatching { a.openSearch(); txCount++ } }
     }
 
@@ -608,6 +611,21 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         val t = text.trim()
         if (t.isEmpty()) return
         if (active?.brand == Brand.ROKU) search(t) else typeText(t)
+    }
+
+    /** Android TV: search an app straight from the phone (no TV keyboard): YouTube or the Play Store. */
+    val searchesApps: Boolean get() = active?.brand == Brand.ANDROID_TV
+
+    fun searchIn(where: String, query: String) {
+        val q = query.trim()
+        if (q.isEmpty()) return
+        val e = java.net.URLEncoder.encode(q, "UTF-8")
+        val link = when (where) {
+            "youtube" -> "https://www.youtube.com/results?search_query=$e"
+            else -> "market://search?q=$e&c=apps"
+        }
+        say("Searching ${if (where == "youtube") "YouTube" else "Play Store"} for $q")
+        act("Couldn't search") { it.launchApp(link) }
     }
 
     fun search(query: String) {
@@ -914,12 +932,15 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
             Screen.HOME -> when (k) {
                 in playbackKeys -> "Playback keys work while something's playing"
                 RemoteKey.SUBTITLES, RemoteKey.AUDIO -> "${k.word} works while something's playing"
+                RemoteKey.INFO -> "Info shows programme details on live TV"
                 in liveKeys -> "Channel keys work on live TV"
                 in colourKeys -> "Colour keys work on live TV"
                 else -> null
             }
             Screen.APP -> when (k) {
                 in liveKeys -> "Channel keys work on live TV"
+                // Google TV apps ignore the Info key; it shows programme details on live TV.
+                RemoteKey.INFO -> if (active?.brand == Brand.ANDROID_TV) "Info shows programme details on live TV" else null
                 in colourKeys -> "Colour keys work on live TV"
                 else -> null
             }
