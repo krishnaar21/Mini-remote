@@ -349,14 +349,24 @@ fun shortName(name: String, fallback: String): String {
 internal fun nowLine(vm: RemoteVM): String? {
     if (vm.link != Link.READY) return null
     val n = vm.nowOn ?: return null
+    if ("launcher" in n.name.lowercase()) return null
     val name = n.name.let { raw ->
         if ('.' in raw && ' ' !in raw) com.krishna.miniremote.Catalog.apps.firstOrNull { it.ids.values.contains(raw) }?.name
             ?: vm.tvApps.firstOrNull { it.id == raw }?.name
+            ?: (if (n.live) "Live TV" else prettyPackage(raw))
         else raw
-    }?.takeIf { it.isNotBlank() && it != "Home" } ?: return null
+    }.takeIf { it.isNotBlank() && it != "Home" } ?: return null
     val pos = n.positionMs; val dur = n.durationMs
     fun t(ms: Long) = (ms / 1000).let { s -> if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60) }
     return if (pos != null && dur != null && dur > 0) "$name · ${t(pos)} / ${t(dur)}" else name
+}
+
+/** A readable name for an app the catalogue doesn't know: "com.example.tv.coolplayer" → "Coolplayer". */
+internal fun prettyPackage(pkg: String): String {
+    val skip = setOf("com", "org", "net", "in", "tv", "android", "app", "apps", "leanback", "atv", "androidtv", "google", "player", "main", "ui", "mobile", "release")
+    val parts = pkg.split('.')
+    val pick = parts.reversed().firstOrNull { it.lowercase() !in skip && it.length > 1 } ?: parts.last()
+    return pick.replace('_', ' ').replace('-', ' ').replaceFirstChar { it.uppercase() }
 }
 
 @Suppress("unused")

@@ -473,7 +473,7 @@ class AndroidTvAdapter(
     private fun isLive(pkg: String): Boolean {
         val p = pkg.lowercase()
         return p == "com.google.android.tv" || p == "com.android.tv" || p.endsWith(".tvinput") || "tvcenter" in p ||
-            "livetv" in p || "live_tv" in p || ".dtv" in p || "tvplayer" in p || ".tuner" in p || "channels" in p ||
+            "livetv" in p || "live_tv" in p || ".dtv" in p || "tvplayer" in p || ".tuner" in p || "channels" in p || "inputplayer" in p ||
             // India's TV services on Android TV: Tata Play, Airtel Xstream, Dish TV / d2h (Watcho), JioTV, Sun Direct.
             "tatasky" in p || "tataplay" in p || "airtel" in p || "dishtv" in p || "d2h" in p || "watcho" in p || "jiotv" in p || "jioplay" in p || "sundirect" in p
     }
