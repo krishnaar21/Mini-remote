@@ -1,5 +1,6 @@
 package com.krishna.miniremote.ui
 
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
@@ -478,13 +479,15 @@ internal fun AppCircle(
     shape: androidx.compose.ui.graphics.Shape = CircleShape, modifier: Modifier? = null, onClick: () -> Unit,
 ) {
     val cat = if (s.kind == ShortcutKind.APP && s.brand == null) Catalog.byKey(s.value) else null
-    val bg = when {
+    val bg0 = when {
         s.kind == ShortcutKind.CHANNEL -> ChannelBg
         cat != null -> Color(cat.bg)
         else -> tint(s.name)
     }
     val ink = cat?.let { Color(it.ink) } ?: Color.White
     val icon = s.icon ?: vm.tvApps.firstOrNull { it.name.equals(s.name, true) }?.icon
+    // Near-black tiles (Netflix…) would vanish on the black remote: lift them to a dark grey.
+    val bg = liftDark(bg0)
     Box(
         (modifier ?: Modifier.size(size)).clip(shape).background(bg)
             .clickable(onClickLabel = "open ${s.name}", role = Role.Button, onClick = onClick)
@@ -546,6 +549,10 @@ private fun OptionsMenu(open: Boolean, onDismiss: () -> Unit, items: List<Pair<S
  * An app's logo: Simple Icons (drawn in [ink]) first, then the app's own website icon for apps
  * Simple Icons doesn't carry (JioHotstar, Prime Video…). [fallback] while loading, when off, or if neither exists.
  */
+/** Tiles this dark disappear on the black remote: they get a dark grey instead. */
+internal val LiftGrey = Color(0xFF2C2C30)
+internal fun liftDark(c: Color): Color = if (c.luminance() < 0.02f) LiftGrey else c
+
 /** The average colour just inside an icon's corners (null when they're see-through). */
 private fun edgeColour(b: ImageBitmap): Color? = runCatching {
     val bm = b.asAndroidBitmap()
@@ -580,7 +587,7 @@ private fun AppLogo(slug: String?, ink: Color, size: androidx.compose.ui.unit.Dp
     else if (real && bleed) {
         // Balanced with the other logos: the icon at about three quarters of the tile, on its own
         // edge colour, so the two blend instead of the app's catalogue colour showing round it.
-        val edge = remember(b) { edgeColour(b) }
+        val edge = remember(b) { edgeColour(b)?.let(::liftDark) }
         Box(Modifier.fillMaxSize().then(if (edge != null) Modifier.background(edge) else Modifier), contentAlignment = Alignment.Center) {
             Image(b, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(0.74f).clip(RoundedCornerShape(26)))
