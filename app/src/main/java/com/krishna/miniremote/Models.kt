@@ -97,6 +97,8 @@ data class Settings(
     val autoKeyboard: Boolean = true,
     /** While connected and the app is in the background, a notification with volume and play keys. */
     val notifRemote: Boolean = true,
+    /** Close TV menus opened from here (Settings, Input…) with Back after 30 s of no use. */
+    val autoClose: Boolean = true,
     /** Home layout: "strip" (Black) or "cards" (see ui.HomeLayout). */
     val layout: String = "strip",
     /** Where quick access apps live: "home" (a third page of circles) or "more" (top of the More sheet). */

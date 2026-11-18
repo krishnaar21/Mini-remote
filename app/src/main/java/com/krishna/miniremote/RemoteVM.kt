@@ -313,6 +313,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         // Android TV players hold a rewind / fast-forward in a seek preview until it's confirmed
         // (they ignore Play / Pause meanwhile). Within 10 s of seeking, Play / Pause sends OK,
         // which confirms the new position and plays from it.
+        watchMenu(key)
         val now = System.currentTimeMillis()
         if (key == RemoteKey.REWIND || key == RemoteKey.FAST_FORWARD) seekAt = now
         if (key == RemoteKey.PLAY_PAUSE && active?.brand == Brand.ANDROID_TV && now - seekAt < 10_000) {
@@ -322,6 +323,44 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     }
 
     private var seekAt = 0L
+
+    /** Keys that open a menu or panel over what's on the TV. */
+    private val menuKeys = setOf(RemoteKey.SETTINGS, RemoteKey.INPUT, RemoteKey.MENU, RemoteKey.INFO, RemoteKey.GUIDE,
+        RemoteKey.CH_LIST, RemoteKey.SUBTITLES, RemoteKey.AUDIO)
+    private var menuJob: Job? = null
+    private val menuIdle = 30_000L
+
+    /**
+     * A TV menu opened from here closes itself: after 30 s with nothing sent from the app
+     * (moving through it, typing or speaking all count as use), Back is pressed once. Not when
+     * the screen behind it changed meanwhile (an input or app was chosen: the menu is gone),
+     * and not after Back / Home / Power.
+     */
+    private fun watchMenu(key: RemoteKey) {
+        when {
+            !settings.autoClose -> { menuJob?.cancel(); menuJob = null }
+            key == RemoteKey.BACK || key == RemoteKey.HOME || key == RemoteKey.POWER -> { menuJob?.cancel(); menuJob = null }
+            key in menuKeys -> {
+                val behind = nowOn?.name
+                menuJob?.cancel()
+                menuJob = viewModelScope.launch {
+                    delay(menuIdle)
+                    // Still being used: wait until it has been quiet for the whole spell.
+                    while (true) {
+                        val quiet = System.currentTimeMillis() - lastTxAt
+                        if (quiet >= menuIdle) break
+                        delay(menuIdle - quiet)
+                    }
+                    menuJob = null
+                    val nowBehind = nowOn?.name
+                    if (behind != null && nowBehind != null && nowBehind != behind) return@launch
+                    if (link != Link.READY) return@launch
+                    queue.trySend(RemoteKey.BACK)
+                    say("Closed the TV's menu (no use for 30 s)")
+                }
+            }
+        }
+    }
 
     fun scrubTick(key: RemoteKey) { feel.fire(Feel.TICK); nudgeVolume(key); queue.trySend(key) }
 
@@ -1013,7 +1052,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 .put("keepAwake", st.keepAwake).put("autoUpdate", st.autoUpdate)
                 .put("controlStyle", st.controlStyle).put("layout", st.layout).put("appsIn", st.appsIn)
                 .put("volumeKeys", st.volumeKeys).put("logos", st.logos)
-                .put("autoKeyboard", st.autoKeyboard).put("notifRemote", st.notifRemote))
+                .put("autoKeyboard", st.autoKeyboard).put("notifRemote", st.notifRemote).put("autoClose", st.autoClose))
             .put("shortcuts", org.json.JSONArray(Shortcut.listToJson(shortcuts)))
         return o.toString(2)
     }
@@ -1043,6 +1082,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
             logos = j.optBoolean("logos", d.logos),
             autoKeyboard = j.optBoolean("autoKeyboard", d.autoKeyboard),
             notifRemote = j.optBoolean("notifRemote", d.notifRemote),
+            autoClose = j.optBoolean("autoClose", d.autoClose),
         )
         update(next)
         o.optJSONArray("shortcuts")?.let { saveShortcuts(Shortcut.listFromJson(it.toString()).take(60)) }

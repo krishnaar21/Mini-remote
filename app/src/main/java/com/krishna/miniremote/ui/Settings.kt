@@ -246,6 +246,8 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
         SetToggle(Ico.KEYBOARD, SetTint.blue, "Auto keyboard", "When the TV asks for text", s.autoKeyboard) { vm.update(s.copy(autoKeyboard = it)) }
         SetLine()
         SetToggle(Ico.ALERT, SetTint.green, "Notification remote", "Volume and play in the background", s.notifRemote) { vm.update(s.copy(notifRemote = it)) }
+        SetLine()
+        SetToggle(Ico.BACK, SetTint.teal, "Close idle TV menus", "Back after 30 s without use", s.autoClose) { vm.update(s.copy(autoClose = it)) }
     }
     SetCard {
         SetRow(Ico.DISPLAY, SetTint.pink, "Appearance", "$iconName · $accentName") { open = "look" }

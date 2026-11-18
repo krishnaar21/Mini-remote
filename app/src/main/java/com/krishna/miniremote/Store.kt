@@ -49,6 +49,7 @@ class Store(ctx: Context) {
             logos = p.getBoolean("logos", d.logos),
             autoKeyboard = p.getBoolean("autoKeyboard", d.autoKeyboard),
             notifRemote = p.getBoolean("notifRemote", d.notifRemote),
+            autoClose = p.getBoolean("autoClose", d.autoClose),
             layout = p.getString("layout", d.layout)?.takeIf { it in setOf("cards", "strip") } ?: d.layout,
             appsIn = p.getString("appsIn", d.appsIn)?.takeIf { it == "home" || it == "more" } ?: d.appsIn,
         )
@@ -62,7 +63,7 @@ class Store(ctx: Context) {
         .putBoolean("autoupdate", s.autoUpdate)
         .putString("control", s.controlStyle).putString("profileName", s.profileName).putString("profileEmail", s.profileEmail)
         .putBoolean("volumeKeys", s.volumeKeys).putBoolean("logos", s.logos).putString("layout", s.layout).putString("appsIn", s.appsIn)
-        .putBoolean("autoKeyboard", s.autoKeyboard).putBoolean("notifRemote", s.notifRemote).apply()
+        .putBoolean("autoKeyboard", s.autoKeyboard).putBoolean("notifRemote", s.notifRemote).putBoolean("autoClose", s.autoClose).apply()
 
     fun loadShortcuts(): List<Shortcut> = Shortcut.listFromJson(p.getString("shortcuts", null))
     fun saveShortcuts(l: List<Shortcut>) = p.edit().putString("shortcuts", Shortcut.listToJson(l)).apply()
