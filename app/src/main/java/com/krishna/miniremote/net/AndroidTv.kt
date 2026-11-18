@@ -203,7 +203,7 @@ class AndroidTvAdapter(
         RemoteKey.REWIND to 89, RemoteKey.FAST_FORWARD to 90,
         RemoteKey.CH_UP to 166, RemoteKey.CH_DOWN to 167,
         RemoteKey.GUIDE to 172, RemoteKey.CH_LIST to 172, RemoteKey.INFO to 165,
-        RemoteKey.INPUT to 178, RemoteKey.MENU to 176, RemoteKey.AUDIO to 222,
+        RemoteKey.INPUT to 178, RemoteKey.MENU to 82, RemoteKey.AUDIO to 222,
         RemoteKey.SUBTITLES to 175, RemoteKey.SETTINGS to 176,
         RemoteKey.RED to 183, RemoteKey.GREEN to 184, RemoteKey.YELLOW to 185, RemoteKey.BLUE to 186,
     ) + RemoteKey.entries.filter { it.digit != null }.associateWith { 7 + (it.digit!! - '0') }

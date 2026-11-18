@@ -16,7 +16,7 @@ enum class RemoteKey(val word: String, val digit: Char? = null) {
     BACK("Back"), HOME("Home"), PLAY_PAUSE("Play / Pause"), POWER("Power"),
     VOL_UP("Volume +"), VOL_DOWN("Volume -"), MUTE("Mute"), VOICE("Voice"),
     REWIND("Rewind"), FAST_FORWARD("Fast forward"), CH_UP("Channel +"), CH_DOWN("Channel -"),
-    GUIDE("TV Guide"), CH_LIST("Channel list"), INFO("Info"), INPUT("Input"), MENU("Display settings"), AUDIO("Audio"),
+    GUIDE("TV Guide"), CH_LIST("Channel list"), INFO("Info"), INPUT("Input"), MENU("Menu"), AUDIO("Audio"),
     SUBTITLES("Subtitles"), SETTINGS("Settings"), RED("Red"), GREEN("Green"), YELLOW("Yellow"), BLUE("Blue"),
     N0("0", '0'), N1("1", '1'), N2("2", '2'), N3("3", '3'), N4("4", '4'),
     N5("5", '5'), N6("6", '6'), N7("7", '7'), N8("8", '8'), N9("9", '9');

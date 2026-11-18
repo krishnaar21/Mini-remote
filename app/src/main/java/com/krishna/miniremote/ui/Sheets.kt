@@ -16,6 +16,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -481,7 +482,7 @@ internal fun DevicePage(vm: RemoteVM, d: Device, accent: Color) {
 @Composable
 internal fun LocalPage(onContinue: () -> Unit) {
     TvIllustration(Color(0xFF6FB1FF))
-    Lead("Finds TVs on your Wi-Fi. For TVs from 2017 on.", center = true)
+    Lead("Finds TVs on your Wi-Fi. No account needed.", center = true)
     Btn("Continue", onClick = onContinue)
 }
 
@@ -828,6 +829,19 @@ internal fun Fold(title: String, summary: String, startOpen: Boolean = false, co
     }
 }
 
+/** A tonal button with an icon, for the profile card. */
+@Composable
+private fun ProfileAction(ico: Ico, label: String, modifier: Modifier, onClick: () -> Unit) {
+    Row(
+        modifier.height(46.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.08f))
+            .clickable(role = Role.Button, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
+    ) {
+        LineIcon(ico, T.Ink, 18.dp)
+        Text(label, color = T.Ink, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
+    }
+}
+
 /** A row that opens another page. */
 @Composable
 internal fun LinkRow(title: String, sub: String, last: Boolean = false, onClick: () -> Unit) {
@@ -863,28 +877,46 @@ internal fun ProfileCard(vm: RemoteVM, accent: Color) {
             else vm.importProfile(text)?.let { icon -> if (icon != com.krishna.miniremote.AppIcon.current(ctx)) com.krishna.miniremote.AppIcon.set(ctx, icon) }
         }
     }
-    Column(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(20.dp)).background(M.Container).padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Avatar(initials(name), accent, 52.dp)
+    val apps = vm.shortcuts.count { it.pinned }
+    val stats = listOf(
+        "${vm.devices.size} TV${if (vm.devices.size == 1) "" else "s"}",
+        "$apps in Quick access",
+        if (s.layout == "cards") "Cards" else "Black",
+    ).joinToString("  ·  ")
+    // A card with a soft wash of your accent colour: you, what you've set up, and the backup.
+    Column(
+        Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(24.dp))
+            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(accent.copy(alpha = 0.22f).compositeOver(M.Container), M.Container)))
+            .padding(18.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Box(Modifier.size(68.dp).border(2.dp, accent.copy(alpha = 0.7f), CircleShape).padding(4.dp)) { Avatar(initials(name), accent, 60.dp) }
             Column(Modifier.weight(1f)) {
-                BasicTextField(
-                    name, { name = it.take(30) }, singleLine = true,
-                    textStyle = TextStyle(color = T.Ink, fontSize = 17.sp, fontWeight = FontWeight.Medium, fontFamily = Inter),
-                    cursorBrush = SolidColor(T.Ink),
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { vm.update(s.copy(profileName = name.trim())) }),
-                    modifier = Modifier.fillMaxWidth().onFocusChanged { if (!it.isFocused && name.trim() != s.profileName) vm.update(s.copy(profileName = name.trim())) }
-                        .semantics { contentDescription = "Your name" },
-                    decorationBox = { inner -> Box { if (name.isEmpty()) Text("Your name", color = Muted, fontSize = 17.sp); inner() } },
-                )
-                Text("Settings, Quick access and icon. Saved on this phone.", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 3.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BasicTextField(
+                        name, { name = it.take(30) }, singleLine = true,
+                        textStyle = TextStyle(color = T.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, fontFamily = Inter),
+                        cursorBrush = SolidColor(T.Ink),
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { vm.update(s.copy(profileName = name.trim())) }),
+                        modifier = Modifier.weight(1f).onFocusChanged { if (!it.isFocused && name.trim() != s.profileName) vm.update(s.copy(profileName = name.trim())) }
+                            .semantics { contentDescription = "Your name" },
+                        decorationBox = { inner -> Box { if (name.isEmpty()) Text("Add your name", color = Muted, fontSize = 20.sp, fontWeight = FontWeight.SemiBold); inner() } },
+                    )
+                    LineIcon(Ico.EDIT, Muted, 16.dp)
+                }
+                Text(stats, color = Muted, fontSize = 12.5.sp, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
             }
         }
-        Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.weight(1f)) { Btn("Save to file", kind = 1) { save.launch("Mini Remote profile${if (s.profileName.isNotBlank()) " - " + s.profileName else ""}.json") } }
-            Box(Modifier.weight(1f)) { Btn("Load file", kind = 1) { load.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) } }
+        Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ProfileAction(Ico.BACKUP, "Back up", Modifier.weight(1f)) { save.launch("Mini Remote profile${if (s.profileName.isNotBlank()) " - " + s.profileName else ""}.json") }
+            ProfileAction(Ico.RESTORE, "Restore", Modifier.weight(1f)) { load.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
         }
-        Text("Paired TVs stay on this phone (their keys can't move). Pair once on a new phone.", color = Muted, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 10.dp))
+        Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            LineIcon(Ico.INFO, Muted, 14.dp)
+            Text("A backup holds your settings, Quick access and app icon. Paired TVs stay on this phone: pair once on a new one.",
+                color = Muted, fontSize = 12.sp, lineHeight = 16.sp)
+        }
     }
 }
 

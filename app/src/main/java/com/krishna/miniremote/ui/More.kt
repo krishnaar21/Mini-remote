@@ -64,17 +64,20 @@ fun MoreSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
             // 1 · Controls: every key in one card (5 across), colour keys under them.
             SectionTitle("Controls")
             Group {
+                // Three rows of four, like the keys on Home: playback, what's playing, the TV.
                 KeyGrid(vm, accent, listOf(
                     Triple(RemoteKey.REWIND, Ico.REWIND, "Rewind"),
                     Triple(RemoteKey.PLAY_PAUSE, if (vm.playing) Ico.PAUSE else Ico.PLAY_ONLY, if (vm.playing) "Pause" else "Play"),
                     Triple(RemoteKey.FAST_FORWARD, Ico.FFWD, "Forward"),
+                    Triple(RemoteKey.MUTE, if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, if (vm.muted) "Unmute" else "Mute"),
                     Triple(RemoteKey.SUBTITLES, Ico.CC, "Subtitles"),
                     Triple(RemoteKey.AUDIO, Ico.AUDIO, "Audio"),
-                    Triple(RemoteKey.SETTINGS, Ico.GEAR, "Menu"),
                     Triple(RemoteKey.INFO, Ico.INFO, "Info"),
                     Triple(RemoteKey.GUIDE, Ico.GUIDE, "Guide"),
                     Triple(RemoteKey.CH_LIST, Ico.LIST, "Channels"),
                     Triple(RemoteKey.INPUT, Ico.INPUT, "Input"),
+                    Triple(RemoteKey.MENU, Ico.MORE, "Menu"),
+                    Triple(RemoteKey.SETTINGS, Ico.GEAR, "Settings"),
                 ))
                 val colours = listOf(RemoteKey.RED to Color(0xFFE5484D), RemoteKey.GREEN to Color(0xFF30A46C), RemoteKey.YELLOW to Color(0xFFF5D90A), RemoteKey.BLUE to Color(0xFF3E63DD))
                 if (colours.any { vm.can(it.first) }) {
@@ -148,18 +151,18 @@ fun MoreSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
     }
 }
 
-/** Keys five across (two rows for ten), each with its label; dimmed when they don't fit what's on the TV. */
+/** Keys four across in round 58dp circles, like Home, each with its label; dimmed when they don't fit what's on the TV. */
 @Composable
 private fun KeyGrid(vm: RemoteVM, accent: Color, keys: List<Triple<RemoteKey, Ico, String>>) {
-    Column(Modifier.padding(vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        keys.chunked(5).forEach { row ->
+    Column(Modifier.padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        keys.chunked(4).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 row.forEach { (k, ico, label) ->
                     val on = vm.can(k)
-                    Column(Modifier.width(56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        KeyButton(accent, label, Modifier.size(48.dp), repeat = k == RemoteKey.REWIND || k == RemoteKey.FAST_FORWARD,
-                            pressedScale = 0.94f, enabled = on, onPress = { vm.press(k) }) { c, _ -> LineIcon(ico, c, 19.dp) }
-                        Text(label, color = if (on) Muted else Muted.copy(alpha = 0.4f), fontSize = 10.5.sp, maxLines = 1, modifier = Modifier.padding(top = 5.dp))
+                    Column(Modifier.width(66.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        KeyButton(accent, label, Modifier.size(58.dp), repeat = k == RemoteKey.REWIND || k == RemoteKey.FAST_FORWARD,
+                            pressedScale = 0.94f, enabled = on, onPress = { vm.press(k) }) { c, _ -> LineIcon(ico, c, 21.dp) }
+                        Text(label, color = if (on) Muted else Muted.copy(alpha = 0.4f), fontSize = 11.sp, maxLines = 1, modifier = Modifier.padding(top = 6.dp))
                     }
                 }
             }
