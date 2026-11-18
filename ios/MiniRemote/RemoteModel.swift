@@ -389,8 +389,8 @@ final class RemoteModel: ObservableObject {
         let hosts = Set(devices.map(\.host))
         Task { [weak self] in
             // Each TV shows up as soon as it's found.
-            let list = await Discovery.scan { d in
-                Task { @MainActor in
+            let list = await Discovery.scan { [weak self] d in
+                Task { @MainActor [weak self] in
                     guard let self, !hosts.contains(d.host), !self.found.contains(where: { $0.host == d.host }) else { return }
                     self.found.append(d)
                 }

@@ -205,7 +205,7 @@ private struct ManualPage: View {
             Text("IP address").font(.system(size: 13)).foregroundStyle(T.muted).padding(.bottom, 8)
             TextField("192.168.1.20", text: $ip).keyboardType(.decimalPad).padding(.horizontal, 12).frame(height: 52)
                 .background(RoundedRectangle(cornerRadius: 12).fill(T.high)).foregroundStyle(T.ink)
-                .onChange(of: ip) { _ in err = nil }
+                .onChange(of: ip) { _, _ in err = nil }
             Text("Brand").font(.system(size: 13)).foregroundStyle(T.muted).padding(.top, 18).padding(.bottom, 8)
             Picker("Brand", selection: $brand) { ForEach(Brand.allCases) { Text($0.label).tag($0) } }.pickerStyle(.menu)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 6).frame(height: 52)
@@ -239,7 +239,7 @@ private struct PairPage: View {
                     Text("\(p.tvName) is showing a 6-character code. Type it here.").foregroundStyle(Color(hex: 0xE0E0E4)).padding(.bottom, 16)
                     TextField("A1B2C3", text: $code).font(.system(size: 26, design: .monospaced)).multilineTextAlignment(.center)
                         .textInputAutocapitalization(.characters).autocorrectionDisabled()
-                        .onChange(of: code) { v in code = String(v.uppercased().filter { $0.isHexDigit }.prefix(6)) }
+                        .onChange(of: code) { _, v in code = String(v.uppercased().filter { $0.isHexDigit }.prefix(6)) }
                         .padding(.horizontal, 12).frame(height: 60).background(RoundedRectangle(cornerRadius: 12).fill(T.high)).foregroundStyle(T.ink)
                     Text(p.error ?? " ").font(.system(size: 13)).foregroundStyle(Color(hex: 0xFF8A8A)).padding(.top, 10)
                     WideButton(title: "Pair", enabled: code.count == 6) { vm.answerCode(code); code = "" }

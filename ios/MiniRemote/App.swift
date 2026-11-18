@@ -186,7 +186,7 @@ private struct CodeSheet: View {
             Text("Type the 6-character code on the TV.").foregroundStyle(T.muted)
             TextField("A1B2C3", text: $code).font(.system(size: 26, design: .monospaced)).multilineTextAlignment(.center)
                 .textInputAutocapitalization(.characters).autocorrectionDisabled()
-                .onChange(of: code) { v in code = String(v.uppercased().filter { $0.isHexDigit }.prefix(6)) }
+                .onChange(of: code) { _, v in code = String(v.uppercased().filter { $0.isHexDigit }.prefix(6)) }
                 .frame(height: 60).background(RoundedRectangle(cornerRadius: 12).fill(T.high)).foregroundStyle(T.ink)
             if let e = prompt.error { Text(e).font(.system(size: 13)).foregroundStyle(Color(hex: 0xFF8A8A)) }
             WideButton(title: "Pair", enabled: code.count == 6) { vm.answerCode(code) }
