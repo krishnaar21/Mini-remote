@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -237,8 +238,10 @@ private fun KeyTile(vm: RemoteVM, k: RemoteKey, ico: Ico, label: String, modifie
 
 /** The sleep timer: a countdown with Cancel when set, and 15 / 30 / 60 / 90 minute choices. */
 @Composable
-internal fun SleepCard(vm: RemoteVM, accent: Color) {
-    Group {
+internal fun SleepCard(vm: RemoteVM, accent: Color, card: Boolean = true) {
+    val wrap: @Composable (@Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) -> Unit =
+        if (card) { c -> Group(c) } else { c -> Column(Modifier.fillMaxWidth(), content = c) }
+    wrap {
         val at = vm.sleepAt
         if (at != null) {
             // Counting down: how long is left, big; when; and a way to stop it.
@@ -281,8 +284,47 @@ fun SleepSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
         shape = SheetShape, scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
-            Text("Sleep timer", color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-            SleepCard(vm, accent)
+            SleepArt(accent, Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp).height(120.dp))
+            Text("Sleep timer", color = T.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text("The TV turns itself off when the time's up.", color = Muted, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp))
+            SleepCard(vm, accent, card = false)
         }
+    }
+}
+
+/** A TV resting under a crescent moon, with a few stars and a soft glow: the sleep timer's picture. */
+@Composable
+private fun SleepArt(accent: Color, modifier: Modifier) {
+    androidx.compose.foundation.Canvas(modifier.semantics { contentDescription = "" }) {
+        val cx = size.width / 2f
+        val u = size.height / 120f
+        // Glow behind the moon.
+        drawCircle(androidx.compose.ui.graphics.Brush.radialGradient(listOf(accent.copy(alpha = 0.28f), Color.Transparent), center = androidx.compose.ui.geometry.Offset(cx + 26 * u, 30 * u), radius = 60 * u),
+            radius = 60 * u, center = androidx.compose.ui.geometry.Offset(cx + 26 * u, 30 * u))
+        // Crescent moon: a disc with a bite taken out.
+        val moon = androidx.compose.ui.geometry.Offset(cx + 26 * u, 30 * u)
+        val path = androidx.compose.ui.graphics.Path().apply {
+            addOval(androidx.compose.ui.geometry.Rect(moon, 20 * u))
+            val bite = androidx.compose.ui.graphics.Path().apply { addOval(androidx.compose.ui.geometry.Rect(androidx.compose.ui.geometry.Offset(moon.x + 10 * u, moon.y - 8 * u), 18 * u)) }
+            op(this, bite, androidx.compose.ui.graphics.PathOperation.Difference)
+        }
+        drawPath(path, accent)
+        // Stars.
+        listOf(Triple(-52f, 18f, 2.6f), Triple(-30f, 6f, 1.8f), Triple(58f, 8f, 2f), Triple(70f, 46f, 1.6f), Triple(-64f, 46f, 1.6f)).forEach { (dx, dy, r) ->
+            drawCircle(Color.White.copy(alpha = 0.7f), r * u, androidx.compose.ui.geometry.Offset(cx + dx * u, dy * u))
+        }
+        // The TV: screen and stand, dark with a thin outline.
+        val w = 96 * u; val h = 54 * u; val top = 54 * u
+        val tl = androidx.compose.ui.geometry.Offset(cx - w / 2, top)
+        drawRoundRect(Color(0xFF1C1C1E), tl, androidx.compose.ui.geometry.Size(w, h), androidx.compose.ui.geometry.CornerRadius(8 * u))
+        drawRoundRect(Color.White.copy(alpha = 0.22f), tl, androidx.compose.ui.geometry.Size(w, h), androidx.compose.ui.geometry.CornerRadius(8 * u),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f * u))
+        drawLine(Color.White.copy(alpha = 0.22f), androidx.compose.ui.geometry.Offset(cx - 18 * u, top + h + 8 * u), androidx.compose.ui.geometry.Offset(cx + 18 * u, top + h + 8 * u), 3 * u,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        // "z z" drifting off the screen.
+        val z = android.graphics.Paint().apply { color = android.graphics.Color.argb(150, 255, 255, 255); textSize = 13 * u; isAntiAlias = true; typeface = android.graphics.Typeface.DEFAULT_BOLD }
+        drawContext.canvas.nativeCanvas.drawText("z", cx - 8 * u, top + h / 2 + 5 * u, z)
+        z.textSize = 10 * u
+        drawContext.canvas.nativeCanvas.drawText("z", cx + 6 * u, top + h / 2 - 4 * u, z)
     }
 }

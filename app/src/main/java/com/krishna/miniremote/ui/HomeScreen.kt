@@ -220,12 +220,9 @@ fun HomeScreen(
     }
     val padOnly = if (deck == Deck.NUMPAD) (if (vm.settings.controlStyle == "trackpad") Deck.TRACKPAD else Deck.DIAL) else deck
 
-    // Top, as on the Apple TV Remote: mute · TV picker · power, inset from the screen edges.
+    // Top: the TV pill on the left, power on the right.
     val topBar: @Composable () -> Unit = {
-        Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 20.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            KeyButton(accent, "Mute", Modifier.size(52.dp), state = if (vm.muted) "Muted" else null, pressedScale = 1f, enabled = vm.can(RemoteKey.MUTE), onDisabled = { vm.explain(RemoteKey.MUTE) }, onPress = { vm.press(RemoteKey.MUTE) }) { c, _ ->
-                LineIcon(if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, c, 22.dp)
-            }
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 20.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             TvPicker(vm, Modifier.weight(1f), openDevices)
             KeyButton(accent, "Power", Modifier.size(52.dp), pressedScale = 1f, onPress = {
                 // Off (not reachable): wake it. On: ask before turning it off.
@@ -308,7 +305,7 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
         vm.link == Link.CONNECTING -> Color(0xFFFDD663)
         else -> Color(0xFFF2B8B5)
     }
-    Box(modifier.padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+    Box(modifier.padding(end = 12.dp), contentAlignment = Alignment.CenterStart) {
         Row(
             Modifier.height(44.dp).clip(CircleShape).background(M.High)
                 .clickable(onClickLabel = "choose a TV", role = Role.Button, onClick = openDevices)

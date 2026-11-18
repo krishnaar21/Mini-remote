@@ -267,7 +267,7 @@ private fun KeyPage2(vm: RemoteVM, accent: Color, k: Dp, openSleep: () -> Unit) 
             key("Info", Ico.INFO, RemoteKey.INFO)
             key("Guide", Ico.GUIDE, RemoteKey.GUIDE)
             key("Input", Ico.INPUT, RemoteKey.INPUT)
-            key("Settings", Ico.GEAR, RemoteKey.SETTINGS)
+            key("TV settings", Ico.SLIDERS, RemoteKey.SETTINGS)
         }
     }
 }
