@@ -67,5 +67,5 @@ private fun animationsOff(ctx: Context): Boolean =
 /** Soft top highlight that slides with the tilt, like light catching a rubber button. */
 fun DrawScope.sheen(t: Offset, strength: Float = 0.16f) {
     val c = Offset(size.width * (0.5f + t.x * 0.34f), size.height * (0.08f + t.y * 0.12f))
-    drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = strength), Color.Transparent), c, size.maxDimension * 0.55f))
+    drawRect(Brush.radialGradient(listOf(T.Ink.copy(alpha = strength), Color.Transparent), c, size.maxDimension * 0.55f))
 }

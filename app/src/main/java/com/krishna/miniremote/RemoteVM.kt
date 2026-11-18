@@ -1057,7 +1057,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 .put("keepAwake", st.keepAwake).put("autoUpdate", st.autoUpdate)
                 .put("controlStyle", st.controlStyle).put("layout", st.layout).put("appsIn", st.appsIn)
                 .put("volumeKeys", st.volumeKeys).put("logos", st.logos)
-                .put("autoKeyboard", st.autoKeyboard).put("notifRemote", st.notifRemote).put("autoClose", st.autoClose))
+                .put("autoKeyboard", st.autoKeyboard).put("notifRemote", st.notifRemote).put("autoClose", st.autoClose).put("theme", st.theme))
             .put("shortcuts", org.json.JSONArray(Shortcut.listToJson(shortcuts)))
         return o.toString(2)
     }
@@ -1088,6 +1088,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
             autoKeyboard = j.optBoolean("autoKeyboard", d.autoKeyboard),
             notifRemote = j.optBoolean("notifRemote", d.notifRemote),
             autoClose = j.optBoolean("autoClose", d.autoClose),
+            theme = j.optString("theme", d.theme).takeIf { it in setOf("dark", "light", "navy", "retro") } ?: d.theme,
         )
         update(next)
         o.optJSONArray("shortcuts")?.let { saveShortcuts(Shortcut.listFromJson(it.toString()).take(60)) }

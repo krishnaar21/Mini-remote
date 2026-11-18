@@ -105,11 +105,11 @@ import kotlin.math.roundToInt
 /* ---------------------------------------------------------------- palette */
 
 /** Sheets use the remote's own charcoal so they read as part of the same object. */
-internal val SheetBg = Color(0xFF262629)
+internal val SheetBg get() = Look.p.sheet
 internal val CardBg = Color(0xFF222223)
-internal val Line = Color(0xFF2E2E30)
-internal val Muted = Color(0xFFB4B4B9)
-internal val LeadInk = Color(0xFFE0E0E4)
+internal val Line get() = Look.p.line
+internal val Muted get() = Look.p.muted
+internal val LeadInk get() = Look.p.lead
 internal val Fill2 = Color(0xFF2A2A2B)
 internal val OkGreen = Color(0xFF4DDC88)
 internal val SwitchOn = Color(0xFF34C759)
@@ -207,7 +207,7 @@ internal val SheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
 
 /** .grab: 38 x 4 handle, 12 above and 4 below. */
 @Composable
-internal fun Grab() = Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(28.dp, 3.dp).background(Color(0xFF8A8A8E), RoundedCornerShape(2.dp)))
+internal fun Grab() = Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(28.dp, 3.dp).background(T.Sub, RoundedCornerShape(2.dp)))
 
 /** .field: label above (13, muted), 52 tall, radius 12, #141415, 1px line, 16 text. */
 @Composable
@@ -362,7 +362,7 @@ internal fun TvIllustration(accent: Color) {
 @Composable
 internal fun Spinner(accent: Color) {
     Box(Modifier.fillMaxWidth().height(96.dp), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(color = accent, trackColor = Color(0xFF333333), strokeWidth = 3.dp, modifier = Modifier.size(38.dp))
+        CircularProgressIndicator(color = accent, trackColor = M.High, strokeWidth = 3.dp, modifier = Modifier.size(38.dp))
     }
 }
 
@@ -400,7 +400,7 @@ internal fun CardRow(
     }
 }
 
-@Composable internal fun Chevron() = LineIcon(Ico.CHEVRON_R, Color(0xFFA8A8AD), 18.dp)
+@Composable internal fun Chevron() = LineIcon(Ico.CHEVRON_R, T.Sub, 18.dp)
 
 @Composable
 internal fun Badge(text: String) =
@@ -427,7 +427,7 @@ internal fun DeviceRow(vm: RemoteVM, d: Device, onClick: () -> Unit) {
         !active -> null to null
         vm.link == Link.READY -> "Connected" to OkGreen
         vm.link == Link.CONNECTING -> "Connecting…" to Color(0xFFFDD663)
-        else -> "Not connected" to Color(0xFF8A8A8E)
+        else -> "Not connected" to T.Sub
     }
     Column(
         Modifier.fillMaxWidth().padding(bottom = 12.dp)
@@ -726,7 +726,7 @@ internal val LocalAccent = androidx.compose.runtime.compositionLocalOf { Color(0
 @Composable
 internal fun ProfileAction(ico: Ico, label: String, modifier: Modifier, onClick: () -> Unit) {
     Row(
-        modifier.height(46.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.08f))
+        modifier.height(46.dp).clip(RoundedCornerShape(14.dp)).background(T.Ink.copy(alpha = 0.08f))
             .clickable(role = Role.Button, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
     ) {
@@ -777,7 +777,7 @@ internal fun ProfileEditSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) 
                     modifier = Modifier.fillMaxWidth().height(52.dp).semantics { contentDescription = label },
                     decorationBox = { inner ->
                         Box(Modifier.fillMaxSize().softFace(HOLLOW, sheen = false, corner = 14.dp, dpUnits = true).padding(horizontal = 14.dp), contentAlignment = Alignment.CenterStart) {
-                            if (value.isEmpty()) Text(hint, color = Color(0xFF8A8A8E), fontSize = 16.sp); inner()
+                            if (value.isEmpty()) Text(hint, color = T.Sub, fontSize = 16.sp); inner()
                         }
                     },
                 )
@@ -807,7 +807,7 @@ internal fun Group(content: @Composable ColumnScope.() -> Unit) {
 
 
 @Composable
-internal fun Divider() { if (LocalRowLines.current) Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF3A3A3E))) }
+internal fun Divider() { if (LocalRowLines.current) Box(Modifier.fillMaxWidth().height(1.dp).background(M.High)) }
 
 @Composable
 internal fun ToggleRow(title: String, sub: String?, checked: Boolean, last: Boolean = false, onChange: (Boolean) -> Unit) {
@@ -853,7 +853,7 @@ fun statusColor(l: Link, accent: Color): Color = when (l) {
     Link.READY -> Color(0xFF30D158)
     Link.CONNECTING -> Color(0xFFFFD60A)
     Link.ERROR -> T.Danger
-    Link.IDLE -> Color(0xFFA1A1A6)
+    Link.IDLE -> T.Sub
 }
 fun linkWord(l: Link) = when (l) { Link.READY -> "Connected"; Link.CONNECTING -> "Connecting..."; Link.ERROR -> "Can't reach"; Link.IDLE -> "" }
 
@@ -938,7 +938,7 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, openSearch: Boolean = true, start
                                         ) {
                                             LineIcon(Ico.SEARCH, Muted, 18.dp)
                                             Box(Modifier.weight(1f)) {
-                                                if (text.isEmpty()) Text("Search or type", color = Color(0xFF8A8A8E), fontSize = 16.sp)
+                                                if (text.isEmpty()) Text("Search or type", color = T.Sub, fontSize = 16.sp)
                                                 inner()
                                             }
                                         }

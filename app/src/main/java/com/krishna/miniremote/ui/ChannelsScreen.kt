@@ -287,7 +287,7 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit, picking
 /** Where a dragged app lands: a grey dashed box in the Quick access row. Lights up when the tile is over it. */
 @Composable
 private fun DropSlot(over: Boolean, accent: Color, modifier: Modifier) {
-    val line = if (over) accent else Color(0xFF5E5E63)
+    val line = if (over) accent else T.Sub
     Box(
         modifier.fillMaxWidth().height(96.dp)
             .background(if (over) accent.copy(alpha = 0.12f) else Color.Transparent, RoundedCornerShape(20.dp))
@@ -311,7 +311,7 @@ private class Dragger(val start: (AppEntry, Offset) -> Unit, val move: (Offset) 
 @Composable
 private fun Loading(accent: Color, text: String) {
     Row(Modifier.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        CircularProgressIndicator(color = accent, trackColor = Color(0xFF333333), strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+        CircularProgressIndicator(color = accent, trackColor = M.High, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
         Text(text, color = Muted, fontSize = 13.sp)
     }
 }
@@ -550,8 +550,8 @@ private fun OptionsMenu(open: Boolean, onDismiss: () -> Unit, items: List<Pair<S
  * Simple Icons doesn't carry (JioHotstar, Prime Video…). [fallback] while loading, when off, or if neither exists.
  */
 /** Tiles this dark disappear on the black remote: they get a dark grey instead. */
-internal val LiftGrey = Color(0xFF2C2C30)
-internal fun liftDark(c: Color): Color = if (c.luminance() < 0.02f) LiftGrey else c
+internal val LiftGrey get() = Look.p.high
+internal fun liftDark(c: Color): Color = if (!Look.p.light && c.luminance() < 0.02f) LiftGrey else c
 
 /** The average colour just inside an icon's corners (null when they're see-through). */
 private fun edgeColour(b: ImageBitmap): Color? = runCatching {
@@ -698,7 +698,7 @@ private fun IdHint(brand: Brand?, accent: Color) {
                     // The picture: a little screen (browser address bar, or the app's details), with the ID highlighted.
                     Box(
                         Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFF111113))
-                            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp)).padding(12.dp),
+                            .border(1.dp, T.Ink.copy(alpha = 0.08f), RoundedCornerShape(12.dp)).padding(12.dp),
                     ) {
                         Column {
                             Row(horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.padding(bottom = 10.dp)) {

@@ -104,10 +104,10 @@ fun Trackpad(
                     val p = Offset(i * gap, j * gap)
                     var f = 0f
                     if (t != null && glow > 0f) { val d = (p - t).getDistance(); f = (1f - d / reach).coerceIn(0f, 1f); f *= f * glow }
-                    drawCircle(Color.White.copy(alpha = 0.09f + 0.55f * f), r * (1f + 0.9f * f), p + (t?.let { (it - p) * (0.14f * f) } ?: Offset.Zero))
+                    drawCircle(T.Ink.copy(alpha = 0.09f + 0.55f * f), r * (1f + 0.9f * f), p + (t?.let { (it - p) * (0.14f * f) } ?: Offset.Zero))
                 }
                 if (t != null && glow > 0f) {
-                    drawCircle(Brush.radialGradient(0f to Color.White.copy(0.10f * glow), 0.7f to Color.Transparent, center = t, radius = u * 0.3f), u * 0.3f, t)
+                    drawCircle(Brush.radialGradient(0f to T.Ink.copy(0.10f * glow), 0.7f to Color.Transparent, center = t, radius = u * 0.3f), u * 0.3f, t)
                 }
                 drawContent()
             }
@@ -163,9 +163,9 @@ fun Trackpad(
     ) {
         if (offline) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                LineIcon(Ico.TV, Color(0xFFB0B0B5), 40.dp, stroke = 1.5f)
-                Text("No TV connected", color = Color(0xFFB0B0B5), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Text("Tap to choose a TV", color = Color(0xFFA1A1A6), fontSize = 12.sp)
+                LineIcon(Ico.TV, T.Dim, 40.dp, stroke = 1.5f)
+                Text("No TV connected", color = T.Dim, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text("Tap to choose a TV", color = T.Sub, fontSize = 12.sp)
             }
             return@Box
         }
@@ -186,7 +186,7 @@ fun Trackpad(
             val dist = when (k) { RemoteKey.UP -> t.y; RemoteKey.DOWN -> hPx - t.y; RemoteKey.LEFT -> t.x; else -> wPx - t.x }
             return (1f - dist / (minOf(wPx, hPx) * 0.5f)).coerceIn(0f, 1f) * 0.85f
         }
-        fun col(k: RemoteKey) = if (lit == k) Color.White else Color(0xFFBDBDC2)
+        fun col(k: RemoteKey) = if (lit == k) T.Ink else T.Dim
         @Composable fun arrow(k: RemoteKey, ico: Ico, m: Modifier) {
             val a = near(k)
             if (a > 0.02f) LineIcon(ico, col(k), cs, m.graphicsLayer { alpha = a }, stroke = 2.2f)

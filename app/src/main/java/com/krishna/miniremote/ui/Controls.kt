@@ -53,7 +53,7 @@ private fun Modifier.rippleLayer(p: () -> Float) = drawWithContent {
     val v = p()
     if (v < 1f) insideStadium {
         val r = size.maxDimension * 1.6f / 2f * (0.1f + 0.9f * v)
-        drawCircle(Color.White.copy(alpha = 0.16f * (1f - v)), r, center)
+        drawCircle(T.Ink.copy(alpha = 0.16f * (1f - v)), r, center)
     }
 }
 
@@ -130,7 +130,7 @@ fun KeyButton(
         contentAlignment = Alignment.Center,
     ) {
         // Hide icons/text from TalkBack; the button's own label speaks for them.
-        Box(Modifier.clearAndSetSemantics {}, contentAlignment = Alignment.Center) { content(if (down) Color.White else restColor, down) }
+        Box(Modifier.clearAndSetSemantics {}, contentAlignment = Alignment.Center) { content(if (down) T.Ink else restColor, down) }
     }
 }
 
@@ -195,7 +195,7 @@ private fun RowScope.PillSegment(
                 val v = rip.value
                 if (v < 1f) {
                     val r = size.maxDimension * 0.8f * (0.1f + 0.9f * v)
-                    drawCircle(Color.White.copy(alpha = 0.16f * (1f - v)), r, center)
+                    drawCircle(T.Ink.copy(alpha = 0.16f * (1f - v)), r, center)
                 }
             }
             .pressInput(repeat, scope, { down = it; if (it) scope.ripple(rip) }, onPress),
@@ -245,7 +245,7 @@ private fun ColumnScope.RockerSeg(label: String, accent: Color, onPress: () -> U
             .drawWithContent {
                 drawContent()
                 val v = rip.value
-                if (v < 1f) drawCircle(Color.White.copy(alpha = 0.16f * (1f - v)), size.maxDimension * 0.8f * (0.1f + 0.9f * v), center)
+                if (v < 1f) drawCircle(T.Ink.copy(alpha = 0.16f * (1f - v)), size.maxDimension * 0.8f * (0.1f + 0.9f * v), center)
             }
             .pressInput(true, scope, { down = it; if (it) scope.ripple(rip) }, onPress),
         contentAlignment = Alignment.Center,

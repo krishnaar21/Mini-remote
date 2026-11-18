@@ -159,8 +159,8 @@ private fun fadeInOut(t: Float, inEnd: Float, outStart: Float) = when {
 
 private fun DrawScope.finger(p: Offset, r: Float, a: Float) {
     if (a <= 0f) return
-    drawCircle(Color.White.copy(alpha = 0.18f * a), r * 1.9f, p)
-    drawCircle(Color.White.copy(alpha = 0.9f * a), r, p)
+    drawCircle(T.Ink.copy(alpha = 0.18f * a), r * 1.9f, p)
+    drawCircle(T.Ink.copy(alpha = 0.9f * a), r, p)
 }
 
 private fun DrawScope.ripple(c: Offset, w: Float, p: Float, accent: Color) {

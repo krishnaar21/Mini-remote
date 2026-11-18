@@ -89,19 +89,32 @@ class MainActivity : ComponentActivity() {
         ) askNotifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         setContent {
             val accent = com.krishna.miniremote.ui.accentColor(vm.settings.accentHex)
+            // The theme: every colour in the app reads from it.
+            val pal = com.krishna.miniremote.ui.Palettes.of(vm.settings.theme)
+            if (com.krishna.miniremote.ui.Look.p != pal) com.krishna.miniremote.ui.Look.p = pal
+            androidx.compose.runtime.LaunchedEffect(pal) {
+                androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = pal.light; isAppearanceLightNavigationBars = pal.light
+                }
+            }
             val onAccent = if (accent.luminance() > 0.5f) Color(0xFF1B1B1B) else Color.White
             MaterialTheme(
                 // Material 3 dark, neutral surfaces, with the chosen accent as the primary colour.
-                colorScheme = darkColorScheme(
+                colorScheme = (if (pal.light) androidx.compose.material3.lightColorScheme(
                     primary = accent, onPrimary = onAccent,
-                    primaryContainer = accent.copy(alpha = 0.3f).compositeOver(Color(0xFF1C1C1E)), onPrimaryContainer = Color.White,
-                    secondaryContainer = accent.copy(alpha = 0.22f).compositeOver(Color(0xFF1C1C1E)), onSecondaryContainer = Color.White,
-                    background = Color(0xFF1C1C1E), surface = Color(0xFF1C1C1E),
-                    surfaceContainerLowest = Color(0xFF161618), surfaceContainerLow = Color(0xFF262629),
-                    surfaceContainer = Color(0xFF2E2E31), surfaceContainerHigh = Color(0xFF3D3D41), surfaceContainerHighest = Color(0xFF4C4C51),
-                    onSurface = Color(0xFFF7F7F8), onSurfaceVariant = Color(0xFFD6D9DC),
-                    outline = Color(0xFF8E918F), outlineVariant = Color(0xFF444746),
-                ),
+                    background = pal.bg, surface = pal.bg, surfaceContainerLow = pal.sheet, surfaceContainer = pal.container,
+                    surfaceContainerHigh = pal.high, surfaceContainerHighest = pal.highest, onSurface = pal.ink, onSurfaceVariant = pal.dim,
+                    outline = pal.sub, outlineVariant = pal.line,
+                ) else darkColorScheme(
+                    primary = accent, onPrimary = onAccent,
+                    primaryContainer = accent.copy(alpha = 0.3f).compositeOver(pal.bg), onPrimaryContainer = Color.White,
+                    secondaryContainer = accent.copy(alpha = 0.22f).compositeOver(pal.bg), onSecondaryContainer = Color.White,
+                    background = pal.bg, surface = pal.bg,
+                    surfaceContainerLowest = pal.screen, surfaceContainerLow = pal.sheet,
+                    surfaceContainer = pal.container, surfaceContainerHigh = pal.high, surfaceContainerHighest = pal.highest,
+                    onSurface = pal.ink, onSurfaceVariant = pal.dim,
+                    outline = pal.sub, outlineVariant = pal.line,
+                )),
                 typography = Typography().withFont(Inter),
             ) {
                 AppShell(vm)

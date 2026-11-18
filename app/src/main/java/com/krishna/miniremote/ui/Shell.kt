@@ -90,7 +90,7 @@ val NAV_H = 34.dp
 /** Raised capsule the tab pill and the control switcher sit on. */
 val NAV_FACE = Face(listOf(Color(0xFF303033), Color(0xFF1E1E21)), listOf(
     Sh(0f, 0f, Color.Black.copy(.6f), spread = 1f), Sh(10f, 24f, Color.Black.copy(.55f)),
-    Sh(1f, 0f, Color.White.copy(.10f), inset = true), Sh(-2f, 3f, Color.Black.copy(.3f), inset = true)))
+    Sh(1f, 0f, T.Ink.copy(.10f), inset = true), Sh(-2f, 3f, Color.Black.copy(.3f), inset = true)))
 
 private fun grain(): ImageBitmap {
     val n = 96
@@ -183,7 +183,7 @@ fun AppShell(vm: RemoteVM) {
     BackHandler(enabled = !onRemote) { go(Tab.HOME) }
 
     CompositionLocalProvider(LocalTilt provides tilt) {
-        BoxWithConstraints(Modifier.fillMaxSize().background(if (layout == "strip") Color.Black else T.Bg)) {
+        BoxWithConstraints(Modifier.fillMaxSize().background(T.Screen)) {
             val k = (maxWidth.value - 32f).coerceAtMost(420f) / 920f
             CompositionLocalProvider(LocalK provides k) {
                 Box(Modifier.fillMaxSize().systemBarsPadding()) {
@@ -264,7 +264,7 @@ fun AppShell(vm: RemoteVM) {
                                     ) { c, dy -> c.consume(); pull = (pull + dy).coerceAtLeast(0f) }
                                 }
                                 .clickable(onClickLabel = "back to the remote") { apps = false }, contentAlignment = Alignment.Center) {
-                                Box(Modifier.size(width = 36.dp, height = 4.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.25f)))
+                                Box(Modifier.size(width = 36.dp, height = 4.dp).clip(CircleShape).background(T.Ink.copy(alpha = 0.25f)))
                             }
                             Box(Modifier.weight(1f)) { ChannelsScreen(vm, accent, openDevices = { sheet = Page.Devices }, picking = picking, onFull = { apps = false; vm.say("Quick access is full") }) }
                         }
@@ -328,7 +328,7 @@ fun PagePills(n: Int, page: Int, accent: Color, names: List<String>, modifier: M
                 Modifier.height(24.dp).clip(CircleShape).selectable(sel, role = Role.Tab) { onPick(i) }
                     .semantics { contentDescription = names.getOrElse(i) { "Page ${i + 1}" } }.padding(horizontal = 3.dp),
                 contentAlignment = Alignment.Center,
-            ) { Box(Modifier.size(w, 6.dp).clip(CircleShape).background(if (sel) accent else Color(0xFF7C7C82))) }
+            ) { Box(Modifier.size(w, 6.dp).clip(CircleShape).background(if (sel) accent else T.DotOff)) }
         }
     }
 }
@@ -352,7 +352,7 @@ fun PageDots(page: Int, accent: Color, modifier: Modifier = Modifier, onSwipe: (
                     .semantics { contentDescription = t.label }.padding(horizontal = 3.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Box(Modifier.size(if (sel) 18.dp else 6.dp, 6.dp).clip(CircleShape).background(if (sel) accent else Color(0xFF7C7C82)))
+                Box(Modifier.size(if (sel) 18.dp else 6.dp, 6.dp).clip(CircleShape).background(if (sel) accent else T.DotOff))
             }
         }
     }

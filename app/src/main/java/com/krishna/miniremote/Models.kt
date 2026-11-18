@@ -97,6 +97,8 @@ data class Settings(
     val autoKeyboard: Boolean = true,
     /** While connected and the app is in the background, a notification with volume and play keys. */
     val notifRemote: Boolean = true,
+    /** Look: "dark", "light", "navy" or "retro" (see ui.Palettes). */
+    val theme: String = "dark",
     /** Close TV menus opened from here (Settings, Input…) with Back after 15 s of no use. */
     val autoClose: Boolean = true,
     /** Home layout: "strip" (Black) or "cards" (see ui.HomeLayout). */

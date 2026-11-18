@@ -108,7 +108,7 @@ fun MoreSheet(vm: RemoteVM, accent: Color, openApps: (Boolean) -> Unit = {}, onC
                                     val current = now.isNotEmpty() && (now.equals(input.name, true) || n.startsWith(now.lowercase()))
                                     Row(
                                         Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp))
-                                            .background(if (current) Color.White.copy(0.14f) else M.High)
+                                            .background(if (current) T.Ink.copy(0.14f) else M.High)
                                             .clickable(role = Role.Button, onClickLabel = "switch to ${input.name}") { vm.switchInput(input) }
                                             .padding(horizontal = 12.dp),
                                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -146,14 +146,14 @@ internal fun NavPad(vm: RemoteVM) {
         keys.forEachIndexed { i, (k, ico) ->
             val on = vm.can(k)
             val c = if (on) T.Ink else T.Ink.copy(alpha = 0.3f)
-            if (i == 1) Box(Modifier.width(1.dp).height(24.dp).background(Color.White.copy(alpha = 0.08f)))
+            if (i == 1) Box(Modifier.width(1.dp).height(24.dp).background(T.Ink.copy(alpha = 0.08f)))
             Box(
                 Modifier.weight(1f).fillMaxHeight().clickable(role = Role.Button, onClickLabel = k.word) { if (on) vm.press(k) else vm.explain(k) }
                     .semantics { contentDescription = k.word },
                 contentAlignment = Alignment.Center,
             ) {
                 if (ico != null) LineIcon(ico, c, 21.dp)
-                else Box(Modifier.size(38.dp).clip(CircleShape).background(Color.White.copy(alpha = if (on) 0.12f else 0.05f)), contentAlignment = Alignment.Center) {
+                else Box(Modifier.size(38.dp).clip(CircleShape).background(T.Ink.copy(alpha = if (on) 0.12f else 0.05f)), contentAlignment = Alignment.Center) {
                     Text("OK", color = c, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
@@ -173,7 +173,7 @@ private fun MediaBar(vm: RemoteVM) {
     Row(Modifier.fillMaxWidth().height(58.dp).clip(CircleShape).background(M.High), verticalAlignment = Alignment.CenterVertically) {
         keys.forEachIndexed { i, (k, ico, label) ->
             val on = vm.can(k)
-            if (i > 0) Box(Modifier.width(1.dp).height(24.dp).background(Color.White.copy(alpha = 0.08f)))
+            if (i > 0) Box(Modifier.width(1.dp).height(24.dp).background(T.Ink.copy(alpha = 0.08f)))
             Box(
                 Modifier.weight(1f).fillMaxHeight().clickable(role = Role.Button, onClickLabel = label) { if (on) vm.press(k) else vm.explain(k) }
                     .semantics { contentDescription = label },
@@ -209,7 +209,7 @@ private fun AppSquares(vm: RemoteVM, openApps: (Boolean) -> Unit) {
                                 }
                             }
                             cell != null -> { val s = pinned[cell]; AppCircle(vm, s, 68.dp, shape, m) { if (ready) vm.launch(s) else vm.explain(RemoteKey.HOME) } }
-                            else -> Box(m.clip(shape).border(1.dp, Color.White.copy(alpha = 0.10f), shape).clickable(onClickLabel = "add apps") { openApps(true) },
+                            else -> Box(m.clip(shape).border(1.dp, T.Ink.copy(alpha = 0.10f), shape).clickable(onClickLabel = "add apps") { openApps(true) },
                                 contentAlignment = Alignment.Center) { LineIcon(Ico.PLUS, T.Ink.copy(alpha = 0.3f), 16.dp) }
                         }
                     }
@@ -310,15 +310,15 @@ private fun SleepArt(accent: Color, modifier: Modifier) {
         drawPath(path, accent)
         // Stars.
         listOf(Triple(-52f, 18f, 2.6f), Triple(-30f, 6f, 1.8f), Triple(58f, 8f, 2f), Triple(70f, 46f, 1.6f), Triple(-64f, 46f, 1.6f)).forEach { (dx, dy, r) ->
-            drawCircle(Color.White.copy(alpha = 0.7f), r * u, androidx.compose.ui.geometry.Offset(cx + dx * u, dy * u))
+            drawCircle(T.Ink.copy(alpha = 0.7f), r * u, androidx.compose.ui.geometry.Offset(cx + dx * u, dy * u))
         }
         // The TV: screen and stand, dark with a thin outline.
         val w = 96 * u; val h = 54 * u; val top = 54 * u
         val tl = androidx.compose.ui.geometry.Offset(cx - w / 2, top)
         drawRoundRect(Color(0xFF1C1C1E), tl, androidx.compose.ui.geometry.Size(w, h), androidx.compose.ui.geometry.CornerRadius(8 * u))
-        drawRoundRect(Color.White.copy(alpha = 0.22f), tl, androidx.compose.ui.geometry.Size(w, h), androidx.compose.ui.geometry.CornerRadius(8 * u),
+        drawRoundRect(T.Ink.copy(alpha = 0.22f), tl, androidx.compose.ui.geometry.Size(w, h), androidx.compose.ui.geometry.CornerRadius(8 * u),
             style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f * u))
-        drawLine(Color.White.copy(alpha = 0.22f), androidx.compose.ui.geometry.Offset(cx - 18 * u, top + h + 8 * u), androidx.compose.ui.geometry.Offset(cx + 18 * u, top + h + 8 * u), 3 * u,
+        drawLine(T.Ink.copy(alpha = 0.22f), androidx.compose.ui.geometry.Offset(cx - 18 * u, top + h + 8 * u), androidx.compose.ui.geometry.Offset(cx + 18 * u, top + h + 8 * u), 3 * u,
             cap = androidx.compose.ui.graphics.StrokeCap.Round)
         // "z z" drifting off the screen.
         val z = android.graphics.Paint().apply { color = android.graphics.Color.argb(150, 255, 255, 255); textSize = 13 * u; isAntiAlias = true; typeface = android.graphics.Typeface.DEFAULT_BOLD }

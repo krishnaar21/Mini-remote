@@ -320,7 +320,7 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
         ) {
             // A TV in a circle, with the connection colour as a small badge on its corner.
             Box(Modifier.size(40.dp)) {
-                Box(Modifier.fillMaxSize().clip(CircleShape).background(Color.White.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) { LineIcon(Ico.TV, T.Ink, 20.dp) }
+                Box(Modifier.fillMaxSize().clip(CircleShape).background(T.Ink.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) { LineIcon(Ico.TV, T.Ink, 20.dp) }
                 dot?.let { Box(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp).size(10.dp).clip(CircleShape).background(M.High).padding(1.5.dp).clip(CircleShape).background(it)) }
             }
             // The TV's name, and what's on it underneath when the TV says (app, time played).
@@ -379,7 +379,7 @@ private fun NowPlaying(vm: RemoteVM) {
                     modifier = Modifier.widthIn(max = 220.dp).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 1500)
                         .semantics { contentDescription = "On the TV: $name" })
                 if (pos != null && dur != null && dur > 0) {
-                    Box(Modifier.padding(top = 4.dp).width(140.dp).height(2.dp).clip(CircleShape).background(Color.White.copy(0.15f))) {
+                    Box(Modifier.padding(top = 4.dp).width(140.dp).height(2.dp).clip(CircleShape).background(T.Ink.copy(0.15f))) {
                         Box(Modifier.fillMaxHeight().fillMaxWidth((pos.toFloat() / dur).coerceIn(0f, 1f)).background(T.Dim))
                     }
                 }

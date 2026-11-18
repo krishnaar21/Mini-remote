@@ -145,7 +145,7 @@ fun RingDial(dial: Dp, accent: Color, level: Float? = null, value: String? = nul
     ) {
         content(turning)
         // At rest the number sits at the foot of the ring; while turning it shows in the middle (see content).
-        if (value != null && !turning && ring) Box(Modifier.align(Alignment.BottomCenter).clip(CircleShape).background(Color.Black).padding(horizontal = 8.dp)) {
+        if (value != null && !turning && ring) Box(Modifier.align(Alignment.BottomCenter).clip(CircleShape).background(T.Screen).padding(horizontal = 8.dp)) {
             Text(value, color = T.Dim, fontSize = 12.sp, fontWeight = FontWeight.Medium)
         }
     }
@@ -159,7 +159,7 @@ fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ic
     val scale by animateFloatAsState(if (pressed) 0.94f else 1f, if (pressed) tween(70) else androidx.compose.animation.core.spring(0.45f, 700f), label = "press")
     Box(
         Modifier.size(size).graphicsLayer { scaleX = scale; scaleY = scale; alpha = if (enabled) 1f else 0.32f }.clip(CircleShape)
-            .background(if (active || pressed) Color(0xFF2E2E31) else Color(0xFF1C1C1E))
+            .background(if (active || pressed) M.Container else T.Key)
             .clickable(src, androidx.compose.material3.ripple(color = Color.White), onClickLabel = label, role = Role.Button) { if (enabled) onClick() else onDisabled?.invoke() }
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
@@ -285,7 +285,7 @@ internal fun AppsPage(vm: RemoteVM, accent: Color, k: Dp, openApps: (Boolean) ->
                                     },
                             ) { AppCircle(vm, s, k) { if (ready) vm.launch(s) else vm.explain(RemoteKey.HOME) } }
                         }
-                        else -> Box(Modifier.size(k).clip(CircleShape).border(1.dp, Color.White.copy(alpha = 0.10f), CircleShape)
+                        else -> Box(Modifier.size(k).clip(CircleShape).border(1.dp, T.Ink.copy(alpha = 0.10f), CircleShape)
                             .clickable(onClickLabel = "add apps") { openApps(true) }, contentAlignment = Alignment.Center) {
                             LineIcon(Ico.PLUS, T.Ink.copy(alpha = 0.3f), 16.dp)
                         }
@@ -334,7 +334,7 @@ fun VoiceKey(vm: RemoteVM, size: Dp) {
     val scale by animateFloatAsState(if (down) 0.94f else 1f, tween(90), label = "voice")
     Box(
         Modifier.size(size).graphicsLayer { scaleX = scale; scaleY = scale; alpha = if (vm.can(RemoteKey.HOME)) 1f else 0.32f }.clip(CircleShape)
-            .background(if (down || vm.listening) Color(0xFF3A3A3E) else Color(0xFF1C1C1E))
+            .background(if (down || vm.listening) M.High else T.Key)
             .semantics {
                 contentDescription = "Voice assistant"
                 role = Role.Button

@@ -135,13 +135,13 @@ internal fun SetSheet(title: String, sub: String?, onClose: () -> Unit, content:
 }
 
 /** Secondary text: quieter than the titles. */
-internal val SubInk = Color(0xFF8E8E93)
+internal val SubInk get() = Look.p.sub
 
 /** A settings icon on its own rounded square, in the row's colour. */
 @Composable
 internal fun IconTile(ico: Ico, tint: Color) {
     // One calm colour for every tile (the row's colour is ignored): the page stays quiet.
-    Box(Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(Color(0xFF3A3A3F)), contentAlignment = Alignment.Center) { LineIcon(ico, T.Ink, 18.dp) }
+    Box(Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(M.High), contentAlignment = Alignment.Center) { LineIcon(ico, T.Ink, 18.dp) }
 }
 
 /** A rounded group of rows. */
@@ -152,7 +152,7 @@ internal fun SetCard(modifier: Modifier = Modifier, content: @Composable ColumnS
 
 /** The thin line between rows, starting after the icon. */
 @Composable
-internal fun SetLine() = Box(Modifier.fillMaxWidth().padding(start = 62.dp).height(1.dp).background(Color.White.copy(alpha = 0.07f)))
+internal fun SetLine() = Box(Modifier.fillMaxWidth().padding(start = 62.dp).height(1.dp).background(T.Ink.copy(alpha = 0.07f)))
 
 /** One row: icon, title (and a smaller line), what's set, and a chevron when it opens something. */
 @Composable
@@ -205,7 +205,7 @@ private fun Choice(label: String, sub: String?, sel: Boolean, accent: Color, ico
 
 private object SetTint {
     val blue = Color(0xFF4C8DFF); val green = Color(0xFF34C759); val orange = Color(0xFFFF9F0A); val purple = Color(0xFFAF7BFF)
-    val pink = Color(0xFFFF5C8A); val teal = Color(0xFF30C8D6); val grey = Color(0xFFA1A1A6); val red = Color(0xFFFF6B5E); val yellow = Color(0xFFFFD60A)
+    val pink = Color(0xFFFF5C8A); val teal = Color(0xFF30C8D6); val grey = T.Sub; val red = Color(0xFFFF6B5E); val yellow = Color(0xFFFFD60A)
 }
 
 @Composable
@@ -247,7 +247,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
         SetRow(Ico.SPEAKER, SetTint.red, "Touch & sound", listOf(if (s.haptics) "Haptics" else null, if (s.sound) "Sound" else null).filterNotNull().joinToString(", ").ifEmpty { "Off" }) { open = "feel" }
     }
     SetCard {
-        SetRow(Ico.DISPLAY, SetTint.pink, "Appearance", "$iconName · $accentName") { open = "look" }
+        SetRow(Ico.DISPLAY, SetTint.pink, "Appearance", "${Palettes.of(s.theme).label} · $accentName") { open = "look" }
         SetLine()
         SetToggle(Ico.STAR, SetTint.yellow, "App logos", "Download logos", s.logos) { vm.update(s.copy(logos = it)) }
         SetLine()
@@ -316,7 +316,32 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
                 }
             }
         }
-        "look" -> SetSheet("Appearance", "The app's icon and colour.", { open = null }) {
+        "look" -> SetSheet("Appearance", "Theme, colour and the app's icon.", { open = null }) {
+            SetCard {
+                Text("Theme", color = T.Ink, fontSize = 16.sp, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
+                Row(Modifier.fillMaxWidth().selectableGroup().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Palettes.all.forEach { p ->
+                        val sel = s.theme == p.key
+                        // A little remote in the theme's colours: screen, a key row and a dial.
+                        Column(Modifier.weight(1f).selectable(sel, role = Role.RadioButton) { vm.update(s.copy(theme = p.key)) }, horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(
+                                Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(14.dp)).background(p.screen)
+                                    .border(if (sel) 2.dp else 1.dp, if (sel) accent else p.line, RoundedCornerShape(14.dp)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Box(Modifier.size(34.dp).clip(CircleShape).background(p.high), contentAlignment = Alignment.Center) {
+                                        Box(Modifier.size(14.dp).clip(CircleShape).background(p.highest))
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { repeat(3) { Box(Modifier.size(9.dp).clip(CircleShape).background(p.keyFill.takeIf { p.light }?.let { p.high } ?: p.high)) } }
+                                    Box(Modifier.size(22.dp, 3.dp).clip(CircleShape).background(accent))
+                                }
+                            }
+                            Text(p.label, color = if (sel) T.Ink else Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 8.dp))
+                        }
+                    }
+                }
+            }
             SetCard {
                 Text("App icon", color = T.Ink, fontSize = 16.sp, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
                 var icon by remember { mutableStateOf(com.krishna.miniremote.AppIcon.current(ctx)) }

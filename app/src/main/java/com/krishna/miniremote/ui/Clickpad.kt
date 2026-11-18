@@ -202,14 +202,14 @@ fun Clickpad(
             insideStadium {
                 touch?.let { t ->
                     if (!wellDown) drawCircle(Brush.radialGradient(
-                        0f to Color.White.copy(0.10f), 0.7f to Color.Transparent, center = t, radius = this.size.width * 260f / 780f),
+                        0f to T.Ink.copy(0.10f), 0.7f to Color.Transparent, center = t, radius = this.size.width * 260f / 780f),
                         this.size.width * 260f / 780f, t)
                 }
                 val v = rip.value
                 if (v < 1f) {
                     val r = ripD / 2f * (0.1f + 0.9f * v)
                     drawCircle(Brush.radialGradient(
-                        0f to Color.White.copy(0.20f * (1f - v)), 0.55f to Color.White.copy(0.07f * (1f - v)), 0.7f to Color.Transparent,
+                        0f to T.Ink.copy(0.20f * (1f - v)), 0.55f to T.Ink.copy(0.07f * (1f - v)), 0.7f to Color.Transparent,
                         center = ripAt, radius = r), r, ripAt)
                 }
             }
@@ -220,7 +220,7 @@ fun Clickpad(
             val cs = 76f * u
             val e = 52f * u
             fun chev(dir: RemoteKey, ico: Ico, x: Float, y: Float) {
-                val col = if (litDir == dir) Color.White else T.Dim
+                val col = if (litDir == dir) T.Ink else T.Dim
                 translate(x, y) {
                     scale(cs / 24f, cs / 24f, pivot = Offset.Zero) {
                         drawPath(ico.path, col, style = Stroke(2.3f, cap = StrokeCap.Round, join = StrokeJoin.Round))
@@ -243,16 +243,16 @@ fun Clickpad(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(bdp(22f)),
             ) {
-                LineIcon(Ico.TV, Color(0xFFB0B0B5), bdp(110f), stroke = 1.5f)
-                Text("No TV connected", color = Color(0xFFB0B0B5), fontSize = bsp(36f), fontWeight = FontWeight.SemiBold)
-                Text("Tap to choose a TV", color = Color(0xFFA1A1A6), fontSize = bsp(30f))
+                LineIcon(Ico.TV, T.Dim, bdp(110f), stroke = 1.5f)
+                Text("No TV connected", color = T.Dim, fontSize = bsp(36f), fontWeight = FontWeight.SemiBold)
+                Text("Tap to choose a TV", color = T.Sub, fontSize = bsp(30f))
             }
             return@Box
         }
         // .well: dished centre, 300 of the pad's 780. Sinks (scale .97) and darkens while pressed;
         // tinted with the accent while holding for voice.
         val wellFace = when {
-            listening -> flat(mix(accent, 0.22f, Color(0xFF1A1A1C)), WELL.shadows)
+            listening -> flat(mix(accent, 0.22f, T.Bg), WELL.shadows)
             wellDown -> WELL_DOWN
             else -> WELL
         }
@@ -263,7 +263,7 @@ fun Clickpad(
             if (twoMode) {
                 TwoFingerHint(twoKey, accent, bdp(64f), bsp(24f))
             } else if (toast == null) {
-                Text("OK", Modifier.clearAndSetSemantics {}, color = if (wellDown) Color.White else Color(0xFFA1A1A6),
+                Text("OK", Modifier.clearAndSetSemantics {}, color = if (wellDown) T.Ink else T.Sub,
                     fontSize = bsp(40f), fontWeight = FontWeight.SemiBold, letterSpacing = bsp(40f * 0.06f))
             } else {
                 // .toast: accent icon (84px) over the key name, 500 28px #d4d4d9; longer messages wrap.
@@ -274,8 +274,8 @@ fun Clickpad(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(bdp(8f)),
                 ) {
-                    if (toastIcon != null) LineIcon(toastIcon, Color.White, bdp(56f), stroke = 2f)
-                    Text(toast, color = Color(0xFFD4D4D9), fontSize = bsp(23f), fontWeight = FontWeight.Medium,
+                    if (toastIcon != null) LineIcon(toastIcon, T.Ink, bdp(56f), stroke = 2f)
+                    Text(toast, color = T.Dim, fontSize = bsp(23f), fontWeight = FontWeight.Medium,
                         lineHeight = bsp(29f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }
             }
