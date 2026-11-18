@@ -147,7 +147,7 @@ final class RemoteModel: ObservableObject {
         guard !demo else { return }
         disconnect()
         demo = true
-        devices = [Device(id: "demo", name: "Living Room TV (demo)", host: "192.168.1.20", brand: .ANDROID_TV)]
+        devices = [Device(id: "demo", name: "Demo TV", host: "192.168.1.20", brand: .ANDROID_TV)]
         activeId = "demo"
         link = .ready
         tvVolume = TvVolume(level: 24, max: 100, muted: false)
