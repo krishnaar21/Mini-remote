@@ -382,7 +382,7 @@ private fun AppSheet(e: AppEntry, accent: Color, logosOn: Boolean, onOpen: () ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Box(Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)).background(e.bg), contentAlignment = Alignment.Center) {
                     val short: @Composable () -> Unit = { Text(e.name.take(2).uppercase(), color = e.ink, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
-                    val logo: @Composable () -> Unit = { AppLogo(e.logo, e.ink, 34.dp, logosOn, e.site, e.pkg, short) }
+                    val logo: @Composable () -> Unit = { AppLogo(e.logo, e.ink, 34.dp, logosOn, e.site, e.pkg, fallback = short) }
                     if (e.icon != null) TvIcon(e.icon, Modifier.fillMaxSize().padding(6.dp), logo) else logo()
                 }
                 Column(Modifier.weight(1f)) {
@@ -462,7 +462,7 @@ private fun QuickTile(s: Shortcut, accent: Color, icon: String?, logoOn: Boolean
             val slug = if (s.kind == ShortcutKind.CHANNEL) null else cat?.logo ?: Logos.slugFor(s.name)
             val pkg = if (s.kind == ShortcutKind.CHANNEL) null else ((cat ?: Catalog.apps.firstOrNull { it.name.equals(s.name, true) })?.let { Catalog.iconPkg(it) }
                 ?: if (s.brand == Brand.ANDROID_TV) s.value.takeIf { "://" !in it } else null)
-            val logo: @Composable () -> Unit = { AppLogo(slug, ink, 34.dp, logoOn, cat?.site, pkg, short) }
+            val logo: @Composable () -> Unit = { AppLogo(slug, ink, 34.dp, logoOn, cat?.site, pkg, fallback = short) }
             if (icon != null) TvIcon(icon, Modifier.fillMaxSize().padding(8.dp), logo) else logo()
         }
         Text(s.name, color = T.Ink, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
