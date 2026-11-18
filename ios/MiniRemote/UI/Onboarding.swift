@@ -122,10 +122,10 @@ struct CoachTour: View {
     @State private var i = 0
 
     private static let steps: [(id: String, title: String, text: String, round: Bool)] = [
-        ("tv", "Your TV", "Tap here to choose a TV, add another or see how it's connected. The dot shows green when it's ready.", false),
+        ("tv", "Your TV", "This is a demo TV for the tour. After it, tap here to find and pair your own TV; the dot turns green when it's connected.", false),
         ("power", "Power", "Turns the TV off (it asks first). When it's off, this wakes it up again where the TV allows.", true),
         ("dial", "Move and select", "Tap the arrows or swipe across the dial to move; tap OK to select. Double-tap OK to mute; hold it to talk to the TV.", true),
-        ("dial", "Volume ring", "Turn your finger round the outer ring to change the volume. The number at its foot is the TV's own volume.", true),
+        ("dial", "Volume ring", "The thin ring round the dial is the volume: the coloured arc is how loud the TV is (24 here). Turn your finger round it to change it. It appears once a TV is connected.", true),
         ("keys", "More keys and your apps", "Swipe these circles sideways: more keys (skip, sleep timer, inputs…), then your quick access apps. Drag an app onto another to move it.", false),
         ("pills", "Pages", "Shows which page of circles you're on: tap it for the next one. What's playing shows on this line too.", false),
     ]
@@ -168,7 +168,13 @@ struct CoachTour: View {
 
     private func card(_ title: String, _ text: String, number: Int, of n: Int, last: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("\(number) of \(n)").font(.system(size: 12.5, weight: .medium)).foregroundStyle(accent)
+            HStack {
+                Text("\(number) of \(n)").font(.system(size: 12.5, weight: .medium)).foregroundStyle(accent)
+                Spacer()
+                // The tour runs on a pretend TV: say so.
+                Text("Demo TV · nothing is sent").font(.system(size: 11.5)).foregroundStyle(T.sub)
+                    .padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(T.ink.opacity(0.08)))
+            }
             Text(title).font(.system(size: 18, weight: .semibold)).foregroundStyle(T.ink).padding(.top, 4)
             Text(text).font(.system(size: 14)).foregroundStyle(T.dim).fixedSize(horizontal: false, vertical: true).padding(.top, 6)
             HStack {

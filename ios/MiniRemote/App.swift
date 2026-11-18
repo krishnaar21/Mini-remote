@@ -75,8 +75,12 @@ struct ContentView: View {
                 GeometryReader { g in
                     CoachTour(rects: anchors.mapValues { g[$0] }, accent: accent) {
                         var s = vm.settings; s.toured = true; vm.update(s)
+                        vm.endDemo()
                         if vm.active == nil { showDevices = true }
                     }
+                    // A pretend TV for the tour, so the remote shows as it does when connected.
+                    .onAppear { vm.startDemo() }
+                    .onDisappear { vm.endDemo() }
                 }
             }
         }
@@ -129,7 +133,7 @@ extension ContentView {
     /** SHOT=<screen> opens one screen with a pretend TV, for the CI screenshot run. */
     func screenshot() {
         guard let s = ProcessInfo.processInfo.environment["SHOT"] else { return }
-        vm.demo(trackpad: s == "trackpad", cards: false, live: s == "live")
+        vm.screenshotDemo(trackpad: s == "trackpad", cards: false, live: s == "live")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             switch s {
             case "more": showMore = true

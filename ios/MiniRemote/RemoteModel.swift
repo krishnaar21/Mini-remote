@@ -114,6 +114,11 @@ final class RemoteModel: ObservableObject {
     /* ------------------------------------------------------------ keys */
 
     func press(_ key: RemoteKey, quiet: Bool = false) {
+        if demo {
+            feel.fire(.press)
+            if key == .mute { muted.toggle() }; if key == .playPause { playing.toggle() }
+            nudgeVolume(key); if !quiet { say(key.word, key) }; return
+        }
         guard let d = active else { feel.fire(.error); say("Choose a TV first"); return }
         if link == .error { connect(d) }
         feel.fire(key == .power ? .heavy : .press)
@@ -133,7 +138,30 @@ final class RemoteModel: ObservableObject {
         keys?.yield(key)
     }
 
-    func scrubTick(_ key: RemoteKey) { userAt = Date(); menuUsed(); feel.fire(.tick); nudgeVolume(key); keys?.yield(key) }
+    func scrubTick(_ key: RemoteKey) { userAt = Date(); menuUsed(); feel.fire(.tick); nudgeVolume(key); if !demo { keys?.yield(key) } }
+
+    /** The guided tour's pretend TV: the remote as it is when connected; nothing is sent or saved. */
+    @Published private(set) var demo = false
+
+    func startDemo() {
+        guard !demo else { return }
+        disconnect()
+        demo = true
+        devices = [Device(id: "demo", name: "Living Room TV (demo)", host: "192.168.1.20", brand: .ANDROID_TV)]
+        activeId = "demo"
+        link = .ready
+        tvVolume = TvVolume(level: 24, max: 100, muted: false)
+        nowOn = NowOn(name: "Netflix", live: false, positionMs: 1_204_000, durationMs: 2_710_000)
+    }
+
+    /** Back to the real app: your saved TVs (none if you have none yet), connecting as usual. */
+    func endDemo() {
+        guard demo else { return }
+        demo = false
+        link = .idle; tvVolume = nil; nowOn = nil; muted = false; playing = false
+        devices = store.loadDevices(); activeId = store.activeId
+        if let d = active { connect(d) }
+    }
 
     /* ------------------------------------------------- idle TV menus */
 
@@ -376,6 +404,7 @@ final class RemoteModel: ObservableObject {
     /* ------------------------------------------------------- run on TV */
 
     private func act(_ fail: String, _ block: @escaping (RemoteAdapter) async throws -> Void) {
+        if demo { say("Demo: nothing is sent to a TV"); return }
         guard let d = active else { feel.fire(.error); say("Choose a TV first"); return }
         guard let a = adapter, link == .ready else {
             feel.fire(.error)
@@ -718,7 +747,7 @@ extension RemoteModel {
 #if DEBUG
 // Screenshot mode (Debug builds only): a pretend TV that's connected, a few apps, nothing saved.
 extension RemoteModel {
-    func demo(trackpad: Bool, cards: Bool, live: Bool = false) {
+    func screenshotDemo(trackpad: Bool, cards: Bool, live: Bool = false) {
         devices = [
             Device(id: "demo", name: "Living Room TV", host: "192.168.1.20", brand: .ANDROID_TV),
             Device(id: "demo2", name: "Bedroom Roku", host: "192.168.1.31", brand: .ROKU),
