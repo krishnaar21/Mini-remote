@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import UIKit
+import AVFoundation
 
 /** The app's state and actions; the iOS twin of the Android RemoteVM. */
 @MainActor
@@ -27,6 +28,14 @@ final class RemoteModel: ObservableObject {
     @Published private(set) var nowOn: NowOn?
     /** The TV's own volume, when it tells us (Android TV, LG, most Samsung). */
     @Published private(set) var tvVolume: TvVolume?
+    /** Bumps when the TV asks for a keyboard: the Search sheet opens. */
+    @Published var keyboardAsk = 0
+    /** The TV's inputs, for the More sheet. */
+    @Published private(set) var inputs: [TvInput] = []
+    /** Sleep timer: when the TV turns off. */
+    @Published private(set) var sleepAt: Date?
+    var sleepTask: Task<Void, Never>?
+    var voiceSession: (engine: AVAudioEngine, id: UInt64, adapter: AndroidTvAdapter)?
 
     let maxPinned = 8
     var active: Device? { devices.first { $0.id == activeId } }
@@ -72,7 +81,11 @@ final class RemoteModel: ObservableObject {
             var warned = false
             for await op in ops {
                 guard let self, self.link == .ready, let a = self.adapter else { continue }
-                do { if op == "\u{8}" { try await a.backspace() } else { try await a.typeText(op) }; self.txCount += 1 } catch {
+                do {
+                    if op.hasPrefix("\u{1}") { try await a.setText(String(op.dropFirst())) }
+                    else if op == "\u{8}" { try await a.backspace() } else { try await a.typeText(op) }
+                    self.txCount += 1
+                } catch {
                     if !warned { warned = true; self.say((error as? UserFacing)?.message ?? "Couldn't type") }
                 }
             }
@@ -123,6 +136,8 @@ final class RemoteModel: ObservableObject {
     /** Mirrors an edit of the search box on the TV: deletes what changed, types what's new. */
     func liveType(_ old: String, _ new: String) {
         guard active != nil else { say("Choose a TV first"); return }
+        // Android TV takes the whole box at once (any characters).
+        if adapter?.replacesText == true { textOps?.yield("\u{1}" + new); return }
         let o = Array(old), n = Array(new)
         var common = 0
         while common < o.count && common < n.count && o[common] == n[common] { common += 1 }
@@ -177,12 +192,15 @@ final class RemoteModel: ObservableObject {
                 self.tvVolume = nil
                 a.onVolume = { v in Task { @MainActor in self.tvVolume = v; self.muted = v.muted } }
                 a.onDropped = { [weak a] in Task { @MainActor in if let a { self.dropped(d, a) } } }
+                (a as? AndroidTvAdapter)?.onKeyboard = { Task { @MainActor in if self.settings.autoKeyboard { self.keyboardAsk += 1 } } }
                 try await a.connect()
                 if Task.isCancelled { a.close(); return }
                 self.adapter = a
                 self.link = .ready
                 self.redials = 0
                 self.refreshVolume(after: 0)
+                // Remember the TV's network address so it can be woken later.
+                if d.mac == nil { Task { if let m = await a.macAddress() { self.updateDevice(d.id) { $0.mac = m } } } }
                 if !quiet { self.feel.fire(.success) }
             } catch {
                 if Task.isCancelled { return }
@@ -464,10 +482,118 @@ final class RemoteModel: ObservableObject {
     }
 }
 
+/* ------------------------------------------------ wake, voice, more */
+
+extension RemoteModel {
+    /** Turns the TV on: Roku's PowerOn, or Wake-on-LAN with its saved network address; then connects. */
+    func wake() {
+        guard let d = active else { say("Choose a TV first"); return }
+        feel.fire(.heavy)
+        Task {
+            if let a = adapter, link == .ready, await a.powerOn() { say("Turning on \(d.name)"); return }
+            guard let mac = d.mac else { say("\(d.name) can't be turned on from here yet. Connect once while it's on."); return }
+            let ok = await Task.detached { Wol.wake(mac: mac, host: d.host) }.value
+            guard ok else { say("Couldn't wake \(d.name) from this iPhone"); return }
+            say("Waking \(d.name)…")
+            for _ in 0..<6 {
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                if link == .ready { return }
+                if link != .connecting { connect(d) }
+            }
+        }
+    }
+
+    /** Hold OK on an Android TV: the iPhone's mic goes to the TV's Assistant while held. */
+    func voiceStart() {
+        guard let a = adapter as? AndroidTvAdapter, link == .ready else { press(.voice); return }
+        Task {
+            let granted = await AVAudioApplication.requestRecordPermission()
+            guard granted else { press(.voice); say("Allow the microphone to talk to the TV"); return }
+            guard let id = await a.voiceBegin() else { return }
+            do {
+                let session = AVAudioSession.sharedInstance()
+                try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+                try session.setActive(true)
+                let engine = AVAudioEngine()
+                let input = engine.inputNode
+                let inFmt = input.outputFormat(forBus: 0)
+                guard let outFmt = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 8000, channels: 1, interleaved: true),
+                      let conv = AVAudioConverter(from: inFmt, to: outFmt) else { await a.voiceEnd(id); return }
+                input.installTap(onBus: 0, bufferSize: 2048, format: inFmt) { buf, _ in
+                    let cap = AVAudioFrameCount(Double(buf.frameLength) * 8000 / inFmt.sampleRate) + 16
+                    guard let out = AVAudioPCMBuffer(pcmFormat: outFmt, frameCapacity: cap) else { return }
+                    var fed = false
+                    conv.convert(to: out, error: nil) { _, status in
+                        if fed { status.pointee = .noDataNow; return nil }
+                        fed = true; status.pointee = .haveData; return buf
+                    }
+                    guard let ch = out.int16ChannelData, out.frameLength > 0 else { return }
+                    let data = Data(bytes: ch[0], count: Int(out.frameLength) * 2)
+                    Task { await a.voiceChunk(id, data) }
+                }
+                try engine.start()
+                voiceSession = (engine, id, a)
+                say("Listening…", .voice)
+                // Never more than 15 seconds.
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
+                if voiceSession?.id == id { voiceStop() }
+            } catch { await a.voiceEnd(id) }
+        }
+    }
+
+    func voiceStop() {
+        guard let v = voiceSession else { return }
+        voiceSession = nil
+        v.engine.inputNode.removeTap(onBus: 0)
+        v.engine.stop()
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        Task { await v.adapter.voiceEnd(v.id) }
+    }
+
+    func loadInputs() {
+        guard let a = adapter, link == .ready else { return }
+        Task { inputs = await a.listInputs() }
+    }
+
+    func switchInput(_ i: TvInput) {
+        guard let a = adapter else { say("Choose a TV first"); return }
+        feel.fire(.press); say(i.name)
+        Task { do { try await a.switchInput(i.id); txCount += 1 } catch { say((error as? UserFacing)?.message ?? "Couldn't switch input") } }
+    }
+
+    /** Turns the TV off after [minutes] while the app is running; nil turns the timer off. */
+    func setSleep(_ minutes: Int?) {
+        sleepTask?.cancel(); sleepTask = nil
+        guard let minutes else { sleepAt = nil; say("Sleep timer off"); return }
+        let at = Date().addingTimeInterval(Double(minutes) * 60)
+        sleepAt = at
+        say("TV turns off in \(minutes) min")
+        sleepTask = Task {
+            while Date() < at { try? await Task.sleep(nanoseconds: 1_000_000_000); if Task.isCancelled { return } }
+            sleepAt = nil
+            if let d = active { if link != .ready { connect(d) }; try? await Task.sleep(nanoseconds: 1_500_000_000); press(.power, quiet: true) }
+        }
+    }
+
+    /** From Siri / Shortcuts: opens a Quick access or catalog app by name once the TV is connected. */
+    func openByName(_ name: String) {
+        Task {
+            if link != .ready, let d = active, link != .connecting { connect(d) }
+            for _ in 0..<100 { if link == .ready { break }; try? await Task.sleep(nanoseconds: 100_000_000) }
+            guard link == .ready else { say("Couldn't reach the TV"); return }
+            let n = name.lowercased()
+            if let s = shortcuts.first(where: { $0.kind == .app && $0.name.lowercased() == n }) { launch(s); return }
+            if let c = Catalog.apps.first(where: { $0.name.lowercased() == n || $0.key == n }) { launchCatalog(c); return }
+            if let t = tvApps.first(where: { $0.name.lowercased().contains(n) }) { launchApp(t.name, t.id); return }
+            say("Couldn't find \(name) on the TV")
+        }
+    }
+}
+
 #if DEBUG
 // Screenshot mode (Debug builds only): a pretend TV that's connected, a few apps, nothing saved.
 extension RemoteModel {
-    func demo(trackpad: Bool, cards: Bool) {
+    func demo(trackpad: Bool, cards: Bool, live: Bool = false) {
         devices = [
             Device(id: "demo", name: "Living Room TV", host: "192.168.1.20", brand: .ANDROID_TV),
             Device(id: "demo2", name: "Bedroom Roku", host: "192.168.1.31", brand: .ROKU),
@@ -477,6 +603,8 @@ extension RemoteModel {
         settings.controlStyle = trackpad ? "trackpad" : "dial"
         settings.layout = cards ? "cards" : "strip"
         tvVolume = TvVolume(level: 24, max: 100, muted: false)
+        nowOn = live ? NowOn(name: "Live TV", live: true) : NowOn(name: "Netflix", live: false, positionMs: 1_204_000, durationMs: 2_710_000)
+        inputs = [TvInput(id: "h1", name: "HDMI 1 · PlayStation"), TvInput(id: "h2", name: "HDMI 2"), TvInput(id: "tv", name: "Antenna")]
         shortcuts = [("netflix", "Netflix"), ("youtube", "YouTube"), ("prime", "Prime Video"), ("hotstar", "JioHotstar")].map {
             Shortcut(id: "s-\($0.0)", kind: .app, name: $0.1, value: $0.0, pinned: true)
         }

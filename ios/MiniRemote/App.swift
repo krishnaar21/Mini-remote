@@ -19,6 +19,8 @@ struct ContentView: View {
     @State private var showKeys = false
     @State private var connecting = false
     @State private var startRoute: [Route] = []
+    @State private var showMore = false
+    @State private var keysFromTv = false
 
     private var accent: Color { Color(hexString: vm.settings.accentHex) }
 
@@ -27,7 +29,7 @@ struct ContentView: View {
             (vm.settings.layout == "strip" ? Color.black : T.bg).ignoresSafeArea()
             TabView(selection: $page) {
                 HomeView(vm: vm, accent: accent, numpad: $numpad,
-                         openDevices: { showDevices = true }, openKeys: { showKeys = true }).tag(0)
+                         openDevices: { showDevices = true }, openKeys: { showKeys = true }, openMore: { showMore = true }).tag(0)
                 AppsView(vm: vm, accent: accent, openDevices: { showDevices = true }).tag(1)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
@@ -41,7 +43,14 @@ struct ContentView: View {
         }
         .tint(accent)
         .sheet(isPresented: $showDevices) { DevicesSheet(vm: vm, accent: accent, start: startRoute) }
-        .sheet(isPresented: $showKeys) { KeyboardSheet(vm: vm, accent: accent) }
+        .sheet(isPresented: $showKeys, onDismiss: { keysFromTv = false }) { KeyboardSheet(vm: vm, accent: accent, openSearch: !keysFromTv) }
+        .sheet(isPresented: $showMore) { MoreSheet(vm: vm) }
+        // The TV focused a text box (login, search): open the typing sheet, without pressing Search again.
+        .onChange(of: vm.keyboardAsk) { _, _ in if !showKeys { keysFromTv = true; showKeys = true } }
+        .onAppear {
+            IntentInbox.shared.model = vm
+            if let f = IntentInbox.shared.pending { IntentInbox.shared.pending = nil; f(vm) }
+        }
         .sheet(item: Binding(get: { showDevices ? nil : vm.pairPrompt.map { PromptBox(p: $0) } }, set: { if $0 == nil { vm.answerCode(nil) } })) { b in
             CodeSheet(vm: vm, accent: accent, prompt: b.p)
         }
@@ -67,10 +76,10 @@ extension ContentView {
     /** SHOT=<screen> opens one screen with a pretend TV, for the CI screenshot run. */
     func screenshot() {
         guard let s = ProcessInfo.processInfo.environment["SHOT"] else { return }
-        vm.demo(trackpad: s == "trackpad", cards: s == "cards")
+        vm.demo(trackpad: s == "trackpad", cards: s == "cards", live: s == "live")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             switch s {
-            case "numpad": numpad = true
+            case "more": showMore = true
             case "gestures": startRoute = [.settings, .gestures]; showDevices = true
             case "apps": page = 1
             case "devices": showDevices = true

@@ -63,6 +63,7 @@ struct Pb {
 }
 
 private func long(_ m: [Int: [Any]], _ f: Int) -> UInt64? { m[f]?.first as? UInt64 }
+private func text(_ m: [Int: [Any]], _ f: Int) -> String? { (m[f]?.first as? Data).map { String(decoding: $0, as: UTF8.self) } }
 private func sub(_ m: [Int: [Any]], _ f: Int) -> [Int: [Any]]? { (m[f]?.first as? Data).flatMap { try? Pb.parse($0) } }
 
 /* ------------------------------------------------------------ DER / X.509 */
@@ -289,7 +290,14 @@ final class AndroidTvAdapter: RemoteAdapter {
     private var reader: Task<Void, Never>?
     var onVolume: ((TvVolume) -> Void)?
     var onDropped: (() -> Void)?
+    /** The TV asked for a keyboard (a text box got focus). */
+    var onKeyboard: (() -> Void)?
     private var up = false
+    /** Keyboard link counters the TV last sent, and the app in front. */
+    private var imeCounter: UInt64 = 0
+    private var fieldCounter: UInt64 = 0
+    private var currentApp: String?
+    private var voiceWait: Once<UInt64>?
 
     init(host: String, pin: String?, onPin: @escaping (String) -> Void, askCode: @escaping (String?) async -> String?) {
         self.host = host; self.pin = pin; self.onPin = onPin; self.askCode = askCode
@@ -300,6 +308,7 @@ final class AndroidTvAdapter: RemoteAdapter {
             .up: 19, .down: 20, .left: 21, .right: 22, .ok: 23, .back: 4, .home: 3, .playPause: 85, .power: 26,
             .volUp: 24, .volDown: 25, .mute: 164, .voice: 84, .rewind: 89, .fastForward: 90, .chUp: 166, .chDown: 167,
             .guide: 172, .chList: 172, .info: 165, .input: 178, .menu: 176, .audio: 222,
+            .subtitles: 175, .settings: 176, .red: 183, .green: 184, .yellow: 185, .blue: 186,
         ]
         for k in RemoteKey.allCases { if let d = k.digit, let v = d.wholeNumberValue { m[k] = 7 + v } }
         return m
@@ -389,6 +398,18 @@ final class AndroidTvAdapter: RemoteAdapter {
                     } else if let ping = sub(m, 8) {
                         let v = long(ping, 1) ?? 0
                         try await l.send(Pb.make { p in p.msg(9) { r in r.int(1, v) } })
+                    } else if let k = sub(m, 20) {
+                        // RemoteImeKeyInject: the app in front (app_info.app_package).
+                        if let app = sub(k, 1).flatMap({ text($0, 12) }), !app.isEmpty { self?.currentApp = app }
+                        if let f = sub(k, 2).flatMap({ long($0, 1) }) { self?.fieldCounter = f }
+                    } else if let b = sub(m, 21) {
+                        if let c = long(b, 1) { self?.imeCounter = c }
+                        if let f = long(b, 2) { self?.fieldCounter = f }
+                    } else if let r = sub(m, 22) {
+                        if let f = sub(r, 2).flatMap({ long($0, 1) }) { self?.fieldCounter = f }
+                        self?.onKeyboard?()
+                    } else if let v = sub(m, 30) {
+                        self?.voiceWait?.succeed(long(v, 1) ?? 0)
                     } else if let v = sub(m, 50) {
                         // RemoteSetVolumeLevel: max (6), level (7), muted (8), sent whenever it changes.
                         let mx = Int(long(v, 6) ?? 0)
@@ -431,8 +452,10 @@ final class AndroidTvAdapter: RemoteAdapter {
         try await launchApp("market://details?id=\(pkg)")
     }
 
-    /** Letters, digits and a few symbols as key presses. */
-    func typeText(_ text: String) async throws {
+    func typeText(_ text: String) async throws { try await setText(text) }
+
+    /** Letters, digits and a few symbols as key presses (older fallback). */
+    func typeKeys(_ text: String) async throws {
         var codes: [Int] = []
         for c in text.lowercased() {
             if let a = c.asciiValue, c >= "a" && c <= "z" { codes.append(29 + Int(a - 97)) }
@@ -445,6 +468,43 @@ final class AndroidTvAdapter: RemoteAdapter {
     }
 
     func backspace() async throws { try await key(67) }
+
+    var replacesText: Bool { true }
+
+    /** Puts the whole text in the TV's focused box through its keyboard link (any characters). */
+    func setText(_ text: String) async throws {
+        guard let l = link else { throw UserFacing("Not connected") }
+        let end = UInt64(max(0, text.count - 1))
+        let ime = imeCounter, field = fieldCounter
+        try await l.send(Pb.make { p in p.msg(21) { b in
+            b.int(1, ime); b.int(2, field)
+            b.msg(3) { e in e.int(1, 1); e.msg(2) { o in o.int(1, end); o.int(2, end); o.str(3, text) } }
+        } })
+    }
+
+    private func isLive(_ pkg: String) -> Bool {
+        let p = pkg.lowercased()
+        return p == "com.google.android.tv" || p == "com.android.tv" || p.hasSuffix(".tvinput") || p.contains("tvcenter") ||
+            p.contains("livetv") || p.contains("live_tv") || p.contains(".dtv") || p.contains("tvplayer") || p.contains(".tuner") || p.contains("channels")
+    }
+
+    func nowOn() async throws -> NowOn {
+        guard let a = currentApp else { return NowOn(name: "", live: false) }
+        return NowOn(name: a, live: isLive(a))
+    }
+
+    /** Voice to the TV's Assistant: Search, then answer the TV's voice session. Audio: 16-bit mono PCM, 8 kHz. */
+    func voiceBegin() async -> UInt64? {
+        let w = Once<UInt64>()
+        voiceWait = w
+        try? await key(84)
+        guard let id = try? await w.wait(2.5), let l = link else { voiceWait = nil; return nil }
+        voiceWait = nil
+        try? await l.send(Pb.make { p in p.msg(30) { v in v.int(1, id) } })
+        return id
+    }
+    func voiceChunk(_ id: UInt64, _ pcm: Data) async { try? await link?.send(Pb.make { p in p.msg(31) { v in v.int(1, id); v.bytes(2, pcm) } }) }
+    func voiceEnd(_ id: UInt64) async { try? await link?.send(Pb.make { p in p.msg(32) { v in v.int(1, id) } }) }
 
     func close() {
         up = false

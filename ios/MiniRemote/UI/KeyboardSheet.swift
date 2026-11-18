@@ -11,6 +11,7 @@ import AVFoundation
 struct KeyboardSheet: View {
     @ObservedObject var vm: RemoteModel
     let accent: Color
+    var openSearch = true
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
     @StateObject private var voice = VoiceInput()
@@ -67,7 +68,7 @@ struct KeyboardSheet: View {
         .presentationDetents([.height(300), .large])
         .presentationDragIndicator(.visible)
         .onAppear {
-            vm.openTvSearch()
+            if openSearch { vm.openTvSearch() }
             voice.onFinal = { said in change(text.trimmingCharacters(in: .whitespaces).isEmpty ? said : text.trimmingCharacters(in: .whitespaces) + " " + said) }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { focused = true }
         }

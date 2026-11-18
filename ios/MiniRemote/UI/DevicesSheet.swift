@@ -298,6 +298,8 @@ private struct SettingsPage: View {
                     }.pickerStyle(.segmented).frame(width: 190)
                 }
                 .padding(.vertical, 14)
+                RowDivider()
+                ToggleRow(title: "Auto keyboard", sub: "Opens when the TV asks for text", on: b({ $0.autoKeyboard }, { $0.autoKeyboard = $1 }), accent: accent)
             }
             Text(vm.settings.layout == "cards" ? "Swipe the dots for the volume, channel and number cards." : "Black screen, volume ring, two rows of keys.")
                 .font(.system(size: 12.5)).foregroundStyle(T.muted).padding(.top, 8)

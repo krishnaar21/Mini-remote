@@ -16,6 +16,7 @@ enum Brand: String, Codable, CaseIterable, Identifiable {
 enum RemoteKey: String, CaseIterable {
     case up, down, left, right, ok, back, home, playPause, power, volUp, volDown, mute, voice
     case rewind, fastForward, chUp, chDown, guide, chList, info, input, menu, audio
+    case subtitles, settings, red, green, yellow, blue
     case n0, n1, n2, n3, n4, n5, n6, n7, n8, n9
 
     var word: String {
@@ -27,6 +28,8 @@ enum RemoteKey: String, CaseIterable {
         case .chUp: return "Channel +"; case .chDown: return "Channel -"; case .guide: return "TV Guide"
         case .chList: return "Channel list"; case .info: return "Info"; case .input: return "Input"
         case .menu: return "Display settings"; case .audio: return "Audio"
+        case .subtitles: return "Subtitles"; case .settings: return "Settings"
+        case .red: return "Red"; case .green: return "Green"; case .yellow: return "Yellow"; case .blue: return "Blue"
         default: return digit.map(String.init) ?? rawValue
         }
     }
@@ -51,6 +54,8 @@ struct Device: Codable, Identifiable, Equatable {
     var token: String? = nil
     /** SHA-256 (base64) of the TV's TLS certificate, recorded on first pairing. */
     var pin: String? = nil
+    /** The TV's network (MAC) address, saved after connecting, for waking it (Wake-on-LAN). */
+    var mac: String? = nil
 }
 
 struct Settings: Codable, Equatable {
@@ -65,6 +70,8 @@ struct Settings: Codable, Equatable {
     var controlStyle = "dial"
     /** Home layout: "strip" (Black) or "cards". */
     var layout = "strip"
+    /** Open the typing sheet by itself when the TV focuses a text box (Android TV). */
+    var autoKeyboard = true
 }
 
 extension Settings {
@@ -82,6 +89,7 @@ extension Settings {
         controlStyle = try c.decodeIfPresent(String.self, forKey: .controlStyle) ?? controlStyle
         let l = try c.decodeIfPresent(String.self, forKey: .layout) ?? layout
         layout = ["strip", "cards"].contains(l) ? l : "strip"
+        autoKeyboard = try c.decodeIfPresent(Bool.self, forKey: .autoKeyboard) ?? autoKeyboard
     }
 }
 
@@ -109,7 +117,11 @@ struct PairPrompt: Equatable { var tvName: String; var error: String? }
 
 struct TvApp: Equatable, Identifiable { var id: String; var name: String; var icon: String? = nil; var version: String? = nil }
 
-struct NowOn: Equatable { var name: String; var live: Bool }
+/** What's on the TV: app or input name, whether it's live TV, and (Roku) playback position. */
+struct NowOn: Equatable { var name: String; var live: Bool; var positionMs: Int? = nil; var durationMs: Int? = nil }
+
+/** A TV input (HDMI 1, antenna…) the app can switch to. */
+struct TvInput: Equatable, Identifiable { var id: String; var name: String }
 
 struct CatalogApp: Identifiable {
     var key: String; var name: String; var bg: UInt32; var ink: UInt32; var ids: [Brand: String]

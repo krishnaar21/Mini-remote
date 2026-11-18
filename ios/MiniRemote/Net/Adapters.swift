@@ -10,6 +10,13 @@ protocol RemoteAdapter: AnyObject {
     var onDropped: (() -> Void)? { get set }
     /** Asks the TV for its volume; nil when it can't tell. */
     func readVolume() async -> TvVolume?
+    /** The TV's network address, inputs, waking from standby, and the whole-text-box path. */
+    func macAddress() async -> String?
+    func listInputs() async -> [TvInput]
+    func switchInput(_ id: String) async throws
+    func powerOn() async -> Bool
+    var replacesText: Bool { get }
+    func setText(_ text: String) async throws
     func connect() async throws
     func send(_ key: RemoteKey) async throws
     func typeText(_ text: String) async throws
@@ -25,6 +32,12 @@ protocol RemoteAdapter: AnyObject {
 
 extension RemoteAdapter {
     func readVolume() async -> TvVolume? { nil }
+    func macAddress() async -> String? { nil }
+    func listInputs() async -> [TvInput] { [] }
+    func switchInput(_ id: String) async throws { throw UserFacing("Pick the input on the TV", unsupported: true) }
+    func powerOn() async -> Bool { false }
+    var replacesText: Bool { false }
+    func setText(_ text: String) async throws { throw UserFacing("Typing isn't supported on this TV yet", unsupported: true) }
     func typeText(_ text: String) async throws { throw UserFacing("Typing isn't supported on this TV yet", unsupported: true) }
     func backspace() async throws { throw UserFacing("Typing isn't supported on this TV yet", unsupported: true) }
     func listApps() async throws -> [TvApp] { throw UserFacing("This TV can't list its apps", unsupported: true) }
@@ -72,6 +85,7 @@ final class RokuAdapter: RemoteAdapter {
             .up: "Up", .down: "Down", .left: "Left", .right: "Right", .ok: "Select", .back: "Back", .home: "Home",
             .playPause: "Play", .power: "Power", .volUp: "VolumeUp", .volDown: "VolumeDown", .mute: "VolumeMute",
             .voice: "Search", .rewind: "Rev", .fastForward: "Fwd", .chUp: "ChannelUp", .chDown: "ChannelDown", .info: "Info",
+            .input: "InputTuner",
         ]
         for k in RemoteKey.allCases { if let d = k.digit { m[k] = "Lit_\(d)" } }
         return m
@@ -103,8 +117,21 @@ final class RokuAdapter: RemoteAdapter {
         let xml = try await Http.get(base + "query/active-app")
         guard let m = firstMatch(#"<app( id="([^"]*)")?[^>]*>([^<]*)</app>"#, in: xml), !m[2].isEmpty else { return NowOn(name: "Home", live: false) }
         let name = xmlText(m[3])
-        return NowOn(name: name.isEmpty ? m[2] : name, live: m[2].hasPrefix("tvinput."))
+        let mp = (try? await Http.get(base + "query/media-player")) ?? ""
+        func ms(_ t: String) -> Int? { firstMatch("<\(t)>(\\d+) ms</\(t)>", in: mp).flatMap { Int($0[1]) } }
+        return NowOn(name: name.isEmpty ? m[2] : name, live: m[2].hasPrefix("tvinput."), positionMs: ms("position"), durationMs: ms("duration"))
     }
+    func macAddress() async -> String? {
+        guard let x = try? await Http.get(base + "query/device-info") else { return nil }
+        func tag(_ t: String) -> String? { firstMatch("<\(t)>([^<]*)</\(t)>", in: x).map { $0[1].trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 } }
+        return tag("network-type") == "ethernet" ? (tag("ethernet-mac") ?? tag("wifi-mac")) : (tag("wifi-mac") ?? tag("ethernet-mac"))
+    }
+    func listInputs() async -> [TvInput] {
+        guard let xml = try? await Http.get(base + "query/apps") else { return [] }
+        return allMatches(#"<app id="([^"]+)" type="tvin"[^>]*>([^<]*)</app>"#, in: xml).map { TvInput(id: $0[1], name: xmlText($0[2]).isEmpty ? $0[1] : xmlText($0[2])) }
+    }
+    func switchInput(_ id: String) async throws { try await Http.post(base + "launch/" + enc(id)) }
+    func powerOn() async -> Bool { (try? await Http.post(base + "keypress/PowerOn")) != nil }
     func close() {}
 }
 
@@ -132,7 +159,8 @@ final class SamsungAdapter: RemoteAdapter {
             .home: "KEY_HOME", .playPause: "KEY_PLAY_BACK", .power: "KEY_POWER", .volUp: "KEY_VOLUP", .volDown: "KEY_VOLDOWN",
             .mute: "KEY_MUTE", .voice: "KEY_VOICE", .rewind: "KEY_REWIND", .fastForward: "KEY_FF", .chUp: "KEY_CHUP",
             .chDown: "KEY_CHDOWN", .guide: "KEY_GUIDE", .chList: "KEY_CH_LIST", .info: "KEY_INFO", .input: "KEY_SOURCE",
-            .menu: "KEY_MENU", .audio: "KEY_MTS",
+            .menu: "KEY_MENU", .audio: "KEY_MTS", .subtitles: "KEY_CAPTION", .settings: "KEY_MENU",
+            .red: "KEY_RED", .green: "KEY_GREEN", .yellow: "KEY_YELLOW", .blue: "KEY_CYAN",
         ]
         for k in RemoteKey.allCases { if let d = k.digit { m[k] = "KEY_\(d)" } }
         return m
@@ -208,6 +236,18 @@ final class SamsungAdapter: RemoteAdapter {
 
     func close() { alive = false; ws?.close(); ws = nil }
 
+    func macAddress() async -> String? {
+        guard let s = try? await Http.get("http://\(host):8001/api/v2/"), let j = json(s), let d = j["device"] as? [String: Any],
+              let m = d["wifiMac"] as? String, !m.isEmpty else { return nil }
+        return m
+    }
+    /** No input list over this channel: the HDMI keys. */
+    func listInputs() async -> [TvInput] { (1...4).map { TvInput(id: "KEY_HDMI\($0)", name: "HDMI \($0)") } + [TvInput(id: "KEY_TV", name: "TV")] }
+    func switchInput(_ id: String) async throws {
+        guard let s = ws else { throw UserFacing("Not connected") }
+        try await s.send(jsonString(["method": "ms.remote.control", "params": ["Cmd": "Click", "DataOfCmd": id, "Option": "false", "TypeOfRemote": "SendRemoteKey"]]))
+    }
+
     /** Volume through UPnP RenderingControl (port 9197), which most Samsung TVs answer. */
     func readVolume() async -> TvVolume? {
         func ask(_ action: String, _ tag: String) async -> String? {
@@ -258,11 +298,22 @@ final class LgAdapter: RemoteAdapter {
         return TvVolume(level: v, max: 100, muted: (p["muted"] as? Bool) ?? (p["mute"] as? Bool) ?? false)
     }
 
+    func macAddress() async -> String? {
+        guard let p = (try? await request("ssap://com.webos.service.connectionmanager/getinfo"))?["payload"] as? [String: Any] else { return nil }
+        for k in ["wiredInfo", "wifiInfo"] { if let m = (p[k] as? [String: Any])?["macAddress"] as? String, !m.isEmpty { return m } }
+        return nil
+    }
+    func listInputs() async -> [TvInput] {
+        guard let p = (try? await request("ssap://tv/getExternalInputList"))?["payload"] as? [String: Any], let a = p["devices"] as? [[String: Any]] else { return [] }
+        return a.compactMap { o in (o["id"] as? String).map { TvInput(id: $0, name: (o["label"] as? String) ?? $0) } }
+    }
+    func switchInput(_ id: String) async throws { try await request("ssap://tv/switchInput", ["inputId": id]) }
+
     func readVolume() async -> TvVolume? { parseVolume((try? await request("ssap://audio/getVolume"))?["payload"] as? [String: Any]) }
 
     private let manifest: [String: Any] = ["manifestVersion": 1, "appVersion": "1.1", "permissions": [
         "LAUNCH", "CONTROL_AUDIO", "CONTROL_POWER", "CONTROL_INPUT_TEXT", "CONTROL_MOUSE_AND_KEYBOARD",
-        "CONTROL_INPUT_MEDIA_PLAYBACK", "READ_INSTALLED_APPS",
+        "CONTROL_INPUT_MEDIA_PLAYBACK", "READ_INSTALLED_APPS", "READ_INPUT_DEVICE_LIST", "READ_NETWORK_STATE", "CONTROL_INPUT_TV",
     ]]
 
     private func tryConnect(_ url: String) async throws -> WS {
@@ -362,6 +413,10 @@ final class LgAdapter: RemoteAdapter {
         case .input: try await button("INPUT_HUB")
         case .menu: try await button("MENU")
         case .audio: try await button("SAP")
+        case .subtitles: try await button("CC")
+        case .settings: try await button("MENU")
+        case .red: try await button("RED"); case .green: try await button("GREEN")
+        case .yellow: try await button("YELLOW"); case .blue: try await button("BLUE")
         case .voice: throw UserFacing("Voice isn't available on LG over Wi-Fi", unsupported: true)
         default: throw missing(key, "LG")
         }

@@ -18,6 +18,7 @@ struct HomeView: View {
     @Binding var numpad: Bool
     let openDevices: () -> Void
     let openKeys: () -> Void
+    var openMore: () -> Void = {}
 
     @State private var pad = PadState()
     @State private var askPower = false
@@ -59,10 +60,31 @@ struct HomeView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            topBar.padding(.horizontal, 26).padding(.top, 20)
-            if cards { cardsBody } else { blackBody }
-            Spacer().frame(height: 62)
+        GeometryReader { g in
+            if g.size.width > g.size.height {
+                // Landscape (and iPad): the pad on the left, keys on the right.
+                HStack(spacing: 0) {
+                    VStack(spacing: 0) {
+                        topBar.padding(.horizontal, 26).padding(.top, 12)
+                        NowPlayingLine(vm: vm)
+                        if cards { cardsMiddle } else { blackMiddle }
+                    }
+                    .frame(maxWidth: .infinity)
+                    Group { if cards { FourKeys(vm: vm, openKeys: openKeys) } else { KeyRows(vm: vm, numpad: $numpad, openKeys: openKeys, openMore: openMore) } }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .padding(.bottom, 40)
+            } else {
+                VStack(spacing: 0) {
+                    topBar.padding(.horizontal, 26).padding(.top, 20)
+                    NowPlayingLine(vm: vm)
+                    if cards { cardsMiddle; FourKeys(vm: vm, openKeys: openKeys).padding(.top, 6) }
+                    else { blackMiddle; KeyRows(vm: vm, numpad: $numpad, openKeys: openKeys, openMore: openMore).padding(.top, 10).padding(.bottom, 20) }
+                    Spacer().frame(height: 62)
+                }
+                .frame(maxWidth: 480)
+                .frame(maxWidth: .infinity)
+            }
         }
         .onAppear { vm.followNowOn(vm.link == .ready) }
         .onChange(of: vm.link) { _, l in vm.followNowOn(l == .ready) }
@@ -96,7 +118,8 @@ struct HomeView: View {
                 .accessibilityLabel(vm.active.map { "TV: \($0.name), \(linkWord(vm.link))" } ?? "Choose a TV")
                 Spacer(minLength: 12)
                 GlassKey(symbol: "power", label: "Power", size: 52, icon: 19) {
-                    if vm.active == nil { openDevices() } else { askPower = true }
+                    // Off (not reachable): wake it. On: ask before turning it off.
+                    if vm.active == nil { openDevices() } else if vm.link != .ready { vm.wake() } else { askPower = true }
                 }
             }
         }
@@ -104,7 +127,7 @@ struct HomeView: View {
 
     /* -------------------------------------------------------------- black */
 
-    private var blackBody: some View {
+    private var blackMiddle: some View {
         VStack(spacing: 0) {
             GeometryReader { g in
                 let s = min(g.size.width - 40 - RING_BAND * 2, g.size.height - RING_BAND * 2, 300)
@@ -118,13 +141,12 @@ struct HomeView: View {
                 .frame(width: g.size.width, height: g.size.height)
             }
             .padding(.vertical, 8)
-            KeyRows(vm: vm, numpad: $numpad, openKeys: openKeys).padding(.top, 10)
         }
     }
 
     /* -------------------------------------------------------------- cards */
 
-    private var cardsBody: some View {
+    private var cardsMiddle: some View {
         VStack(spacing: 0) {
             TabView(selection: $card) {
                 GeometryReader { g in
@@ -132,13 +154,12 @@ struct HomeView: View {
                     Group { if style == .trackpad { trackpad(size: s) } else { dial(size: s, ring: false) } }
                         .frame(width: g.size.width, height: g.size.height)
                 }.tag(0)
-                GlassCard { VolChCard(vm: vm) }.tag(1)
+                GlassCard { VolChCard(vm: vm, openMore: openMore) }.tag(1)
                 GlassCard { Numpad(vm: vm) }.tag(2)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .padding(.top, 8)
             CardDots(page: $card, count: 3)
-            FourKeys(vm: vm, openKeys: openKeys).padding(.top, 6)
         }
     }
 
@@ -147,10 +168,11 @@ struct HomeView: View {
     private func touch(_ mode: TouchPadView.Mode, ring: Bool) -> TouchPad {
         TouchPad(mode: mode, stepPx: CGFloat(vm.settings.scrubStep), offline: offline,
                  onKey: key, onTick: { vm.scrubTick($0) },
-                 onVoice: { vm.feel.fire(.heavy); vm.press(.voice) },
+                 onVoice: { vm.feel.fire(.heavy); vm.voiceStart() },
                  onTwo: { vm.scrubTick($0) }, onTwoTap: twoTap,
                  onOffline: { vm.feel.fire(.press); openDevices() },
-                 ring: ring ? RING_BAND : 0, onRing: { up in vm.scrubTick(up ? .volUp : .volDown) }, state: $pad)
+                 ring: ring ? RING_BAND : 0, onRing: { up in vm.scrubTick(up ? .volUp : .volDown) },
+                 onVoiceEnd: { vm.voiceStop() }, state: $pad)
     }
 
     private func dial(size s: CGFloat, ring: Bool) -> some View {
@@ -247,6 +269,7 @@ struct KeyRows: View {
     @ObservedObject var vm: RemoteModel
     @Binding var numpad: Bool
     let openKeys: () -> Void
+    var openMore: () -> Void = {}
     private let k: CGFloat = 68
     var body: some View {
         GlassEffectContainer(spacing: 14) {
@@ -258,10 +281,17 @@ struct KeyRows: View {
                     GlassKey(symbol: "magnifyingglass", label: "Search", size: k, icon: 22, action: openKeys)
                 }
                 HStack(spacing: 14) {
-                    GlassKey(symbol: "minus", caption: "CH", label: "Channel down", size: k, icon: 18) { vm.press(.chDown) }
-                    GlassKey(symbol: "plus", caption: "CH", label: "Channel up", size: k, icon: 18) { vm.press(.chUp) }
-                    GlassKey(word: "123", label: "Number pad", size: k, active: numpad) { numpad.toggle() }
-                    GlassKey(symbol: "rectangle.portrait.and.arrow.right", label: "Input", size: k, icon: 20) { vm.press(.input) }
+                    // Live TV: channels and numbers. Apps: volume and mute.
+                    if vm.nowOn?.live == true {
+                        GlassKey(symbol: "minus", caption: "CH", label: "Channel down", size: k, icon: 18) { vm.press(.chDown) }
+                        GlassKey(symbol: "plus", caption: "CH", label: "Channel up", size: k, icon: 18) { vm.press(.chUp) }
+                        GlassKey(word: "123", label: "Number pad", size: k, active: numpad) { numpad.toggle() }
+                    } else {
+                        GlassKey(symbol: "minus", caption: "VOL", label: "Volume down", size: k, icon: 18) { vm.press(.volDown, quiet: true) }
+                        GlassKey(symbol: "plus", caption: "VOL", label: "Volume up", size: k, icon: 18) { vm.press(.volUp, quiet: true) }
+                        GlassKey(symbol: vm.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", label: "Mute", size: k, icon: 20, active: vm.muted) { vm.press(.mute) }
+                    }
+                    GlassKey(symbol: "ellipsis", label: "More: keys, inputs, sleep timer", size: k, icon: 20, action: openMore)
                 }
             }
         }
@@ -440,6 +470,7 @@ struct GlassCard<Content: View>: View {
 /** Two tall rockers (volume, channel), with mute, input and guide under them. */
 struct VolChCard: View {
     @ObservedObject var vm: RemoteModel
+    var openMore: () -> Void = {}
     var body: some View {
         VStack(spacing: 22) {
             HStack(spacing: 28) { // 80 + 28 = 54 + 54
@@ -449,7 +480,7 @@ struct VolChCard: View {
             GlassEffectContainer(spacing: 16) {
                 HStack(spacing: 54) { // under the rockers' centres
                     GlassKey(symbol: "rectangle.portrait.and.arrow.right", label: "Input", size: 54, icon: 19) { vm.press(.input) }
-                    GlassKey(symbol: "list.bullet.rectangle", label: "Guide", size: 54, icon: 19) { vm.press(.guide) }
+                    GlassKey(symbol: "ellipsis", label: "More", size: 54, icon: 19, action: openMore)
                 }
             }
         }
@@ -529,5 +560,36 @@ struct Numpad: View {
                 }
             }
         }
+    }
+}
+
+/** What's on the TV, in one quiet line under the top bar (Roku adds position and length). */
+struct NowPlayingLine: View {
+    @ObservedObject var vm: RemoteModel
+    private var name: String? {
+        guard let raw = vm.nowOn?.name, !raw.isEmpty, raw != "Home", vm.link == .ready else { return nil }
+        if raw.contains("."), !raw.contains(" ") {
+            return Catalog.apps.first { $0.ids.values.contains(raw) }?.name ?? vm.tvApps.first { $0.id == raw }?.name
+        }
+        return raw
+    }
+    private func t(_ ms: Int) -> String {
+        let s = ms / 1000
+        return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
+    }
+    var body: some View {
+        VStack(spacing: 4) {
+            if let name {
+                let p = vm.nowOn?.positionMs, d = vm.nowOn?.durationMs
+                Text(p != nil && (d ?? 0) > 0 ? "\(name) · \(t(p!)) / \(t(d!))" : name)
+                    .font(.system(size: 12.5)).foregroundStyle(T.dim).lineLimit(1)
+                if let p, let d, d > 0 {
+                    Capsule().fill(.white.opacity(0.15)).frame(width: 140, height: 2)
+                        .overlay(alignment: .leading) { Capsule().fill(T.dim).frame(width: 140 * min(1, CGFloat(p) / CGFloat(d)), height: 2) }
+                }
+            }
+        }
+        .frame(height: 30)
+        .accessibilityElement(children: .combine)
     }
 }

@@ -39,7 +39,7 @@ jobs:
           xcrun simctl install "$UDID" "$APP"
           mkdir -p shots
           i=1
-          for s in home trackpad numpad cards keys apps devices scan settings gestures privacy licenses; do
+          for s in home live trackpad cards more keys apps devices settings gestures privacy licenses; do
             xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
             SIMCTL_CHILD_SHOT=$s xcrun simctl launch "$UDID" "$BID"
             sleep 6

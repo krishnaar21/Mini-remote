@@ -230,7 +230,8 @@ private struct QuickTile: View {
                 RoundedRectangle(cornerRadius: 20).fill(bg)
                 let short = Text(s.kind == .channel ? s.value : String(s.name.prefix(2)).uppercased())
                     .font(.system(size: 20, weight: .bold, design: s.kind == .channel ? .monospaced : .default)).foregroundStyle(ink)
-                if let icon { TvIcon(url: icon) { short }.padding(8) } else { short }
+                if let icon { TvIcon(url: icon) { short }.padding(8) }
+                else { SiteLogo(site: cat.flatMap { Logos.sites[$0.key] }) { short }.padding(cat == nil ? 0 : 10) }
             }
             .frame(width: 70, height: 70)
             Text(s.name).font(.system(size: 11.5)).foregroundStyle(T.ink).lineLimit(1).frame(width: 74)

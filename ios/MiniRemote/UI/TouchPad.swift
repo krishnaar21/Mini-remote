@@ -28,6 +28,8 @@ final class TouchPadView: UIView {
     var onKey: (RemoteKey) -> Void = { _ in }
     var onTick: (RemoteKey) -> Void = { _ in }
     var onVoice: () -> Void = {}
+    /** The finger left OK after a hold (voice ends). */
+    var onVoiceEnd: () -> Void = {}
     var onTwo: (RemoteKey) -> Void = { _ in }
     var onTwoTap: () -> Void = {}
     var onOffline: () -> Void = {}
@@ -229,6 +231,8 @@ final class TouchPadView: UIView {
             if !moved && !cancelled { onOffline() }
         } else if twoActive {
             if !cancelled && twoMax >= 2 && twoTravel < 12 && CACurrentMediaTime() - twoStart < 0.35 { onTwoTap() }
+        } else if held && inWell {
+            onVoiceEnd()
         } else if !moved && !held && !cancelled {
             onKey(mode == .dial ? (inWell ? .ok : zoneKey) : .ok)
         }
@@ -250,11 +254,12 @@ struct TouchPad: UIViewRepresentable {
     var onOffline: () -> Void
     var ring: CGFloat = 0
     var onRing: (Bool) -> Void = { _ in }
+    var onVoiceEnd: () -> Void = {}
     @Binding var state: PadState
 
     func makeUIView(context: Context) -> TouchPadView { TouchPadView() }
     func updateUIView(_ v: TouchPadView, context: Context) {
-        v.mode = mode; v.stepPx = stepPx; v.offline = offline; v.ring = ring; v.onRing = onRing
+        v.mode = mode; v.stepPx = stepPx; v.offline = offline; v.ring = ring; v.onRing = onRing; v.onVoiceEnd = onVoiceEnd
         v.onKey = onKey; v.onTick = onTick; v.onVoice = onVoice; v.onTwo = onTwo; v.onTwoTap = onTwoTap; v.onOffline = onOffline
         let b = $state
         v.onState = { s in DispatchQueue.main.async { b.wrappedValue = s } }
