@@ -173,7 +173,7 @@ fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ic
  * numbers and input, and in apps volume down / up, mute and input.
  */
 @Composable
-fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, openKeys: () -> Unit, openMore: () -> Unit = {}, openApps: () -> Unit = {}, pager0: androidx.compose.foundation.pager.PagerState? = null) {
+fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, openKeys: () -> Unit, openMore: () -> Unit = {}, openApps: (Boolean) -> Unit = {}, pager0: androidx.compose.foundation.pager.PagerState? = null) {
     val tv = vm.nowOn?.live == true
     val k = 68.dp
     var sleep by remember { mutableStateOf(false) }
@@ -223,11 +223,11 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
 
 /** Home's third page: up to seven quick access apps as circles, and All apps (the apps screen). */
 @Composable
-internal fun AppsPage(vm: RemoteVM, accent: Color, k: Dp, openApps: () -> Unit) {
+internal fun AppsPage(vm: RemoteVM, accent: Color, k: Dp, openApps: (Boolean) -> Unit) {
     val pinned = vm.shortcuts.filter { it.pinned }.take(7)
     val ready = vm.active != null && vm.link == com.krishna.miniremote.Link.READY
     val cells: List<(@Composable () -> Unit)?> = pinned.map { s -> @Composable { AppCircle(vm, s, k) { if (ready) vm.launch(s) else vm.explain(RemoteKey.HOME) } } } +
-        List(7 - pinned.size) { null } + listOf(@Composable { StripKey(accent, "All apps", k, ico = Ico.GRID, onClick = openApps) })
+        List(7 - pinned.size) { null } + listOf(@Composable { StripKey(accent, "All apps", k, ico = Ico.GRID) { openApps(false) } })
     Column(verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         cells.chunked(4).forEachIndexed { r, row ->
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -235,7 +235,7 @@ internal fun AppsPage(vm: RemoteVM, accent: Color, k: Dp, openApps: () -> Unit) 
                     if (cell != null) cell()
                     // Empty places: a faint ring; the first one says how to fill them.
                     else Box(Modifier.size(k).clip(CircleShape).border(1.dp, Color.White.copy(alpha = 0.10f), CircleShape)
-                        .clickable(onClickLabel = "add apps", onClick = openApps), contentAlignment = Alignment.Center) {
+                        .clickable(onClickLabel = "add apps") { openApps(true) }, contentAlignment = Alignment.Center) {
                         if (r * 4 + c == pinned.size) LineIcon(Ico.PLUS, T.Ink.copy(alpha = 0.35f), 18.dp)
                     }
                 }

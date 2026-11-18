@@ -116,6 +116,8 @@ fun AppShell(vm: RemoteVM) {
     val accent = accentColor(vm.settings.accentHex)
     /** The apps screen, slid up over the remote (from All apps on Home's third page). */
     var apps by remember { mutableStateOf(false) }
+    /** Opened from a "+" place: tapping an app adds it to quick access. */
+    var picking by remember { mutableStateOf(false) }
     /** Home's pages of circles: their dots sit at the bottom of the screen. */
     val keyPager = rememberPagerState { if (vm.settings.appsIn == "more") 2 else 3 }
     val scope = rememberCoroutineScope()
@@ -191,7 +193,7 @@ fun AppShell(vm: RemoteVM) {
                                 tray = tray, numpad = numpad, onNumpad = { numpad = !numpad },
                                 onTray = { open -> if (open != tray) vm.feel.fire(com.krishna.miniremote.Feel.TICK); tray = open },
                                 openMore = { more = true },
-                                openApps = { apps = true },
+                                openApps = { pick -> picking = pick; apps = true },
                                 keyPager = keyPager,
                             )
                         }
@@ -222,7 +224,7 @@ fun AppShell(vm: RemoteVM) {
                                 .clickable(onClickLabel = "back to the remote") { apps = false }, contentAlignment = Alignment.Center) {
                                 Box(Modifier.size(width = 36.dp, height = 4.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.25f)))
                             }
-                            Box(Modifier.weight(1f)) { ChannelsScreen(vm, accent, openDevices = { sheet = Page.Devices }) }
+                            Box(Modifier.weight(1f)) { ChannelsScreen(vm, accent, openDevices = { sheet = Page.Devices }, picking = picking) }
                         }
                     }
                     // The dial shows messages in its well; everywhere else they float near the bottom.
@@ -244,7 +246,7 @@ fun AppShell(vm: RemoteVM) {
         }
         sheet?.let { start -> RemoteSheet(vm, accent, start) { sheet = null } }
         if (keys) KeyboardSheet(vm, accent, openSearch = !keysFromTv && !keysVoice, startVoice = keysVoice) { keys = false; keysFromTv = false; keysVoice = false }
-        if (more) MoreSheet(vm, accent, openApps = { apps = true }) { more = false }
+        if (more) MoreSheet(vm, accent, openApps = { pick -> picking = pick; apps = true }) { more = false }
         if (sheet == null) vm.pairPrompt?.let { PairCodeDialog(vm, it, accent) }
     }
 }

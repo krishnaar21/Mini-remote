@@ -50,7 +50,7 @@ import com.krishna.miniremote.RemoteVM
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoreSheet(vm: RemoteVM, accent: Color, openApps: () -> Unit = {}, onClose: () -> Unit) {
+fun MoreSheet(vm: RemoteVM, accent: Color, openApps: (Boolean) -> Unit = {}, onClose: () -> Unit) {
     val st = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     LaunchedEffect(vm.activeId, vm.link) { vm.loadInputs() }
     ModalBottomSheet(
@@ -71,7 +71,7 @@ fun MoreSheet(vm: RemoteVM, accent: Color, openApps: () -> Unit = {}, onClose: (
             // Quick access, when it lives here (Settings › Remote › Quick access).
             if (vm.settings.appsIn == "more") {
                 SectionTitle("Quick access")
-                AppSquares(vm) { onClose(); openApps() }
+                AppSquares(vm) { pick -> onClose(); openApps(pick) }
             }
 
             // Keys not on Home's pages: subtitles, audio, channel list, menu; colour keys under them.
@@ -189,7 +189,7 @@ private fun MediaBar(vm: RemoteVM) {
  * up to seven apps and All apps.
  */
 @Composable
-private fun AppSquares(vm: RemoteVM, openApps: () -> Unit) {
+private fun AppSquares(vm: RemoteVM, openApps: (Boolean) -> Unit) {
     val pinned = vm.shortcuts.filter { it.pinned }.take(7)
     val ready = vm.active != null && vm.link == com.krishna.miniremote.Link.READY
     val shape = RoundedCornerShape(18.dp)
@@ -201,14 +201,14 @@ private fun AppSquares(vm: RemoteVM, openApps: () -> Unit) {
                     val m = Modifier.weight(1f).height(68.dp)
                     when (cell) {
                         is com.krishna.miniremote.Shortcut -> AppCircle(vm, cell, 68.dp, shape, m) { if (ready) vm.launch(cell) else vm.explain(RemoteKey.HOME) }
-                        "all" -> Box(m.clip(shape).background(M.High).clickable(role = Role.Button, onClickLabel = "all apps", onClick = openApps)
+                        "all" -> Box(m.clip(shape).background(M.High).clickable(role = Role.Button, onClickLabel = "all apps") { openApps(false) }
                             .semantics(mergeDescendants = true) { contentDescription = "All apps" }, contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 LineIcon(Ico.GRID, T.Ink, 20.dp)
                                 Text("All apps", color = Muted, fontSize = 11.sp, lineHeight = 13.sp, modifier = Modifier.padding(top = 3.dp))
                             }
                         }
-                        else -> Box(m.clip(shape).border(1.dp, Color.White.copy(alpha = 0.10f), shape).clickable(onClickLabel = "add apps", onClick = openApps),
+                        else -> Box(m.clip(shape).border(1.dp, Color.White.copy(alpha = 0.10f), shape).clickable(onClickLabel = "add apps") { openApps(true) },
                             contentAlignment = Alignment.Center) { LineIcon(Ico.PLUS, T.Ink.copy(alpha = 0.3f), 16.dp) }
                     }
                 }

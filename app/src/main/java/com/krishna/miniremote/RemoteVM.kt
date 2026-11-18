@@ -683,7 +683,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     fun pinnedTvApp(app: TvApp): Shortcut? = shortcuts.firstOrNull { it.kind == ShortcutKind.APP && it.brand == active?.brand && it.value == app.id }
 
     /** Quick access holds at most this many. */
-    val maxPinned = 8
+    val maxPinned = 7
     private fun roomToPin(): Boolean {
         if (shortcuts.count { it.pinned } < maxPinned) return true
         feel.fire(Feel.ERROR); say("Quick access is full ($maxPinned). Remove one first.")

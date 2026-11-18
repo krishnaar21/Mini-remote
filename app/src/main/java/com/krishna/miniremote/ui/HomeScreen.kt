@@ -99,7 +99,7 @@ fun HomeScreen(
     onNumpad: () -> Unit,
     onTray: (open: Boolean) -> Unit,
     openMore: () -> Unit = {},
-    openApps: () -> Unit = {},
+    openApps: (Boolean) -> Unit = {},
     keyPager: androidx.compose.foundation.pager.PagerState? = null,
 ) {
     val scope = rememberCoroutineScope()

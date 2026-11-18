@@ -115,6 +115,8 @@ private class AppEntry(
     /** true / false when the TV lists its apps; null when it can't tell. */
     val installed: Boolean? = null,
     val pinned: Boolean,
+    /** Its quick access entry, when it has one. */
+    val pinnedAs: Shortcut? = null,
     /** Id for the TV's store page (Roku, Android TV); null where install / remove isn't possible from here. */
     val storeId: String? = null,
     val open: () -> Unit,
@@ -125,10 +127,10 @@ private class AppEntry(
 
 /**
  * Apps and channels. Tap an app for its details (open, quick access, install / remove);
- * long-press and drag it onto the Quick access zone that appears at the top.
+ * long-press it (or tap, when opened to add apps) to put it in quick access; again for its options.
  */
 @Composable
-fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
+fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit, picking: Boolean = false) {
     var adding by remember { mutableStateOf<ShortcutKind?>(null) }
     var details by remember { mutableStateOf<AppEntry?>(null) }
     /** Index of the quick access item whose actions sheet is open. */
@@ -147,18 +149,14 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
     val over = drag != null && zone.contains(dragPos)
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
-    val dragger = Dragger(
-        // Dragging starts: bring Quick access (the drop slot) into view.
-        start = { e, at -> drag = e; dragPos = at; zone = Rect.Zero; vm.feel.fire(com.krishna.miniremote.Feel.HEAVY); scope.launch { scroll.animateScrollTo(0) } },
-        move = { by -> dragPos += by },
-        end = {
-            val e = drag
-            if (e != null && zone.contains(dragPos)) {
-                if (e.pinned) vm.say("Already in quick access") else { e.pin(); vm.feel.fire(com.krishna.miniremote.Feel.SUCCESS) }
-            }
-            drag = null
-        },
-    )
+    /** Quick access options for an app already in it (open, move, remove). */
+    fun options(e: AppEntry) { e.pinnedAs?.let { s -> quickMenu = vm.shortcuts.filter { it.pinned }.indexOfFirst { it.id == s.id }.takeIf { it >= 0 } } }
+    /** Adding to quick access: the first tap adds the app, a second tap opens its options. */
+    fun pick(e: AppEntry) { if (e.pinned) options(e) else { e.pin(); vm.feel.fire(com.krishna.miniremote.Feel.SUCCESS) } }
+    /** Tap: in adding mode, add; otherwise the app's details. */
+    fun tap(e: AppEntry) { if (picking) pick(e) else details = e }
+    // Long-press does the same as a tap in adding mode, from anywhere.
+    val dragger = Dragger(start = { e, _ -> vm.feel.fire(com.krishna.miniremote.Feel.HEAVY); pick(e) }, move = {}, end = {})
 
     val brand = d?.brand
     val entries = remember(vm.tvApps, vm.shortcuts, brand) {
@@ -168,7 +166,7 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
                 key = "tv:${app.id}", name = app.name, bg = tint(app.name), ink = Color.White, icon = app.icon,
                 logo = Catalog.apps.firstOrNull { it.name.equals(app.name, true) }?.logo ?: Logos.slugFor(app.name),
                 pkg = Catalog.apps.firstOrNull { it.name.equals(app.name, true) }?.let { Catalog.iconPkg(it) } ?: if (brand == Brand.ANDROID_TV) app.id else null,
-                version = app.version, installed = true, pinned = pin != null,
+                version = app.version, installed = true, pinned = pin != null, pinnedAs = pin,
                 storeId = if (brand == Brand.ROKU) app.id else null,
                 open = { vm.launchApp(app.name, app.id) }, pin = { vm.pinTvApp(app) }, unpin = { pin?.let { vm.setPinned(it, false) } },
             )
@@ -178,14 +176,14 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
         val pin = vm.pinnedCatalog(c)
         AppEntry(
             key = "cat:${c.key}", name = c.name, bg = Color(c.bg), ink = Color(c.ink), vendor = c.vendor.ifEmpty { null }, logo = c.logo, site = c.site.ifEmpty { null }, pkg = Catalog.iconPkg(c),
-            installed = vm.installed(c), pinned = pin != null,
+            installed = vm.installed(c), pinned = pin != null, pinnedAs = pin,
             storeId = brand?.let { b -> if (b == Brand.ROKU || b == Brand.ANDROID_TV) c.ids[b] else null },
             open = { vm.launchCatalog(c) }, pin = { vm.pinCatalog(c) }, unpin = { pin?.let { vm.setPinned(it, false) } },
         )
     }
     val added = vm.shortcuts.filter { it.kind == ShortcutKind.APP && it.added }.map { s ->
         AppEntry(
-            key = "add:${s.id}", name = s.name, bg = tint(s.name), ink = Color.White, badge = s.brand?.label, pinned = s.pinned,
+            key = "add:${s.id}", name = s.name, bg = tint(s.name), ink = Color.White, badge = s.brand?.label, pinned = s.pinned, pinnedAs = s.takeIf { it.pinned },
             logo = Logos.slugFor(s.name),
             pkg = Catalog.apps.firstOrNull { it.name.equals(s.name, true) }?.let { Catalog.iconPkg(it) } ?: if (s.brand == Brand.ANDROID_TV) s.value.takeIf { "://" !in it } else null,
             storeId = if (s.brand == Brand.ROKU || s.brand == Brand.ANDROID_TV) s.value.takeIf { "://" !in it } else null,
@@ -194,7 +192,7 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
     }
     val channels = vm.shortcuts.filter { it.kind == ShortcutKind.CHANNEL }.map { s ->
         AppEntry(
-            key = "ch:${s.id}", name = s.name, bg = ChannelBg, ink = Color.White, badge = s.value, pinned = s.pinned,
+            key = "ch:${s.id}", name = s.name, bg = ChannelBg, ink = Color.White, badge = s.value, pinned = s.pinned, pinnedAs = s.takeIf { it.pinned },
             open = { vm.launch(s) }, pin = { vm.setPinned(s, true) }, unpin = { vm.setPinned(s, false) }, delete = { vm.removeShortcut(s) },
         )
     }
@@ -204,7 +202,7 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
             Modifier.fillMaxSize().verticalScroll(scroll, enabled = drag == null)
                 .padding(horizontal = 20.dp).padding(bottom = NAV_H + 40.dp),
         ) {
-            PageTitle("Apps") {
+            PageTitle(if (picking) "Add to quick access" else "Apps") {
                 RoundIcon(Ico.REFRESH, "Reload the TV's apps") { vm.refreshApps(force = true) }
                 RoundIcon(Ico.PLUS, "Add a channel or app") { adding = ShortcutKind.CHANNEL }
             }
@@ -218,44 +216,24 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
                 modifier = Modifier.then(if (!ready) Modifier.clickable(onClickLabel = "choose a TV", onClick = openDevices) else Modifier),
             )
 
-            SectionTitle("Quick access")
-            val pinned = vm.shortcuts.filter { it.pinned }
-            if (drag != null) {
-                DropSlot(over, accent, Modifier.padding(top = 12.dp).onGloballyPositioned { zone = it.boundsInRoot() })
-            } else if (pinned.isEmpty()) {
-                Hint("Long-press an app and drag it here.", top = 6)
-            } else {
-                // Two rows of four (Quick access holds eight).
-                Column(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-                    pinned.chunked(4).forEachIndexed { r, row ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            row.forEachIndexed { c, s ->
-                                val i = r * 4 + c
-                                QuickTile(s, accent, icon = s.icon ?: vm.tvApps.firstOrNull { it.name.equals(s.name, true) }?.icon, logoOn = vm.settings.logos,
-                                    onClick = { if (!needTv()) vm.launch(s) }, onLongPress = { quickMenu = i })
-                            }
-                            repeat(4 - row.size) { Box(Modifier.width(74.dp)) }
-                        }
-                    }
-                }
-            }
+            if (picking) Hint("Tap apps to add them to quick access. Tap one again for its options.", top = 10)
 
             if (entries.isNotEmpty() || vm.appsLoading) {
                 SectionTitle("On your TV")
                 if (entries.isEmpty()) Loading(accent, "Loading apps…")
-                TileGrid(entries) { e -> Tile(e, dragger) { details = e } }
+                TileGrid(entries) { e -> Tile(e, dragger) { tap(e) } }
             }
             SectionTitle(if (entries.isEmpty()) "Apps" else "Popular apps")
-            TileGrid(popular) { e -> Tile(e, dragger) { details = e } }
+            TileGrid(popular) { e -> Tile(e, dragger) { tap(e) } }
             if (added.isNotEmpty()) {
                 SectionTitle("Added apps")
-                TileGrid(added) { e -> Tile(e, dragger) { details = e } }
+                TileGrid(added) { e -> Tile(e, dragger) { tap(e) } }
             }
 
             SectionTitle("TV channels")
             if (channels.isEmpty()) Hint("Add channels by number, like 101.", top = 6)
             // Channels: tap tunes straight away; long-press drags like apps.
-            else TileGrid(channels) { e -> Tile(e, dragger) { if (!needTv()) e.open() } }
+            else TileGrid(channels) { e -> Tile(e, dragger) { if (picking) pick(e) else if (!needTv()) e.open() } }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(Modifier.weight(1f)) { Btn("Add channel", kind = 1) { adding = ShortcutKind.CHANNEL } }
                 Box(Modifier.weight(1f)) { Btn("Add app", kind = 1) { adding = ShortcutKind.APP } }
