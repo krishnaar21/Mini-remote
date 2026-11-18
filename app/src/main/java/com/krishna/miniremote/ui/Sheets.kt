@@ -690,7 +690,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
                 ) {
                     // Preview as the launcher masks it (a circle here); the art keeps to the safe zone.
                     Box(
-                        Modifier.size(58.dp).then(if (sel) Modifier.border(2.dp, Color.White, CircleShape).padding(4.dp) else Modifier.padding(4.dp))
+                        Modifier.size(54.dp).then(if (sel) Modifier.border(2.dp, Color.White, CircleShape).padding(4.dp) else Modifier.padding(4.dp))
                             .clip(CircleShape),
                     ) {
                         androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.krishna.miniremote.AppIcon.bg(key)), null,

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd" android:pathData="M27,54a27,27 0,1 1,54,0a27,27 0,1 1,-54,0Z M43,54a11,11 0,1 1,22,0a11,11 0,1 1,-22,0Z"/>
-    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="3.5" android:strokeLineCap="round" android:fillColor="#00000000" android:pathData="M54,87 A33,33 0 0,1 21,54 A33,33 0 0,1 30.7,30.7"/>
+<!-- Mini Remote app icon "Dial". -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd" android:pathData="M31,54a23,23 0,1 1,46,0a23,23 0,1 1,-46,0Z M44.5,54a9.5,9.5 0,1 1,19.0,0a9.5,9.5 0,1 1,-19.0,0Z"/>
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="3.4" android:strokeLineCap="round" android:fillColor="#00000000" android:pathData="M54,82 A28,28 0 0,1 26,54 A28,28 0 0,1 34.20,34.20"/>
 </vector>
