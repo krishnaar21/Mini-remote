@@ -44,7 +44,12 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     /** Why the last connection attempt failed, worded for the user. */
     var lastError by mutableStateOf<String?>(null); private set
     /** Bumps every time a command goes out; the transmit light in the TV pill flashes on it. */
-    var txCount by mutableIntStateOf(0); private set
+    private var txN by mutableIntStateOf(0)
+    /** When this app last sent something to the TV (to tell its text boxes from the physical remote's). */
+    private var lastTxAt = 0L
+    var txCount: Int
+        get() = txN
+        private set(v) { txN = v; lastTxAt = System.currentTimeMillis() }
     /** Mute is a toggle on every TV we support, so we track it locally to colour the button. */
     var muted by mutableStateOf(false); private set
     /** Play / pause is a toggle too: tracked locally so the key shows one icon at a time. */
@@ -361,7 +366,12 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 tvVolume = null
                 a.onVolume = { v -> viewModelScope.launch { tvVolume = v; muted = v.muted } }
                 a.onDropped = { dropped(d, a) }
-                a.onKeyboard = { viewModelScope.launch { if (settings.autoKeyboard) keyboardAsk++ } }
+                // A text box got focus on the TV. If the phone is what's driving it (something sent
+                // from here in the last 20 s), type from the phone; if the physical remote is,
+                // leave the TV's own keyboard alone.
+                a.onKeyboard = { viewModelScope.launch {
+                    if (settings.autoKeyboard && System.currentTimeMillis() - lastTxAt < 20_000) keyboardAsk++
+                } }
                 a.connect()
                 adapter = a
                 refreshVolume(0)

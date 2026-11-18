@@ -194,8 +194,12 @@ class AndroidTvAdapter(
     @Volatile private var imeCounter = 0L
     @Volatile private var fieldCounter = 0L
     @Volatile private var currentApp: String? = null
-    @Volatile private var imeFromInject = false
-    @Volatile private var fieldFromInject = false
+    /** Counters came from a RemoteImeBatchEdit (the source androidtvremote2 uses). */
+    @Volatile private var fromBatch = false
+    /** When the TV last told us about a text box, and a wait for the next one. */
+    @Volatile private var fieldAt = 0L
+    @Volatile private var fieldWait: CompletableDeferred<Unit>? = null
+    @Volatile private var ourEditAt = 0L
     /** The TV decided the speech is over (sent back a voice payload). */
     @Volatile var onVoiceDone: (() -> Unit)? = null
     override var onKeyboard: (() -> Unit)? = null
@@ -317,17 +321,31 @@ class AndroidTvAdapter(
                         m[20] != null -> m.sub(20)?.let { k ->
                             k.sub(1)?.let { info ->
                                 info.text(12)?.takeIf { it.isNotEmpty() }?.let { currentApp = it }
-                                info.long(1)?.let { imeCounter = it; imeFromInject = it != 0L }
+                                if (!fromBatch) info.long(1)?.let { imeCounter = it }
                             }
-                            k.sub(2)?.long(1)?.let { fieldCounter = it; fieldFromInject = it != 0L }
+                            if (!fromBatch) k.sub(2)?.long(1)?.let { fieldCounter = it }
                         }
-                        // RemoteImeBatchEdit from the TV: counters, only when the key inject had none.
+                        // RemoteImeBatchEdit from the TV: a text box is active; these are the counters
+                        // our edits must carry. A new box (none for a while, and not an echo of our
+                        // own typing) also offers the phone keyboard.
                         m[21] != null -> m.sub(21)?.let { b ->
-                            if (!imeFromInject) b.long(1)?.let { imeCounter = it }
-                            if (!fieldFromInject) b.long(2)?.let { fieldCounter = it }
+                            b.long(1)?.let { imeCounter = it }
+                            b.long(2)?.let { fieldCounter = it }
+                            fromBatch = true
+                            val now = System.currentTimeMillis()
+                            val fresh = now - fieldAt > 4000 && now - ourEditAt > 4000
+                            fieldAt = now
+                            fieldWait?.complete(Unit)
+                            if (fresh) onKeyboard?.invoke()
                         }
                         // RemoteImeShowRequest: a text box got focus.
-                        m[22] != null -> { m.sub(22)?.sub(2)?.long(1)?.let { fieldCounter = it }; onKeyboard?.invoke() }
+                        m[22] != null -> {
+                            m.sub(22)?.sub(2)?.long(1)?.let { fieldCounter = it }
+                            val now = System.currentTimeMillis()
+                            val fresh = now - fieldAt > 4000
+                            fieldAt = now; fieldWait?.complete(Unit)
+                            if (fresh) onKeyboard?.invoke()
+                        }
                         // RemoteVoiceBegin: the TV opened a voice session for us.
                         m[30] != null -> voiceWait?.complete(m.sub(30)?.long(1) ?: 0L)
                         // RemoteVoicePayload back from the TV: it heard the end of speech.
@@ -369,6 +387,7 @@ class AndroidTvAdapter(
      * session is answered and closed right away, which leaves the search screen with its keyboard.
      */
     override suspend fun openSearch() {
+        fieldAt = 0L // the search box will be a new text box: typing waits for it
         withContext(Dispatchers.IO) {
             val f = io ?: error("Not connected")
             f.send(Pb().apply { msg(10) { int(1, 84); int(2, 1) } }.toBytes()) // down
@@ -430,7 +449,16 @@ class AndroidTvAdapter(
     override suspend fun setText(text: String) = withContext(Dispatchers.IO) {
         if (text.isEmpty()) return@withContext
         val f = io ?: error("Not connected")
-        val n = text.length.toLong()
+        // No text box seen yet (search still opening): wait up to 3 s for the TV to report it,
+        // so the letters land in the box with its current counters.
+        if (fieldAt == 0L) {
+            val w = CompletableDeferred<Unit>().also { fieldWait = it }
+            kotlinx.coroutines.withTimeoutOrNull(3000) { w.await() }
+            fieldWait = null
+        }
+        ourEditAt = System.currentTimeMillis()
+        // As androidtvremote2's send_text: insert, with start = end = length - 1.
+        val n = (text.length - 1).toLong()
         f.send(Pb().apply {
             msg(21) {
                 int(1, imeCounter); int(2, fieldCounter)
@@ -469,7 +497,7 @@ class AndroidTvAdapter(
         codes.forEach { key(it) }
     }
 
-    override suspend fun backspace() = key(67)
+    override suspend fun backspace() { ourEditAt = System.currentTimeMillis(); key(67) }
 
     override fun close() {
         closing = true
