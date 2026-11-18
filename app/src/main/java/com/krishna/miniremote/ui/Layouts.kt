@@ -57,6 +57,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.krishna.miniremote.RemoteKey
@@ -174,6 +175,14 @@ fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ic
 fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, openKeys: () -> Unit, openMore: () -> Unit = {}) {
     val tv = vm.nowOn?.live == true
     val k = 68.dp
+    var sleep by remember { mutableStateOf(false) }
+    if (sleep) SleepSheet(vm, accent) { sleep = false }
+    // Two pages of eight: swipe across the circles for playback, sleep timer and the TV's keys.
+    val pager = androidx.compose.foundation.pager.rememberPagerState { 2 }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.width(k * 4 + 14.dp * 3), beyondViewportPageCount = 1, pageSpacing = 24.dp) { page ->
+    if (page == 1) KeyPage2(vm, accent, k) { sleep = true } else
     Column(verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             StripKey(accent, "Back", k, ico = Ico.CHEVRON_L, enabled = vm.can(RemoteKey.BACK), onDisabled = { vm.explain(RemoteKey.BACK) }) { vm.press(RemoteKey.BACK) }
@@ -192,6 +201,46 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
                 VoiceKey(vm, k)
             }
             StripKey(accent, "More: keys, inputs, sleep timer", k, ico = Ico.MORE, onClick = openMore)
+        }
+    }
+    }
+    // Which page: two dots (tap one to jump).
+    Row(Modifier.padding(top = 10.dp).height(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        repeat(2) { i ->
+            val sel = pager.currentPage == i
+            Box(
+                Modifier.size(if (sel) 7.dp else 6.dp).clip(CircleShape).background(if (sel) T.Ink.copy(alpha = 0.85f) else T.Ink.copy(alpha = 0.25f))
+                    .clickable(onClickLabel = if (i == 0) "main keys" else "more keys") { scope.launch { pager.animateScrollToPage(i) } },
+            )
+        }
+    }
+    }
+}
+
+/** Home's second page: Rewind · Forward · Mute · Sleep, then Info · Guide · Input · Settings. */
+@Composable
+private fun KeyPage2(vm: RemoteVM, accent: Color, k: Dp, openSleep: () -> Unit) {
+    @Composable fun key(label: String, ico: Ico, key: RemoteKey) =
+        StripKey(accent, label, k, ico = ico, enabled = vm.can(key), onDisabled = { vm.explain(key) }) { vm.press(key) }
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            key("Rewind", Ico.REWIND, RemoteKey.REWIND)
+            key("Fast forward", Ico.FFWD, RemoteKey.FAST_FORWARD)
+            key(if (vm.muted) "Unmute" else "Mute", if (vm.muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, RemoteKey.MUTE)
+            // Sleep: shows the minutes left while it's counting down.
+            val at = vm.sleepAt
+            var now by remember { mutableStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(at) { while (at != null) { now = System.currentTimeMillis(); kotlinx.coroutines.delay(15_000) } }
+            val left = at?.let { ((it - now) / 60_000 + 1).coerceAtLeast(1) }
+            StripKey(accent, if (left != null) "Sleep timer, $left minutes left" else "Sleep timer", k, active = at != null,
+                ico = if (left == null) Ico.SLEEP else null, word = left?.let { "${it}m" },
+                enabled = vm.can(RemoteKey.POWER), onDisabled = { vm.explain(RemoteKey.POWER) }, onClick = openSleep)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            key("Info", Ico.INFO, RemoteKey.INFO)
+            key("Guide", Ico.GUIDE, RemoteKey.GUIDE)
+            key("Input", Ico.INPUT, RemoteKey.INPUT)
+            key("Settings", Ico.GEAR, RemoteKey.SETTINGS)
         }
     }
 }

@@ -128,37 +128,7 @@ fun MoreSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
 
             // 3 · Sleep timer: one row.
             SectionTitle("Sleep timer")
-            Group {
-                val at = vm.sleepAt
-                if (at != null) {
-                    // Counting down: how long is left, big; when; and a way to stop it.
-                    var now by remember { mutableStateOf(System.currentTimeMillis()) }
-                    LaunchedEffect(at) { while (true) { now = System.currentTimeMillis(); kotlinx.coroutines.delay(1000) } }
-                    val left = ((at - now) / 1000).coerceAtLeast(0)
-                    val clock = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(at))
-                    Row(Modifier.fillMaxWidth().padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Box(Modifier.size(44.dp).clip(CircleShape).background(accent.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) { LineIcon(Ico.SLEEP, accent, 22.dp) }
-                        Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
-                            Text("%d:%02d".format(left / 60, left % 60), color = T.Ink, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, fontFamily = Mono)
-                            Text("TV turns off at $clock", color = Muted, fontSize = 12.5.sp)
-                        }
-                        Box(Modifier.height(36.dp).clip(CircleShape).background(M.High).clickable(role = Role.Button) { vm.setSleep(null) }.padding(horizontal = 16.dp),
-                            contentAlignment = Alignment.Center) { Text("Cancel", color = T.Ink, fontSize = 13.5.sp, fontWeight = FontWeight.Medium) }
-                    }
-                    Text("Keep Mini Remote open (it can be in the background).", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
-                } else {
-                    Text("Turn the TV off after", color = T.Ink, fontSize = 15.sp, modifier = Modifier.padding(top = 16.dp))
-                }
-                Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(15, 30, 60, 90).forEach { m ->
-                        Box(
-                            Modifier.weight(1f).height(38.dp).clip(CircleShape).background(M.High)
-                                .clickable(role = Role.Button, enabled = vm.can(RemoteKey.POWER)) { vm.setSleep(m) },
-                            contentAlignment = Alignment.Center,
-                        ) { Text(if (m < 60) "$m min" else "${m / 60}${if (m % 60 == 30) ".5" else ""} h", color = if (vm.can(RemoteKey.POWER)) T.Ink else Muted, fontSize = 13.sp, fontWeight = FontWeight.Medium) }
-                    }
-                }
-            }
+            SleepCard(vm, accent)
         }
         // Always at hand, under the scrolling keys: move around and select without going back Home.
         Box(Modifier.fillMaxWidth().background(SheetBg).padding(horizontal = 24.dp).padding(top = 8.dp, bottom = 16.dp)) { NavPad(vm) }
@@ -232,6 +202,58 @@ private fun KeyTile(vm: RemoteVM, k: RemoteKey, ico: Ico, label: String, modifie
             LineIcon(ico, if (on) T.Ink else T.Ink.copy(alpha = 0.3f), 20.dp)
             Text(label, color = if (on) Muted else Muted.copy(alpha = 0.4f), fontSize = 11.sp, lineHeight = 13.sp, maxLines = 1, textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 3.dp))
+        }
+    }
+}
+
+/** The sleep timer: a countdown with Cancel when set, and 15 / 30 / 60 / 90 minute choices. */
+@Composable
+internal fun SleepCard(vm: RemoteVM, accent: Color) {
+    Group {
+        val at = vm.sleepAt
+        if (at != null) {
+            // Counting down: how long is left, big; when; and a way to stop it.
+            var now by remember { mutableStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(at) { while (true) { now = System.currentTimeMillis(); kotlinx.coroutines.delay(1000) } }
+            val left = ((at - now) / 1000).coerceAtLeast(0)
+            val clock = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(at))
+            Row(Modifier.fillMaxWidth().padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Box(Modifier.size(44.dp).clip(CircleShape).background(accent.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) { LineIcon(Ico.SLEEP, accent, 22.dp) }
+                Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
+                    Text("%d:%02d".format(left / 60, left % 60), color = T.Ink, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, fontFamily = Mono)
+                    Text("TV turns off at $clock", color = Muted, fontSize = 12.5.sp)
+                }
+                Box(Modifier.height(36.dp).clip(CircleShape).background(M.High).clickable(role = Role.Button) { vm.setSleep(null) }.padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center) { Text("Cancel", color = T.Ink, fontSize = 13.5.sp, fontWeight = FontWeight.Medium) }
+            }
+            Text("Keep Mini Remote open (it can be in the background).", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+        } else {
+            Text("Turn the TV off after", color = T.Ink, fontSize = 15.sp, modifier = Modifier.padding(top = 16.dp))
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(15, 30, 60, 90).forEach { m ->
+                Box(
+                    Modifier.weight(1f).height(38.dp).clip(CircleShape).background(M.High)
+                        .clickable(role = Role.Button, enabled = vm.can(RemoteKey.POWER)) { vm.setSleep(m) },
+                    contentAlignment = Alignment.Center,
+                ) { Text(if (m < 60) "$m min" else "${m / 60}${if (m % 60 == 30) ".5" else ""} h", color = if (vm.can(RemoteKey.POWER)) T.Ink else Muted, fontSize = 13.sp, fontWeight = FontWeight.Medium) }
+            }
+        }
+    }
+}
+
+/** The sleep timer on its own (from the circle on Home's second page). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SleepSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
+    val st = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onClose, sheetState = st, containerColor = SheetBg, contentColor = T.Ink,
+        shape = SheetShape, scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
+    ) {
+        Column(Modifier.navigationBarsPadding().padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
+            Text("Sleep timer", color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            SleepCard(vm, accent)
         }
     }
 }
