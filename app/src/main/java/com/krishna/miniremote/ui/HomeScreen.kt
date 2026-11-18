@@ -302,6 +302,7 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
     val dot = when {
         d == null -> null
         vm.link == Link.READY -> Color(0xFF6DD58C)
+        vm.btReady -> Color(0xFF64D2FF) // on Bluetooth
         vm.link == Link.CONNECTING -> Color(0xFFFDD663)
         else -> Color(0xFFF2B8B5)
     }

@@ -36,12 +36,15 @@ data class Device(
     val pin: String? = null,
     /** The TV's network (MAC) address, saved after connecting, for waking it (Wake-on-LAN). */
     val mac: String? = null,
+    /** Bluetooth address once the TV has paired with the phone as a Bluetooth remote (Android). */
+    val bt: String? = null,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("name", name).put("host", host).put("brand", brand.name)
         .put("token", token ?: JSONObject.NULL)
         .put("pin", pin ?: JSONObject.NULL)
         .put("mac", mac ?: JSONObject.NULL)
+        .put("bt", bt ?: JSONObject.NULL)
 
     companion object {
         fun fromJson(o: JSONObject): Device? = runCatching {
@@ -53,6 +56,7 @@ data class Device(
                 token = if (o.isNull("token")) null else o.getString("token"),
                 pin = if (!o.has("pin") || o.isNull("pin")) null else o.getString("pin"),
                 mac = if (!o.has("mac") || o.isNull("mac")) null else o.getString("mac"),
+                bt = if (!o.has("bt") || o.isNull("bt")) null else o.getString("bt"),
             )
         }.getOrNull()
 

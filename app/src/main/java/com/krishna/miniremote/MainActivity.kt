@@ -54,6 +54,7 @@ class MainActivity : ComponentActivity() {
         Outside.hide(this)
         vm.maybeCheckForUpdate()
         vm.autoConnect()
+        vm.btResume()
     }
 
     override fun onStop() {

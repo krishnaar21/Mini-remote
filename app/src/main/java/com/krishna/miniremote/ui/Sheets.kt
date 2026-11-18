@@ -473,6 +473,33 @@ internal fun DevicePage(vm: RemoteVM, d: Device, accent: Color) {
     Field("Name", name, { name = it.take(30) })
     if (on) Btn("Disconnect") { vm.disconnect() } else Btn("Connect") { vm.select(d) }
     Btn("Save", kind = 1, enabled = name.isNotBlank() && name.trim() != d.name) { vm.rename(d.id, name); vm.say("Saved") }
+    // Bluetooth: the TV pairs with the phone as a remote, so keys work without Wi-Fi.
+    if (vm.btAvailable) {
+        vm.btTick
+        SectionTitle("Bluetooth")
+        Group {
+            val pairing = vm.btPairing == d.id
+            Column(Modifier.padding(vertical = 14.dp)) {
+                Text(when {
+                    pairing -> "Waiting for the TV…"
+                    d.bt != null && vm.btReady && vm.activeId == d.id -> "Paired · connected"
+                    d.bt != null -> "Paired · used when Wi-Fi can't reach the TV"
+                    else -> "Not paired"
+                }, color = T.Ink, fontSize = 15.sp)
+                Text(
+                    if (pairing) "On the TV, open Settings › Remotes & Accessories (or Bluetooth) › Pair accessory, and choose Mini Remote. Keep this screen open."
+                    else if (d.bt != null) "Arrows, OK, Back, Home, volume, play and search work over Bluetooth. Apps, inputs and typing need Wi-Fi."
+                    else "Pair once and the phone works as a Bluetooth remote too: no Wi-Fi needed for the basic keys.",
+                    color = Muted, fontSize = 12.5.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
+        when {
+            vm.btPairing == d.id -> Btn("Cancel pairing", kind = 1) { vm.btCancelPairing() }
+            d.bt != null -> Btn("Forget Bluetooth", kind = 1) { vm.btForget(d) }
+            else -> Btn("Pair over Bluetooth", kind = 1) { vm.btPair(d) }
+        }
+    }
     Btn(if (arm) "Tap to confirm" else "Forget TV", kind = 2) {
         // Removing it makes this page's TV disappear, and the sheet steps back on its own.
         if (!arm) { arm = true; vm.feel.fire(com.krishna.miniremote.Feel.HEAVY) } else vm.remove(d)
@@ -1253,7 +1280,7 @@ internal fun PrivacyPage(vm: RemoteVM) {
         Divider()
         InfoBlock("Voice", "The mic listens only while you tap it in Search. Speech is turned into text on the phone where possible (otherwise by the phone's speech service); only the text goes to your TV. Nothing is saved.")
         Divider()
-        InfoBlock("Permissions", "Network, microphone (voice search and talking to the TV, only while listening), vibration, notifications (updates, the remote), installing updates. No location, contacts or files.")
+        InfoBlock("Permissions", "Network, Bluetooth (only if you pair a TV over Bluetooth), microphone (voice search and talking to the TV, only while listening), vibration, notifications (updates, the remote), installing updates. No location, contacts or files.")
     }
     var ask by remember { mutableStateOf<String?>(null) }
     Btn("Forget all TVs", kind = 1) { ask = "tvs" }

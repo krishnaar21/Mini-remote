@@ -23,6 +23,7 @@ The microphone is used only while you tap the mic in the Search panel, and it st
 ## Permissions
 - **Internet, network state, Wi-Fi state:** find and control TVs on your network; check for updates.
 - **Microphone:** voice search, only while listening.
+- **Bluetooth:** only if you pair a TV over Bluetooth; the phone then acts as a Bluetooth remote / keyboard for that TV.
 - **Vibrate:** haptic feedback.
 - **Post notifications:** tell you when an update is ready.
 - **Request install packages:** hand a downloaded update to Android's installer. You always confirm.

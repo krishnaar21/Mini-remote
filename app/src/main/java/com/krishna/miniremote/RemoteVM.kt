@@ -193,7 +193,11 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             for (k in queue) {
                 val a = adapter
-                if (link != Link.READY || a == null) continue
+                if (link != Link.READY || a == null) {
+                    // No Wi-Fi link: a TV paired over Bluetooth still gets the key.
+                    if (btReady && runCatching { bt?.send(k) == true }.getOrDefault(false)) txCount++
+                    continue
+                }
                 try { a.send(k); txCount++ } catch (e: TimeoutCancellationException) {
                     feel.fire(Feel.ERROR); say("The TV didn't answer")
                 } catch (e: CancellationException) { throw e } catch (e: Exception) {
@@ -279,6 +283,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     fun press(key: RemoteKey, quiet: Boolean = false) {
         if (active == null) { feel.fire(Feel.ERROR); say("Choose a TV first"); return }
         if (link == Link.ERROR) active?.let { connect(it) }
+        if (link != Link.READY) active?.bt?.let { a -> bt?.connect(a) }
         feel.fire(if (key == RemoteKey.POWER) Feel.HEAVY else Feel.PRESS)
         if (key == RemoteKey.MUTE) muted = !muted
         if (key == RemoteKey.PLAY_PAUSE) playing = !playing
@@ -682,7 +687,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         say("All data erased")
     }
 
-    override fun onCleared() { adapter?.close() }
+    override fun onCleared() { adapter?.close(); bt?.stop() }
 
     /* ---------------------------------------------------- wake, voice, more */
 
@@ -863,6 +868,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     fun whyNot(k: RemoteKey): String? {
         // Nothing works until a TV is connected.
         val d = active ?: return "Choose a TV first"
+        if (link != Link.READY && btReady) return if (bt?.supports(k) == true) null else "${k.word} needs ${d.name} on Wi-Fi"
         if (link == Link.CONNECTING) return "Connecting to ${d.name}…"
         if (link != Link.READY) return "${d.name} isn't connected. Tap the TV at the top to connect."
         val a = adapter
@@ -942,4 +948,68 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         say("Profile loaded")
         o.optString("appIcon").ifEmpty { "dial" }
     }.getOrElse { say("That file isn't a Mini Remote profile"); null }
+
+    /* ----------------------------------------------------------- Bluetooth */
+
+    /** The phone as a Bluetooth remote (Android 9+); null on older phones. */
+    private val bt: com.krishna.miniremote.net.BtRemote? =
+        if (android.os.Build.VERSION.SDK_INT >= 28) com.krishna.miniremote.net.BtRemote(app) { viewModelScope.launch { btTick++ } } else null
+    /** Bumps when the Bluetooth state changes (for the screens). */
+    var btTick by mutableIntStateOf(0); private set
+    /** Bumps when Bluetooth permission is needed, and when the phone should become visible to the TV. */
+    var btAsk by mutableIntStateOf(0); private set
+    var btDiscover by mutableIntStateOf(0); private set
+    /** The TV waiting to pair over Bluetooth. */
+    var btPairing by mutableStateOf<String?>(null); private set
+
+    val btAvailable: Boolean get() = bt?.available == true
+    /** Keys can go over Bluetooth to the TV in use right now. */
+    val btReady: Boolean get() { btTick; val d = active ?: return false; val b = bt ?: return false; return d.bt != null && b.connected && b.host?.address == d.bt }
+
+    private fun btPermitted(): Boolean {
+        if (android.os.Build.VERSION.SDK_INT < 31) return true
+        val c = getApplication<Application>()
+        return androidx.core.content.ContextCompat.checkSelfPermission(c, android.Manifest.permission.BLUETOOTH_CONNECT) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+
+    /** Starts the Bluetooth remote (if any TV uses it) and reconnects to the TV in use. */
+    fun btResume() {
+        val b = bt ?: return
+        if (devices.none { it.bt != null } && btPairing == null) return
+        if (!btPermitted() || !b.enabled) return
+        b.onPaired = { addr, _ -> viewModelScope.launch { btPaired(addr) } }
+        b.start()
+        viewModelScope.launch { delay(800); active?.bt?.let { b.connect(it) } }
+    }
+
+    /** Pair [d] over Bluetooth: the phone becomes visible as "Mini Remote"; pick it on the TV. */
+    fun btPair(d: Device) {
+        val b = bt ?: run { say("Bluetooth remote needs Android 9 or newer"); return }
+        if (!b.available) { say("This phone has no Bluetooth"); return }
+        btPairing = d.id
+        if (!btPermitted()) { btAsk++; return }
+        if (!b.enabled) { say("Turn on Bluetooth, then try again"); btPairing = null; return }
+        b.onPaired = { addr, _ -> viewModelScope.launch { btPaired(addr) } }
+        b.start()
+        btDiscover++
+    }
+
+    /** After the permission prompt. */
+    fun btPermissionResult(ok: Boolean) {
+        if (!ok) { btPairing = null; say("Bluetooth permission is off for Mini Remote"); return }
+        btPairing?.let { id -> devices.firstOrNull { it.id == id }?.let { btPair(it) } } ?: btResume()
+    }
+
+    private fun btPaired(address: String) {
+        val id = btPairing ?: return
+        btPairing = null
+        updateDevice(id) { it.copy(bt = address) }
+        feel.fire(Feel.SUCCESS)
+        say("Paired over Bluetooth")
+    }
+
+    fun btCancelPairing() { btPairing = null }
+
+    fun btForget(d: Device) { updateDevice(d.id) { it.copy(bt = null) }; say("Bluetooth forgotten. Remove Mini Remote on the TV too.") }
+
 }

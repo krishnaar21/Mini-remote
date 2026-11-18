@@ -124,6 +124,23 @@ fun AppShell(vm: RemoteVM) {
         if (ok) vm.voiceStart() else vm.say("Microphone is off for Mini Remote. Turn it on in Android Settings › Apps › Mini Remote › Permissions.")
     }
     LaunchedEffect(vm.micAsk) { if (vm.micAsk > 0) askMic.launch(android.Manifest.permission.RECORD_AUDIO) }
+    // Bluetooth remote: permission, then make the phone visible so the TV can find "Mini Remote".
+    val askBt = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()) { r ->
+        vm.btPermissionResult(r.values.all { it })
+    }
+    LaunchedEffect(vm.btAsk) {
+        if (vm.btAsk > 0 && android.os.Build.VERSION.SDK_INT >= 31)
+            askBt.launch(arrayOf(android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_ADVERTISE))
+    }
+    val discover = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { r ->
+        if (r.resultCode == android.app.Activity.RESULT_CANCELED) { vm.btCancelPairing(); vm.say("The TV can't find the phone unless it's visible") }
+    }
+    LaunchedEffect(vm.btDiscover) {
+        if (vm.btDiscover > 0) runCatching {
+            discover.launch(android.content.Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
+                .putExtra(android.bluetooth.BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 180))
+        }
+    }
     // The TV didn't take the phone's voice: open Search in Voice mode (speech typed on the TV).
     LaunchedEffect(vm.voiceTyping) { if (vm.voiceTyping > 0) { keysVoice = true; keysFromTv = false; keys = true } }
     var more by remember { mutableStateOf(false) }
