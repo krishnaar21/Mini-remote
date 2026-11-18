@@ -124,7 +124,10 @@ object Logos {
                 }
             }.getOrNull()
             // The listing's og:image is the app icon on play-lh.googleusercontent.com; ask for 256 px.
-            val img = html?.let { Regex("<meta property=\"og:image\" content=\"(https://play-lh\\.googleusercontent\\.com/[^\"]+)\"").find(it)?.groupValues?.get(1) }
+            val img = html?.let {
+                Regex("<meta property=\"og:image\" content=\"(https://play-lh\\.googleusercontent\\.com/[^\"]+)\"").find(it)?.groupValues?.get(1)
+                    ?: Regex("(https://play-lh\\.googleusercontent\\.com/[A-Za-z0-9_\\-]+)=[^\"]*\"[^>]*alt=\"Icon image\"").find(it)?.groupValues?.get(1)
+            }
                 ?.substringBefore('=')?.let { "$it=s256" }
             val b = img?.let { fetchPng(site, it) }
             val d = decode(b)

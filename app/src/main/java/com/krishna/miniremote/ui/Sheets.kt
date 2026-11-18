@@ -1140,8 +1140,20 @@ internal class VoiceInput(private val ctx: android.content.Context) {
     var partial by mutableStateOf(""); private set
     var error by mutableStateOf<String?>(null); private set
     var onFinal: (String) -> Unit = {}
-    val available: Boolean get() = android.speech.SpeechRecognizer.isRecognitionAvailable(ctx)
+    /** Speech works on the phone: its own on-device recogniser (Android 13+), or a speech service. */
+    val available: Boolean get() = onDevice() || android.speech.SpeechRecognizer.isRecognitionAvailable(ctx)
     private var rec: android.speech.SpeechRecognizer? = null
+
+    /** The on-device recogniser said it can't do this language: use the speech service instead. */
+    private var useService = false
+
+    private fun onDevice(): Boolean = !useService && android.os.Build.VERSION.SDK_INT >= 33 &&
+        runCatching { android.speech.SpeechRecognizer.isOnDeviceRecognitionAvailable(ctx) }.getOrDefault(false)
+
+    /** On-device first (private, works offline: Android 13+), else the phone's speech service (Android 8+). */
+    private fun create(): android.speech.SpeechRecognizer =
+        if (onDevice() && android.os.Build.VERSION.SDK_INT >= 33) android.speech.SpeechRecognizer.createOnDeviceSpeechRecognizer(ctx)
+        else android.speech.SpeechRecognizer.createSpeechRecognizer(ctx)
 
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
     private fun again() { if (on) main.postDelayed({ if (on) listen() }, 250) }
@@ -1150,7 +1162,8 @@ internal class VoiceInput(private val ctx: android.content.Context) {
 
     private fun listen() {
         error = null; partial = ""; level = 0f
-        val r = rec ?: android.speech.SpeechRecognizer.createSpeechRecognizer(ctx).also { rec = it }
+        val r = rec ?: runCatching { create() }.getOrNull()?.also { rec = it }
+        if (r == null) { on = false; error = "No speech service on this phone"; return }
         r.setRecognitionListener(object : android.speech.RecognitionListener {
             override fun onReadyForSpeech(params: android.os.Bundle?) { listening = true }
             override fun onBeginningOfSpeech() {}
@@ -1161,6 +1174,12 @@ internal class VoiceInput(private val ctx: android.content.Context) {
                 listening = false; level = 0f
                 // Silence or nothing understood: keep listening in voice mode.
                 if (on && (code == android.speech.SpeechRecognizer.ERROR_NO_MATCH || code == android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT)) { again(); return }
+                // On-device can't do this language (12 / 13 on Android 12+): switch to the speech service.
+                if (on && (code == 12 || code == 13) && !useService) { useService = true; runCatching { rec?.destroy() }; rec = null; again(); return }
+                // A stuck recogniser (busy / client error): start a fresh one and carry on.
+                if (on && (code == android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY || code == android.speech.SpeechRecognizer.ERROR_CLIENT)) {
+                    runCatching { rec?.destroy() }; rec = null; again(); return
+                }
                 on = false
                 error = when (code) {
                     android.speech.SpeechRecognizer.ERROR_NO_MATCH, android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Didn't catch that. Tap the mic and try again."

@@ -188,13 +188,17 @@ private fun MediaBar(vm: RemoteVM) {
 @Composable
 private fun KeyTile(vm: RemoteVM, k: RemoteKey, ico: Ico, label: String, modifier: Modifier) {
     val on = vm.can(k)
-    Column(
-        modifier.height(70.dp).clip(RoundedCornerShape(18.dp)).background(M.High)
+    Box(
+        modifier.height(68.dp).clip(RoundedCornerShape(18.dp)).background(M.High)
             .clickable(role = Role.Button, onClickLabel = label) { if (on) vm.press(k) else vm.explain(k) }
             .semantics(mergeDescendants = true) { contentDescription = label },
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+        contentAlignment = Alignment.Center,
     ) {
-        LineIcon(ico, if (on) T.Ink else T.Ink.copy(alpha = 0.3f), 20.dp)
-        Text(label, color = if (on) Muted else Muted.copy(alpha = 0.4f), fontSize = 11.sp, maxLines = 1, modifier = Modifier.padding(top = 6.dp))
+        // Icon and word as one group, centred in the tile.
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            LineIcon(ico, if (on) T.Ink else T.Ink.copy(alpha = 0.3f), 20.dp)
+            Text(label, color = if (on) Muted else Muted.copy(alpha = 0.4f), fontSize = 11.sp, lineHeight = 13.sp, maxLines = 1, textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 3.dp))
+        }
     }
 }

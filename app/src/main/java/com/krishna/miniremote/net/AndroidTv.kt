@@ -174,6 +174,10 @@ internal object ClientCert {
  * [askCode] shows the pairing dialog and returns what the user typed, or null if they cancelled.
  * Its argument is an error to show from the previous attempt (null on the first try).
  */
+/** Voice message sizes Google TV accepts: 20 KB normally, never under 8 KB. */
+const val VOICE_CHUNK = 20 * 1024
+const val VOICE_MIN = 8 * 1024
+
 class AndroidTvAdapter(
     private val host: String,
     private val pin: String?,
@@ -190,6 +194,10 @@ class AndroidTvAdapter(
     @Volatile private var imeCounter = 0L
     @Volatile private var fieldCounter = 0L
     @Volatile private var currentApp: String? = null
+    @Volatile private var imeFromInject = false
+    @Volatile private var fieldFromInject = false
+    /** The TV decided the speech is over (sent back a voice payload). */
+    @Volatile var onVoiceDone: (() -> Unit)? = null
     override var onKeyboard: (() -> Unit)? = null
     /** Voice: the session id the TV hands out after Search is pressed. */
     @Volatile private var voiceWait: CompletableDeferred<Long>? = null
@@ -304,16 +312,26 @@ class AndroidTvAdapter(
                         }
                         // RemoteSetVolumeLevel: the TV's volume (max 6, level 7, muted 8), sent whenever it changes.
                         // RemoteImeKeyInject: which app is in front (app_info.app_package), sent as it changes.
+                        // RemoteImeKeyInject: the app in front (app_info.app_package) and the keyboard
+                        // counters our edits must carry (app_info.counter, text_field_status.counter_field).
                         m[20] != null -> m.sub(20)?.let { k ->
-                            k.sub(1)?.text(12)?.takeIf { it.isNotEmpty() }?.let { currentApp = it }
-                            k.sub(2)?.long(1)?.let { fieldCounter = it }
+                            k.sub(1)?.let { info ->
+                                info.text(12)?.takeIf { it.isNotEmpty() }?.let { currentApp = it }
+                                info.long(1)?.let { imeCounter = it; imeFromInject = it != 0L }
+                            }
+                            k.sub(2)?.long(1)?.let { fieldCounter = it; fieldFromInject = it != 0L }
                         }
-                        // RemoteImeBatchEdit from the TV: the counters our edits must carry.
-                        m[21] != null -> m.sub(21)?.let { b -> b.long(1)?.let { imeCounter = it }; b.long(2)?.let { fieldCounter = it } }
+                        // RemoteImeBatchEdit from the TV: counters, only when the key inject had none.
+                        m[21] != null -> m.sub(21)?.let { b ->
+                            if (!imeFromInject) b.long(1)?.let { imeCounter = it }
+                            if (!fieldFromInject) b.long(2)?.let { fieldCounter = it }
+                        }
                         // RemoteImeShowRequest: a text box got focus.
                         m[22] != null -> { m.sub(22)?.sub(2)?.long(1)?.let { fieldCounter = it }; onKeyboard?.invoke() }
                         // RemoteVoiceBegin: the TV opened a voice session for us.
                         m[30] != null -> voiceWait?.complete(m.sub(30)?.long(1) ?: 0L)
+                        // RemoteVoicePayload back from the TV: it heard the end of speech.
+                        m[31] != null -> onVoiceDone?.invoke()
                         m[50] != null -> m.sub(50)?.let { v ->
                             val max = v.long(6)?.toInt() ?: 0
                             if (max > 0) onVolume?.invoke(TvVolume((v.long(7) ?: 0L).toInt(), max, (v.long(8) ?: 0L) != 0L))
@@ -387,8 +405,16 @@ class AndroidTvAdapter(
         return id
     }
 
+    /** One voice message: 16-bit mono PCM at 8 kHz, at least 8 KB (padded with silence), at most 20 KB. TVs ignore smaller ones. */
     suspend fun voiceChunk(id: Long, pcm: ByteArray) = withContext(Dispatchers.IO) {
-        (io ?: error("Not connected")).send(Pb().apply { msg(31) { int(1, id); bytes(2, pcm) } }.toBytes())
+        val f = io ?: error("Not connected")
+        var i = 0
+        while (i < pcm.size) {
+            var part = pcm.copyOfRange(i, minOf(pcm.size, i + VOICE_CHUNK))
+            if (part.size < VOICE_MIN) part = part.copyOf(VOICE_MIN)
+            f.send(Pb().apply { msg(31) { int(1, id); bytes(2, part) } }.toBytes())
+            i += VOICE_CHUNK
+        }
     }
 
     suspend fun voiceEnd(id: Long) = withContext(Dispatchers.IO) {
@@ -396,16 +422,19 @@ class AndroidTvAdapter(
         Unit
     }
 
-    override val replacesText: Boolean get() = true
-
-    /** Puts [text] in the TV's focused box through its keyboard link (any characters). */
+    /**
+     * Inserts [text] at the cursor of the TV's focused box through its keyboard link (any
+     * characters): a RemoteImeBatchEdit with start = end = the text's length, as Google's remote
+     * does. Live typing sends what's new, and deletions as Delete key presses.
+     */
     override suspend fun setText(text: String) = withContext(Dispatchers.IO) {
+        if (text.isEmpty()) return@withContext
         val f = io ?: error("Not connected")
-        val end = (text.length - 1).coerceAtLeast(0).toLong()
+        val n = text.length.toLong()
         f.send(Pb().apply {
             msg(21) {
                 int(1, imeCounter); int(2, fieldCounter)
-                msg(3) { int(1, 1); msg(2) { int(1, end); int(2, end); str(3, text) } }
+                msg(3) { int(1, 1); msg(2) { int(1, n); int(2, n); str(3, text) } }
             }
         }.toBytes())
     }

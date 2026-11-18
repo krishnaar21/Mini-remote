@@ -736,50 +736,77 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         if (voiceOn) return true
         voiceOn = true
         listening = true
-        voiceJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val id = try { a.voiceBegin() } catch (e: Exception) { null }
-            if (id == null) {
-                // No voice session from the TV: recognise on the phone and type it into the TV's search.
-                voiceOn = false
-                withContext(kotlinx.coroutines.Dispatchers.Main) { listening = false; voiceTyping++ }
-                return@launch
-            }
-            withContext(kotlinx.coroutines.Dispatchers.Main) { say("Listening…", RemoteKey.VOICE) }
-            val rate = 8000
-            val min = android.media.AudioRecord.getMinBufferSize(rate, android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT)
-            @Suppress("MissingPermission")
-            val rec = runCatching {
-                android.media.AudioRecord(android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION, rate,
-                    android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT, maxOf(min, 3200) * 2)
-            }.getOrNull()
-            try {
-                rec?.startRecording()
-                val buf = ByteArray(3200) // 200 ms
-                val started = System.currentTimeMillis()
-                var heard = false
-                var quietSince = 0L
-                while (voiceOn && rec != null && System.currentTimeMillis() - started < 15_000) {
-                    val n = rec.read(buf, 0, buf.size)
-                    if (n <= 0) continue
-                    a.voiceChunk(id, buf.copyOf(n))
-                    // Loudness of this 200 ms: stop by itself after ~1.6 s of quiet once you've spoken.
-                    var sum = 0.0
-                    var i = 0
-                    while (i + 1 < n) { val v = (buf[i].toInt() and 0xFF) or (buf[i + 1].toInt() shl 8); sum += v.toDouble() * v; i += 2 }
-                    val rms = kotlin.math.sqrt(sum / (n / 2).coerceAtLeast(1))
-                    val now = System.currentTimeMillis()
-                    if (rms > 900) { heard = true; quietSince = 0L }
-                    else if (heard) { if (quietSince == 0L) quietSince = now else if (now - quietSince > 1600) break }
-                }
-            } catch (e: Exception) {
-            } finally {
-                runCatching { rec?.stop() }; rec?.release()
-                a.voiceEnd(id)
-                voiceOn = false
-                withContext(kotlinx.coroutines.Dispatchers.Main) { listening = false }
-            }
-        }
+        voiceJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { streamVoice(a) }
         return true
+    }
+
+    /**
+     * Talk to the TV's Assistant, as Google's own remote does: Search key → the TV opens a voice
+     * session (RemoteVoiceBegin with its id) → we answer it → the phone's mic goes to the TV as
+     * 16-bit mono PCM at 8 kHz in 20 KB messages → the TV hears the end of speech (it sends a
+     * voice message back) or you stop → RemoteVoiceEnd. AudioRecord works the same on every
+     * Android version the app supports (8.0+).
+     */
+    private suspend fun streamVoice(a: com.krishna.miniremote.net.AndroidTvAdapter) {
+        val id = try { a.voiceBegin() } catch (e: Exception) { null }
+        if (id == null) {
+            // The TV didn't open a voice session for the phone: recognise speech on the phone and type it.
+            voiceOn = false
+            withContext(kotlinx.coroutines.Dispatchers.Main) { listening = false; voiceTyping++ }
+            return
+        }
+        a.onVoiceDone = { voiceOn = false }
+        withContext(kotlinx.coroutines.Dispatchers.Main) { say("Listening…", RemoteKey.VOICE) }
+        val rate = 8000
+        val fmt = android.media.AudioFormat.ENCODING_PCM_16BIT
+        val ch = android.media.AudioFormat.CHANNEL_IN_MONO
+        val min = android.media.AudioRecord.getMinBufferSize(rate, ch, fmt).coerceAtLeast(4096)
+        @Suppress("MissingPermission")
+        val rec = runCatching {
+            // VOICE_RECOGNITION: tuned for speech (no noise suppression that clips words); MIC as a fallback.
+            android.media.AudioRecord(android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION, rate, ch, fmt, min * 4)
+                .takeIf { it.state == android.media.AudioRecord.STATE_INITIALIZED }
+                ?: android.media.AudioRecord(android.media.MediaRecorder.AudioSource.MIC, rate, ch, fmt, min * 4)
+        }.getOrNull()
+        val pending = java.io.ByteArrayOutputStream()
+        try {
+            if (rec == null || rec.state != android.media.AudioRecord.STATE_INITIALIZED) {
+                withContext(kotlinx.coroutines.Dispatchers.Main) { say("Couldn't use the microphone") }
+                return
+            }
+            rec.startRecording()
+            val buf = ByteArray(1600) // 100 ms
+            val started = System.currentTimeMillis()
+            var heard = false
+            var quietSince = 0L
+            while (voiceOn && System.currentTimeMillis() - started < 12_000) {
+                val n = rec.read(buf, 0, buf.size)
+                if (n <= 0) continue
+                pending.write(buf, 0, n)
+                // TVs only recognise 20 KB messages (about 1.3 s of speech each).
+                if (pending.size() >= com.krishna.miniremote.net.VOICE_CHUNK) {
+                    val all = pending.toByteArray()
+                    a.voiceChunk(id, all.copyOf(com.krishna.miniremote.net.VOICE_CHUNK))
+                    pending.reset(); pending.write(all, com.krishna.miniremote.net.VOICE_CHUNK, all.size - com.krishna.miniremote.net.VOICE_CHUNK)
+                }
+                // A backstop if the TV doesn't end it: 2.5 s of quiet after speaking.
+                var sum = 0.0
+                var i = 0
+                while (i + 1 < n) { val v = ((buf[i].toInt() and 0xFF) or (buf[i + 1].toInt() shl 8)).toShort().toDouble(); sum += v * v; i += 2 }
+                val rms = kotlin.math.sqrt(sum / (n / 2).coerceAtLeast(1))
+                val now = System.currentTimeMillis()
+                if (rms > 700) { heard = true; quietSince = 0L } else if (heard) { if (quietSince == 0L) quietSince = now else if (now - quietSince > 2500) break }
+            }
+            // The rest of the speech (padded to the 8 KB minimum by voiceChunk).
+            if (pending.size() > 0) a.voiceChunk(id, pending.toByteArray())
+        } catch (e: Exception) {
+        } finally {
+            runCatching { rec?.stop() }; rec?.release()
+            a.onVoiceDone = null
+            a.voiceEnd(id)
+            voiceOn = false
+            withContext(kotlinx.coroutines.Dispatchers.Main) { listening = false }
+        }
     }
 
     fun voiceStop() { voiceOn = false }

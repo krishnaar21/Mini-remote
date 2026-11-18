@@ -166,7 +166,7 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
             AppEntry(
                 key = "tv:${app.id}", name = app.name, bg = tint(app.name), ink = Color.White, icon = app.icon,
                 logo = Catalog.apps.firstOrNull { it.name.equals(app.name, true) }?.logo ?: Logos.slugFor(app.name),
-                pkg = if (brand == Brand.ANDROID_TV) app.id else Catalog.apps.firstOrNull { it.name.equals(app.name, true) }?.ids?.get(Brand.ANDROID_TV),
+                pkg = Catalog.apps.firstOrNull { it.name.equals(app.name, true) }?.let { Catalog.iconPkg(it) } ?: if (brand == Brand.ANDROID_TV) app.id else null,
                 version = app.version, installed = true, pinned = pin != null,
                 storeId = if (brand == Brand.ROKU) app.id else null,
                 open = { vm.launchApp(app.name, app.id) }, pin = { vm.pinTvApp(app) }, unpin = { pin?.let { vm.setPinned(it, false) } },
@@ -176,7 +176,7 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
     val popular = Catalog.apps.filter { brand == null || it.ids.containsKey(brand) }.map { c ->
         val pin = vm.pinnedCatalog(c)
         AppEntry(
-            key = "cat:${c.key}", name = c.name, bg = Color(c.bg), ink = Color(c.ink), vendor = c.vendor.ifEmpty { null }, logo = c.logo, site = c.site.ifEmpty { null }, pkg = c.ids[Brand.ANDROID_TV],
+            key = "cat:${c.key}", name = c.name, bg = Color(c.bg), ink = Color(c.ink), vendor = c.vendor.ifEmpty { null }, logo = c.logo, site = c.site.ifEmpty { null }, pkg = Catalog.iconPkg(c),
             installed = vm.installed(c), pinned = pin != null,
             storeId = brand?.let { b -> if (b == Brand.ROKU || b == Brand.ANDROID_TV) c.ids[b] else null },
             open = { vm.launchCatalog(c) }, pin = { vm.pinCatalog(c) }, unpin = { pin?.let { vm.setPinned(it, false) } },
@@ -186,7 +186,7 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
         AppEntry(
             key = "add:${s.id}", name = s.name, bg = tint(s.name), ink = Color.White, badge = s.brand?.label, pinned = s.pinned,
             logo = Logos.slugFor(s.name),
-            pkg = if (s.brand == Brand.ANDROID_TV) s.value.takeIf { "://" !in it } else Catalog.apps.firstOrNull { it.name.equals(s.name, true) }?.ids?.get(Brand.ANDROID_TV),
+            pkg = Catalog.apps.firstOrNull { it.name.equals(s.name, true) }?.let { Catalog.iconPkg(it) } ?: if (s.brand == Brand.ANDROID_TV) s.value.takeIf { "://" !in it } else null,
             storeId = if (s.brand == Brand.ROKU || s.brand == Brand.ANDROID_TV) s.value.takeIf { "://" !in it } else null,
             open = { vm.launch(s) }, pin = { vm.setPinned(s, true) }, unpin = { vm.setPinned(s, false) }, delete = { vm.removeShortcut(s) },
         )
@@ -224,13 +224,17 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit) {
             } else if (pinned.isEmpty()) {
                 Hint("Long-press an app and drag it here.", top = 6)
             } else {
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 12.dp, bottom = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    pinned.forEachIndexed { i, s ->
-                        QuickTile(s, accent, icon = s.icon ?: vm.tvApps.firstOrNull { it.name.equals(s.name, true) }?.icon, logoOn = vm.settings.logos,
-                            onClick = { if (!needTv()) vm.launch(s) }, onLongPress = { quickMenu = i })
+                // Two rows of four (Quick access holds eight).
+                Column(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    pinned.chunked(4).forEachIndexed { r, row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            row.forEachIndexed { c, s ->
+                                val i = r * 4 + c
+                                QuickTile(s, accent, icon = s.icon ?: vm.tvApps.firstOrNull { it.name.equals(s.name, true) }?.icon, logoOn = vm.settings.logos,
+                                    onClick = { if (!needTv()) vm.launch(s) }, onLongPress = { quickMenu = i })
+                            }
+                            repeat(4 - row.size) { Box(Modifier.width(74.dp)) }
+                        }
                     }
                 }
             }
@@ -471,8 +475,8 @@ private fun QuickTile(s: Shortcut, accent: Color, icon: String?, logoOn: Boolean
             // The TV's own icon for the app when it has one (Roku, LG); otherwise its initials.
             // Logo, in order: the TV's own icon, then Simple Icons, then the initials.
             val slug = if (s.kind == ShortcutKind.CHANNEL) null else cat?.logo ?: Logos.slugFor(s.name)
-            val pkg = if (s.kind == ShortcutKind.CHANNEL) null else (cat?.ids?.get(Brand.ANDROID_TV)
-                ?: if (s.brand == Brand.ANDROID_TV) s.value.takeIf { "://" !in it } else Catalog.apps.firstOrNull { it.name.equals(s.name, true) }?.ids?.get(Brand.ANDROID_TV))
+            val pkg = if (s.kind == ShortcutKind.CHANNEL) null else ((cat ?: Catalog.apps.firstOrNull { it.name.equals(s.name, true) })?.let { Catalog.iconPkg(it) }
+                ?: if (s.brand == Brand.ANDROID_TV) s.value.takeIf { "://" !in it } else null)
             val logo: @Composable () -> Unit = { AppLogo(slug, ink, 34.dp, logoOn, cat?.site, pkg, short) }
             if (icon != null) TvIcon(icon, Modifier.fillMaxSize().padding(8.dp), logo) else logo()
         }

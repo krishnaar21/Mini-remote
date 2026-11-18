@@ -65,4 +65,21 @@ object Catalog {
     )
 
     fun byKey(key: String): CatalogApp? = apps.firstOrNull { it.key == key }
+
+    /**
+     * Each app's phone package on Google Play: its listing always exists and carries the
+     * maker's full-colour icon (TV-only packages often have no web listing).
+     */
+    private val iconPkgs = mapOf(
+        "netflix" to "com.netflix.mediaclient", "youtube" to "com.google.android.youtube",
+        "prime" to "com.amazon.avod.thirdpartyclient", "hotstar" to "in.startv.hotstar",
+        "disney" to "com.disney.disneyplus", "sonyliv" to "com.sonyliv", "zee5" to "com.graymatrix.did",
+        "spotify" to "com.spotify.music", "ytmusic" to "com.google.android.apps.youtube.music",
+        "plex" to "com.plexapp.android", "hulu" to "com.hulu.plus", "max" to "com.wbd.stream",
+        "peacock" to "com.peacocktv.peacockandroid", "paramount" to "com.cbs.app", "tubi" to "com.tubitv",
+        "pluto" to "tv.pluto.android", "rokuchannel" to "com.roku.web.trc",
+    )
+
+    /** Package whose Google Play icon to show for [c]. */
+    fun iconPkg(c: CatalogApp): String? = iconPkgs[c.key] ?: c.ids[Brand.ANDROID_TV]?.takeIf { "://" !in it }
 }
