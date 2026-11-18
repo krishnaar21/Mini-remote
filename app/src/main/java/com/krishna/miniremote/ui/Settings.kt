@@ -189,11 +189,12 @@ internal fun SetToggle(ico: Ico, tint: Color, title: String, sub: String?, check
 
 /** A choice in a sheet: the option, and a tick on the one that's set. */
 @Composable
-private fun Choice(label: String, sub: String?, sel: Boolean, accent: Color, onPick: () -> Unit) {
+private fun Choice(label: String, sub: String?, sel: Boolean, accent: Color, ico: Ico? = null, onPick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().heightIn(min = 60.dp).selectable(sel, role = Role.RadioButton, onClick = onPick).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        ico?.let { IconTile(it, accent); Spacer(Modifier.width(14.dp)) }
         Column(Modifier.weight(1f)) {
             Text(label, color = T.Ink, fontSize = 16.sp, lineHeight = 19.sp)
             sub?.let { Text(it, color = SubInk, fontSize = 12.5.sp, lineHeight = 15.sp) }
@@ -278,16 +279,16 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
         }
         "control" -> SetSheet("Control", "What the middle of the remote is.", { open = null }) {
             SetCard(Modifier.padding(top = 0.dp)) {
-                Choice("Dial", "Ring with arrows, OK in the middle; turn the ring for volume", s.controlStyle == "dial", accent) { vm.update(s.copy(controlStyle = "dial")) }
+                Choice("Dial", "Ring with arrows, OK in the middle; turn the ring for volume", s.controlStyle == "dial", accent, Ico.DIAL) { vm.update(s.copy(controlStyle = "dial")) }
                 SetLine()
-                Choice("Trackpad", "Swipe to move, tap to select", s.controlStyle == "trackpad", accent) { vm.update(s.copy(controlStyle = "trackpad")) }
+                Choice("Trackpad", "Swipe to move, tap to select", s.controlStyle == "trackpad", accent, Ico.TRACKPAD) { vm.update(s.copy(controlStyle = "trackpad")) }
             }
         }
         "apps" -> SetSheet("Quick access", "Where your apps sit.", { open = null }) {
             SetCard {
-                Choice("Home page", "A third page of circles: swipe across", s.appsIn != "more", accent) { vm.update(s.copy(appsIn = "home")) }
+                Choice("Home page", "A third page of circles: swipe across", s.appsIn != "more", accent, Ico.HOME) { vm.update(s.copy(appsIn = "home")) }
                 SetLine()
-                Choice("More sheet", "At the top of More", s.appsIn == "more", accent) { vm.update(s.copy(appsIn = "more")) }
+                Choice("More sheet", "At the top of More", s.appsIn == "more", accent, Ico.MORE) { vm.update(s.copy(appsIn = "more")) }
             }
         }
         "feel" -> SetSheet("Touch & sound", "How presses feel and sound.", { open = null }) {

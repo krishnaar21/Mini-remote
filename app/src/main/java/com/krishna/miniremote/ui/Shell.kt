@@ -204,7 +204,7 @@ fun AppShell(vm: RemoteVM) {
                     // Which page of circles: a pill for the one showing, dots for the others.
                     // The bottom line: what's playing (scrolling) on the left, or the name of the key
                     // just pressed for a moment; the page pills on the right.
-                    if (!apps) Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 24.dp, end = 16.dp, bottom = 6.dp),
+                    if (!apps) Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).width(KEYROW_W),
                         verticalAlignment = Alignment.CenterVertically) {
                         val keyName = if (vm.toastKey != null) vm.toast else null
                         val line = keyName ?: nowLine(vm)

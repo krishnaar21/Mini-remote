@@ -255,6 +255,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
 
     /** Mirrors an edit of the search box on the TV: deletes what changed, types what's new. */
     fun liveType(old: String, new: String) {
+        userAt = System.currentTimeMillis()
         if (active == null) { say("Choose a TV first"); return }
         // Android TV takes the whole box at once (any characters, no key-by-key typing).
         if (adapter?.replacesText == true) { textOps.trySend("\u0001" + new); return }
@@ -313,6 +314,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         // Android TV players hold a rewind / fast-forward in a seek preview until it's confirmed
         // (they ignore Play / Pause meanwhile). Within 10 s of seeking, Play / Pause sends OK,
         // which confirms the new position and plays from it.
+        userAt = System.currentTimeMillis()
         watchMenu(key)
         val now = System.currentTimeMillis()
         if (key == RemoteKey.REWIND || key == RemoteKey.FAST_FORWARD) seekAt = now
@@ -323,6 +325,8 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     }
 
     private var seekAt = 0L
+    /** When the user last pressed, turned or typed anything here (not background traffic like volume checks). */
+    @Volatile private var userAt = 0L
 
     /** Keys that open a menu or panel over what's on the TV. */
     private val menuKeys = setOf(RemoteKey.SETTINGS, RemoteKey.INPUT, RemoteKey.MENU, RemoteKey.INFO, RemoteKey.GUIDE,
@@ -347,7 +351,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                     delay(menuIdle)
                     // Still being used: wait until it has been quiet for the whole spell.
                     while (true) {
-                        val quiet = System.currentTimeMillis() - lastTxAt
+                        val quiet = System.currentTimeMillis() - userAt
                         if (quiet >= menuIdle) break
                         delay(menuIdle - quiet)
                     }
@@ -362,7 +366,8 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun scrubTick(key: RemoteKey) { feel.fire(Feel.TICK); nudgeVolume(key); queue.trySend(key) }
+    fun scrubTick(key: RemoteKey) {
+        userAt = System.currentTimeMillis() feel.fire(Feel.TICK); nudgeVolume(key); queue.trySend(key) }
 
     /** Moves the shown volume right away, then asks the TV for the real value a moment later. */
     private fun nudgeVolume(key: RemoteKey) {

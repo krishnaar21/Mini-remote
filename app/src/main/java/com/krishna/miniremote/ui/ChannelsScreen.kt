@@ -1,5 +1,6 @@
 package com.krishna.miniremote.ui
 
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import android.graphics.BitmapFactory
@@ -545,6 +546,15 @@ private fun OptionsMenu(open: Boolean, onDismiss: () -> Unit, items: List<Pair<S
  * An app's logo: Simple Icons (drawn in [ink]) first, then the app's own website icon for apps
  * Simple Icons doesn't carry (JioHotstar, Prime Video…). [fallback] while loading, when off, or if neither exists.
  */
+/** The average colour just inside an icon's corners (null when they're see-through). */
+private fun edgeColour(b: ImageBitmap): Color? = runCatching {
+    val bm = b.asAndroidBitmap()
+    val w = bm.width; val h = bm.height; val i = (minOf(w, h) * 0.04f).toInt().coerceAtLeast(1)
+    val px = listOf(bm.getPixel(i, i), bm.getPixel(w - 1 - i, i), bm.getPixel(i, h - 1 - i), bm.getPixel(w - 1 - i, h - 1 - i))
+    if (px.any { android.graphics.Color.alpha(it) < 200 }) return@runCatching null
+    Color(px.sumOf { android.graphics.Color.red(it) } / 4, px.sumOf { android.graphics.Color.green(it) } / 4, px.sumOf { android.graphics.Color.blue(it) } / 4)
+}.getOrNull()
+
 @Composable
 private fun AppLogo(slug: String?, ink: Color, size: androidx.compose.ui.unit.Dp, enabled: Boolean, site: String? = null, pkg: String? = null, bleed: Boolean = false, fallback: @Composable () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -567,8 +577,15 @@ private fun AppLogo(slug: String?, ink: Color, size: androidx.compose.ui.unit.Dp
     if (b == null) fallback()
     // On a quick access circle or square the real icon is the whole tile, edge to edge (a touch
     // larger, so the icon's own corners fall outside the shape): no tile colour around it.
-    else if (real && bleed) Image(b, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-        modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = 1.08f; scaleY = 1.08f })
+    else if (real && bleed) {
+        // Balanced with the other logos: the icon at about three quarters of the tile, on its own
+        // edge colour, so the two blend instead of the app's catalogue colour showing round it.
+        val edge = remember(b) { edgeColour(b) }
+        Box(Modifier.fillMaxSize().then(if (edge != null) Modifier.background(edge) else Modifier), contentAlignment = Alignment.Center) {
+            Image(b, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(0.74f).clip(RoundedCornerShape(26)))
+        }
+    }
     // The real app icon fills its tile (as square as the tile allows), with app-icon corners.
     else if (real) Image(b, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
         modifier = Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true).padding(6.dp).clip(RoundedCornerShape(16.dp)))
