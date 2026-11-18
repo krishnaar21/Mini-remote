@@ -167,10 +167,10 @@ fun HomeScreen(
             )
         }
     }
-    val trackpadAt: @Composable (Dp) -> Unit = { s ->
+    val trackpadAt: @Composable (Dp, Dp) -> Unit = { s, hgt ->
         CompositionLocalProvider(LocalK provides s.value / 780f) {
             Trackpad(
-                size = s, height = s, accent = accent, stepDp = vm.settings.scrubStepDp, offline = offline,
+                size = s, height = hgt, accent = accent, stepDp = vm.settings.scrubStepDp, offline = offline,
                 onKey = onKey, onTick = onTick, onVoice = voice, onOffline = offlineTap,
                 onTwoFinger = onTwo, onTwoFingerTap = onTwoTap, onVoiceEnd = voiceEnd,
             )
@@ -191,7 +191,7 @@ fun HomeScreen(
                     Deck.TRACKPAD -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         // Same place and size as the dial.
                         val tw = minOf(w - 8.dp, h, 340.dp)
-                        trackpadAt(tw)
+                        trackpadAt(tw, tw)
                     }
                 }
             }
@@ -204,7 +204,8 @@ fun HomeScreen(
             val s = minOf(maxWidth - 8.dp - RING_BAND * 2, maxHeight - RING_BAND * 2, 300.dp)
             // The trackpad takes the dial's place, ring included: same centre, same size.
             val v = vm.tvVolume
-            if (deck == Deck.TRACKPAD) trackpadAt(s + RING_BAND * 2) else
+            // The trackpad lines up with the two rows of keys under it (4 × 68 + 3 × 14).
+            if (deck == Deck.TRACKPAD) { val tw = minOf(maxWidth - 8.dp, maxHeight, KEYROW_W); trackpadAt(tw, tw) } else
             RingDial(s, accent, level = v?.let { if (it.muted) 0f else it.level.toFloat() / it.max }, value = v?.let { if (it.muted) "Muted" else "${it.level}" }, onStep = { up -> vm.scrubTick(if (up) RemoteKey.VOL_UP else RemoteKey.VOL_DOWN) }) { turning -> dialAt(s, true, if (turning) v?.let { if (it.muted) "Muted" else "${it.level}" } ?: "Volume" else null) }
         }
     }
@@ -247,7 +248,8 @@ fun HomeScreen(
                         val ch = minOf(maxHeight - 16.dp, 360.dp)
                         val card = Modifier.size(cw, ch).clip(RoundedCornerShape(28.dp)).background(M.Container).padding(24.dp)
                         when (p) {
-                            0 -> padArea(padOnly, Modifier.width(cw).height(ch))
+                            // The trackpad fills its card exactly, like the other two cards.
+                            0 -> if (padOnly == Deck.TRACKPAD) Box(Modifier.size(cw, ch)) { trackpadAt(cw, ch) } else padArea(padOnly, Modifier.width(cw).height(ch))
                             1 -> Box(card, contentAlignment = Alignment.Center) { VolChCard(vm, accent, openMore) }
                             else -> Box(card, contentAlignment = Alignment.Center) {
                                 CompositionLocalProvider(LocalK provides (cw - 48.dp).value / 780f) { Numpad(vm, accent, Modifier.fillMaxSize()) }

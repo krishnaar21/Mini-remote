@@ -253,6 +253,9 @@ fun CardDots(n: Int, page: Int, onPick: (Int) -> Unit) {
     }
 }
 
+/** Width of the Black layout's two key rows (4 × 68 + 3 × 14): the trackpad matches it. */
+val KEYROW_W = 314.dp
+
 /** Width of the Cards layout's cards: the same as the row of four keys under them (4 × 62 + 3 × 20). */
 val CARD_W = 308.dp
 
@@ -260,16 +263,17 @@ val CARD_W = 308.dp
 @Composable
 fun VolChCard(vm: RemoteVM, accent: Color, openMore: () -> Unit = {}) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(22.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(36.dp)) {
-            VerticalRocker(accent, "VOL", "Volume up", "Volume down", Ico.PLUS, Ico.MINUS, Modifier.width(80.dp).height(210.dp),
+        // Rockers exactly as wide as the round keys under them, centred over them.
+        Row(horizontalArrangement = Arrangement.spacedBy(52.dp)) {
+            VerticalRocker(accent, "VOL", "Volume up", "Volume down", Ico.PLUS, Ico.MINUS, Modifier.width(64.dp).height(200.dp),
                 onUp = { vm.press(RemoteKey.VOL_UP, quiet = true) }, onDown = { vm.press(RemoteKey.VOL_DOWN, quiet = true) })
-            VerticalRocker(accent, "CH", "Channel up", "Channel down", Ico.PLUS, Ico.MINUS, Modifier.width(80.dp).height(210.dp),
+            VerticalRocker(accent, "CH", "Channel up", "Channel down", Ico.PLUS, Ico.MINUS, Modifier.width(64.dp).height(200.dp),
                 onUp = { vm.press(RemoteKey.CH_UP) }, onDown = { vm.press(RemoteKey.CH_DOWN) })
         }
         // Under the rockers' centres.
-        Row(horizontalArrangement = Arrangement.spacedBy(60.dp)) {
-            KeyButton(accent, "Input", Modifier.size(56.dp), pressedScale = 1f, onPress = { vm.press(RemoteKey.INPUT) }) { c, _ -> LineIcon(Ico.INPUT, c, 20.dp) }
-            KeyButton(accent, "More", Modifier.size(56.dp), pressedScale = 0.94f, onPress = openMore) { c, _ -> LineIcon(Ico.MORE, c, 22.dp) }
+        Row(horizontalArrangement = Arrangement.spacedBy(52.dp)) {
+            KeyButton(accent, "Input", Modifier.size(64.dp), pressedScale = 1f, onPress = { vm.press(RemoteKey.INPUT) }) { c, _ -> LineIcon(Ico.INPUT, c, 20.dp) }
+            KeyButton(accent, "More", Modifier.size(64.dp), pressedScale = 0.94f, onPress = openMore) { c, _ -> LineIcon(Ico.MORE, c, 22.dp) }
         }
     }
 }

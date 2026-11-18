@@ -1,5 +1,7 @@
 package com.krishna.miniremote.ui
 
+import androidx.compose.runtime.LaunchedEffect
+
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -83,6 +85,11 @@ fun Trackpad(
     var lit by remember { mutableStateOf<RemoteKey?>(null) }
     val corner = 28.dp
 
+    // The dots answer the finger: brighter, bigger and drawn a little towards it nearby; faint elsewhere.
+    var lastTouch by remember { mutableStateOf<Offset?>(null) }
+    LaunchedEffect(touch) { touch?.let { lastTouch = it } }
+    val glow by androidx.compose.animation.core.animateFloatAsState(
+        if (touch != null) 1f else 0f, androidx.compose.animation.core.tween(if (touch != null) 120 else 500), label = "dots")
     Box(
         Modifier.size(size, height)
             .softFace(PAD, corner = corner)
@@ -91,9 +98,16 @@ fun Trackpad(
                 val gap = u / 11f
                 val r = 1.3.dp.toPx()
                 val rows = (this.size.height / gap).toInt()
-                for (i in 1..10) for (j in 1 until rows) drawCircle(Color.White.copy(alpha = 0.16f), r, Offset(i * gap, j * gap))
-                touch?.let { t ->
-                    drawCircle(Brush.radialGradient(0f to Color.White.copy(0.13f), 0.7f to Color.Transparent, center = t, radius = u * 0.3f), u * 0.3f, t)
+                val t = touch ?: lastTouch
+                val reach = u * 0.36f
+                for (i in 1..10) for (j in 1 until rows) {
+                    val p = Offset(i * gap, j * gap)
+                    var f = 0f
+                    if (t != null && glow > 0f) { val d = (p - t).getDistance(); f = (1f - d / reach).coerceIn(0f, 1f); f *= f * glow }
+                    drawCircle(Color.White.copy(alpha = 0.09f + 0.55f * f), r * (1f + 0.9f * f), p + (t?.let { (it - p) * (0.14f * f) } ?: Offset.Zero))
+                }
+                if (t != null && glow > 0f) {
+                    drawCircle(Brush.radialGradient(0f to Color.White.copy(0.10f * glow), 0.7f to Color.Transparent, center = t, radius = u * 0.3f), u * 0.3f, t)
                 }
                 drawContent()
             }

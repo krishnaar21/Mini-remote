@@ -62,8 +62,8 @@ fun MoreSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
             what?.let { Text(it, color = Muted, fontSize = 12.5.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) }
 
             // 1 · Controls: every key in one card (5 across), colour keys under them.
-            SectionTitle("Controls")
-            Group {
+            // The round keys sit on the sheet itself, like on Home; cards are for lists.
+            Column(Modifier.padding(top = 8.dp)) {
                 // Three rows of four, like the keys on Home: playback, what's playing, the TV.
                 KeyGrid(vm, accent, listOf(
                     Triple(RemoteKey.REWIND, Ico.REWIND, "Rewind"),
@@ -81,12 +81,11 @@ fun MoreSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
                 ))
                 val colours = listOf(RemoteKey.RED to Color(0xFFE5484D), RemoteKey.GREEN to Color(0xFF30A46C), RemoteKey.YELLOW to Color(0xFFF5D90A), RemoteKey.BLUE to Color(0xFF3E63DD))
                 if (colours.any { vm.adapterHas(it.first) }) {
-                    Divider()
-                    Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         colours.forEach { (k, c) ->
                             val on = vm.can(k)
                             Box(
-                                Modifier.weight(1f).height(26.dp).clip(CircleShape).background(if (on) c else c.copy(alpha = 0.25f))
+                                Modifier.weight(1f).height(30.dp).clip(CircleShape).background(if (on) c else c.copy(alpha = 0.25f))
                                     .clickable(role = Role.Button) { if (on) vm.press(k) else vm.explain(k) }.semantics { contentDescription = k.word },
                             )
                         }
@@ -154,13 +153,13 @@ fun MoreSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
 /** Keys four across in round 58dp circles, like Home, each with its label; dimmed when they don't fit what's on the TV. */
 @Composable
 private fun KeyGrid(vm: RemoteVM, accent: Color, keys: List<Triple<RemoteKey, Ico, String>>) {
-    Column(Modifier.padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         keys.chunked(4).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 row.forEach { (k, ico, label) ->
                     val on = vm.can(k)
-                    Column(Modifier.width(66.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        KeyButton(accent, label, Modifier.size(58.dp), repeat = k == RemoteKey.REWIND || k == RemoteKey.FAST_FORWARD,
+                    Column(Modifier.width(70.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        KeyButton(accent, label, Modifier.size(62.dp), repeat = k == RemoteKey.REWIND || k == RemoteKey.FAST_FORWARD,
                             pressedScale = 0.94f, enabled = on, onDisabled = { vm.explain(k) }, onPress = { vm.press(k) }) { c, _ -> LineIcon(ico, c, 21.dp) }
                         Text(label, color = if (on) Muted else Muted.copy(alpha = 0.4f), fontSize = 11.sp, maxLines = 1, modifier = Modifier.padding(top = 6.dp))
                     }
