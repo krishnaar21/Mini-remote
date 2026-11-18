@@ -2,7 +2,6 @@ package com.krishna.miniremote.ui
 
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import android.graphics.Bitmap
 import android.graphics.BlurMaskFilter
@@ -134,7 +133,7 @@ fun Modifier.softFace(face: Face, sheen: Boolean = true, corner: Dp? = null, dpU
 fun DrawScope.depthShape(fill: Color, radius: Float, pressed: Boolean = false) {
     val dark = !Look.p.light
     drawIntoCanvas { c ->
-        val p = Paint().asFrameworkPaint().apply {
+        val p = android.graphics.Paint().apply {
             isAntiAlias = true
             color = fill.toArgb()
             setShadowLayer(if (pressed) 3.dp.toPx() else 12.dp.toPx(), 0f, if (pressed) 1.dp.toPx() else 6.dp.toPx(),
