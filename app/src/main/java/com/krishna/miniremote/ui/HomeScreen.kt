@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -337,14 +338,16 @@ private fun NowPlaying(vm: RemoteVM) {
             ?: vm.tvApps.firstOrNull { it.id == raw }?.name
         else raw
     }?.takeIf { it.isNotBlank() && it != "Home" }
-    Box(Modifier.fillMaxWidth().height(30.dp), contentAlignment = Alignment.Center) {
+    // A little below the top bar; long names scroll within a fixed width, round and round.
+    Box(Modifier.fillMaxWidth().padding(top = 10.dp).height(34.dp), contentAlignment = Alignment.Center) {
         if (name != null && vm.link == Link.READY) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 val pos = n?.positionMs; val dur = n?.durationMs
                 fun t(ms: Long) = (ms / 1000).let { s -> if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60) }
                 Text(if (pos != null && dur != null && dur > 0) "$name · ${t(pos)} / ${t(dur)}" else name,
-                    color = T.Dim, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.semantics { contentDescription = "On the TV: $name" })
+                    color = T.Dim, fontSize = 12.5.sp, maxLines = 1, softWrap = false,
+                    modifier = Modifier.widthIn(max = 220.dp).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 1500)
+                        .semantics { contentDescription = "On the TV: $name" })
                 if (pos != null && dur != null && dur > 0) {
                     Box(Modifier.padding(top = 4.dp).width(140.dp).height(2.dp).clip(CircleShape).background(Color.White.copy(0.15f))) {
                         Box(Modifier.fillMaxHeight().fillMaxWidth((pos.toFloat() / dur).coerceIn(0f, 1f)).background(T.Dim))

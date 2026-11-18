@@ -675,6 +675,36 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
         }
     }
 
+    SectionTitle("App icon")
+    Group {
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        var icon by remember { mutableStateOf(com.krishna.miniremote.AppIcon.current(ctx)) }
+        Row(Modifier.fillMaxWidth().selectableGroup().padding(vertical = 18.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            com.krishna.miniremote.AppIcon.all.forEach { (key, label) ->
+                val sel = icon == key
+                Column(
+                    Modifier.selectable(sel, role = Role.RadioButton) {
+                        if (!sel) { com.krishna.miniremote.AppIcon.set(ctx, key); icon = key; vm.say("App icon: $label") }
+                    },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    // Preview as the launcher masks it (a circle here); the art keeps to the safe zone.
+                    Box(
+                        Modifier.size(58.dp).then(if (sel) Modifier.border(2.dp, Color.White, CircleShape).padding(4.dp) else Modifier.padding(4.dp))
+                            .clip(CircleShape),
+                    ) {
+                        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.krishna.miniremote.AppIcon.bg(key)), null,
+                            Modifier.matchParentSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.krishna.miniremote.AppIcon.fg(key)), null,
+                            Modifier.matchParentSize().graphicsLayer { scaleX = 1.5f; scaleY = 1.5f }, contentScale = androidx.compose.ui.layout.ContentScale.Fit)
+                    }
+                    Text(label, color = if (sel) T.Ink else Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+        }
+    }
+    Hint("Adaptive: your launcher's icon shape and themed (monochrome) icons apply.", top = 8)
+
     SectionTitle("Accent colour")
     Group {
     Row(Modifier.fillMaxWidth().selectableGroup().padding(vertical = 18.dp), horizontalArrangement = Arrangement.SpaceBetween) {

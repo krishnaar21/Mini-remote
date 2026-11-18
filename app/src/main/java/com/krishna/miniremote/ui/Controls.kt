@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -112,7 +113,7 @@ fun KeyButton(
         modifier
             .graphicsLayer { alpha = if (enabled) 1f else 0.32f }
             .semantics(mergeDescendants = true) {
-                if (!enabled) androidx.compose.ui.semantics.disabled()
+                if (!enabled) disabled()
                 role = Role.Button
                 contentDescription = label
                 if (!state.isNullOrEmpty()) stateDescription = state
