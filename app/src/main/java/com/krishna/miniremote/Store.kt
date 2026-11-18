@@ -6,8 +6,24 @@ import android.content.Context
 class Store(ctx: Context) {
     private val p = ctx.getSharedPreferences("mini_remote", Context.MODE_PRIVATE)
 
-    fun loadDevices(): List<Device> = Device.listFromJson(p.getString("devices", null))
-    fun saveDevices(l: List<Device>) = p.edit().putString("devices", Device.listToJson(l)).apply()
+    /** Saved TVs (with their pairing tokens and pins), encrypted with [Vault]. Older plain copies are moved over. */
+    fun loadDevices(): List<Device> {
+        p.getString("devices_v", null)?.let { return Device.listFromJson(Vault.open(it)) }
+        val legacy = p.getString("devices", null) ?: return emptyList()
+        val l = Device.listFromJson(legacy)
+        saveDevices(l)
+        return l
+    }
+    fun saveDevices(l: List<Device>) {
+        val e = p.edit().remove("devices")
+        runCatching { Vault.seal(Device.listToJson(l)) }
+            .onSuccess { e.putString("devices_v", it) }
+            .onFailure { e.putString("devices", Device.listToJson(l)) } // no Keystore: still app-private
+        e.apply()
+    }
+
+    /** Erase everything this app stored. */
+    fun clearAll() = p.edit().clear().commit()
     fun activeId(): String? = p.getString("active", null)
     fun saveActive(id: String?) = p.edit().putString("active", id).apply()
 
@@ -26,6 +42,20 @@ class Store(ctx: Context) {
             gyro = p.getBoolean("gyro", d.gyro),
             keepAwake = p.getBoolean("awake", d.keepAwake),
             autoUpdate = p.getBoolean("autoupdate", d.autoUpdate),
+            controlStyle = p.getString("control", d.controlStyle)?.takeIf { it == "dial" || it == "trackpad" } ?: d.controlStyle,
+            profileName = p.getString("profileName", d.profileName) ?: d.profileName,
+            profileEmail = p.getString("profileEmail", d.profileEmail) ?: d.profileEmail,
+            volumeKeys = p.getBoolean("volumeKeys", d.volumeKeys),
+            logos = p.getBoolean("logos", d.logos),
+            autoKeyboard = p.getBoolean("autoKeyboard", d.autoKeyboard),
+            notifRemote = p.getBoolean("notifRemote", d.notifRemote),
+            theme = p.getString("theme", d.theme)?.takeIf { it in setOf("auto", "dark", "light", "navy") } ?: d.theme,
+            autoClose = p.getBoolean("autoClose", d.autoClose),
+            onboarded = p.getBoolean("onboarded", d.onboarded),
+            toured = p.getBoolean("toured", d.toured),
+            depth = p.getBoolean("depth", d.depth),
+            layout = p.getString("layout", d.layout)?.takeIf { it in setOf("cards", "strip") } ?: d.layout,
+            appsIn = p.getString("appsIn", d.appsIn)?.takeIf { it == "home" || it == "more" } ?: d.appsIn,
         )
     }
 
@@ -34,7 +64,13 @@ class Store(ctx: Context) {
         .putBoolean("sound", s.sound).putFloat("soundLevel", s.soundLevel)
         .putString("accent", s.accentHex).putFloat("step", s.scrubStepDp)
         .putBoolean("gyro", s.gyro).putBoolean("awake", s.keepAwake)
-        .putBoolean("autoupdate", s.autoUpdate).apply()
+        .putBoolean("autoupdate", s.autoUpdate)
+        .putString("control", s.controlStyle).putString("profileName", s.profileName).putString("profileEmail", s.profileEmail)
+        .putBoolean("volumeKeys", s.volumeKeys).putBoolean("logos", s.logos).putString("layout", s.layout).putString("appsIn", s.appsIn)
+        .putBoolean("autoKeyboard", s.autoKeyboard).putBoolean("notifRemote", s.notifRemote).putBoolean("autoClose", s.autoClose).putBoolean("onboarded", s.onboarded).putBoolean("toured", s.toured).putBoolean("depth", s.depth).putString("theme", s.theme).apply()
+
+    fun loadShortcuts(): List<Shortcut> = Shortcut.listFromJson(p.getString("shortcuts", null))
+    fun saveShortcuts(l: List<Shortcut>) = p.edit().putString("shortcuts", Shortcut.listToJson(l)).apply()
 
     /** Whether the one-time local network explainer has been shown. */
     fun localSeen(): Boolean = p.getBoolean("localSeen", false)

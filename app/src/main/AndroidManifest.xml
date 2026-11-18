@@ -6,23 +6,114 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Lets the in-app updater hand a downloaded APK to Android's installer (the user still confirms). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Tells you when a new build is ready to install. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Voice search in the app's own search panel (only while you hold the mic open). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Bluetooth remote: the TV pairs with the phone as a remote / keyboard (works without Wi-Fi). -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+
+    <!-- Android 11+: lets the app see the phone's speech service (otherwise voice search can't start). -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="false"
-        android:icon="@drawable/ic_launcher"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_app_dial"
+        android:roundIcon="@mipmap/ic_app_dial"
         android:label="Mini Remote"
         android:networkSecurityConfig="@xml/network_security"
         android:theme="@style/Theme.MiniRemote">
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:screenOrientation="portrait"
+            android:launchMode="singleTop"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:windowSoftInputMode="adjustResize">
+        </activity>
+        <!-- The launcher entry, one per app icon design (Settings › App icon switches between them). -->
+        <activity-alias
+            android:name=".IconDial"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="true"
+            android:icon="@mipmap/ic_app_dial"
+            android:roundIcon="@mipmap/ic_app_dial">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconPaper"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:icon="@mipmap/ic_app_paper"
+            android:roundIcon="@mipmap/ic_app_paper">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconMidnight"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:icon="@mipmap/ic_app_midnight"
+            android:roundIcon="@mipmap/ic_app_midnight">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconRed"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:icon="@mipmap/ic_app_red"
+            android:roundIcon="@mipmap/ic_app_red">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconMono"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:icon="@mipmap/ic_app_mono"
+            android:roundIcon="@mipmap/ic_app_mono">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <!-- Keys from the remote notification (only this app can send them). -->
+        <receiver android:name=".KeyReceiver" android:exported="false" />
+        <!-- Quick Settings tile that opens the remote. -->
+        <service
+            android:name=".RemoteTile"
+            android:exported="true"
+            android:icon="@drawable/ic_n_remote"
+            android:label="TV remote"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.updates"

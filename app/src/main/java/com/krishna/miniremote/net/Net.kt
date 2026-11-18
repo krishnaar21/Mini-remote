@@ -27,6 +27,8 @@ object Net {
             .connectTimeout(4, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
             .pingInterval(25, TimeUnit.SECONDS)
+            // A TV must not be able to bounce us to some other (possibly public) address.
+            .followRedirects(false).followSslRedirects(false)
             .build()
     }
 
@@ -36,6 +38,7 @@ object Net {
             .connectTimeout(600, TimeUnit.MILLISECONDS)
             .readTimeout(900, TimeUnit.MILLISECONDS)
             .retryOnConnectionFailure(false)
+            .followRedirects(false).followSslRedirects(false)
             .build()
     }
 
@@ -50,6 +53,11 @@ object Net {
     fun pinnedTls(pin: TlsPin): OkHttpClient {
         val ctx = SSLContext.getInstance("TLS").apply { init(null, arrayOf(pin), SecureRandom()) }
         return plain.newBuilder()
+            // Long-lived TV sockets: no read timeout, and no pings (several TVs never answer them,
+            // so OkHttp would drop a healthy connection after a minute). Drops are noticed by
+            // the socket failing, and the app reconnects.
+            .readTimeout(0, TimeUnit.SECONDS)
+            .pingInterval(0, TimeUnit.SECONDS)
             .sslSocketFactory(ctx.socketFactory, pin)
             // TVs are addressed by IP and their certs don't name it; the pin replaces this check.
             .hostnameVerifier { _, _ -> true }

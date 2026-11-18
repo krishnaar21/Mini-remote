@@ -42,53 +42,16 @@ fun Fader(
     steps: Int = 0,
     onChange: (Float) -> Unit,
 ) {
-    val frac = ((value - range.start) / (range.endInclusive - range.start)).coerceIn(0f, 1f)
-    Column(Modifier.fillMaxWidth()) {
-        Slider(
-            value = value, onValueChange = onChange, valueRange = range, steps = steps,
-            // 48dp is the minimum touch target; the track and thumb still draw at their own size.
-            modifier = Modifier.fillMaxWidth().height(48.dp)
-                .semantics { contentDescription = label; stateDescription = valueText },
-            thumb = {
-                val shape = RoundedCornerShape(8.dp)
-                Box(
-                    Modifier.size(58.dp, 28.dp)
-                        .shadow(6.dp, shape)
-                        .background(Brush.verticalGradient(listOf(Color(0xFF4A4A4E), Color(0xFF29292B))), shape)
-                        .border(1.dp, Color.Black, shape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        repeat(3) { Box(Modifier.width(2.dp).height(14.dp).background(Color.White.copy(0.09f))) }
-                        Box(Modifier.width(2.dp).height(16.dp).background(accent, RoundedCornerShape(1.dp)))
-                        repeat(3) { Box(Modifier.width(2.dp).height(14.dp).background(Color.White.copy(0.09f))) }
-                    }
-                }
-            },
-            track = {
-                val shape = RoundedCornerShape(8.dp)
-                Box(
-                    Modifier.fillMaxWidth().height(12.dp)
-                        .background(Color(0xFF141415), shape)
-                        .border(1.dp, Color.Black, shape)
-                        .drawBehind {
-                            drawRoundRect(accent, size = size.copy(width = size.width * frac),
-                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2))
-                        }
-                )
-            },
-        )
-        // Tick scale: 11 marks, the ends and middle longer, aligned under the thumb's travel.
-        Box(
-            Modifier.fillMaxWidth().height(9.dp).padding(horizontal = 29.dp)
-                .drawBehind {
-                    for (i in 0..10) {
-                        val x = size.width * i / 10f
-                        val long = i == 0 || i == 5 || i == 10
-                        val h = if (long) size.height else size.height * 0.66f
-                        drawLine(if (long) Color(0xFF8A8A90) else Color(0xFF5D5D62), Offset(x, size.height - h), Offset(x, size.height), 1.5.dp.toPx())
-                    }
-                }
-        )
-    }
+    // Material 3 slider in the accent colour: filled track, round thumb, no tick marks.
+    Slider(
+        value = value, onValueChange = onChange, valueRange = range, steps = steps,
+        modifier = Modifier.fillMaxWidth().height(48.dp)
+            .semantics { contentDescription = label; stateDescription = valueText },
+        colors = androidx.compose.material3.SliderDefaults.colors(
+            thumbColor = accent, activeTrackColor = accent, inactiveTrackColor = M.High,
+            activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent,
+        ),
+        // A small round knob instead of the tall default handle.
+        thumb = { Box(Modifier.size(20.dp).background(accent, androidx.compose.foundation.shape.CircleShape)) },
+    )
 }

@@ -94,6 +94,7 @@ internal class Pb {
 }
 
 private fun Map<Int, List<Any>>.long(f: Int): Long? = this[f]?.firstOrNull() as? Long
+private fun Map<Int, List<Any>>.text(f: Int): String? = (this[f]?.firstOrNull() as? ByteArray)?.decodeToString()
 private fun Map<Int, List<Any>>.sub(f: Int): Map<Int, List<Any>>? = (this[f]?.firstOrNull() as? ByteArray)?.let { Pb.parse(it) }
 
 /** Messages on both ports are prefixed with their length as a varint. */
@@ -150,6 +151,9 @@ internal object ClientCert {
         return ks
     }
 
+    /** Forgets this phone's Android TV identity (TVs will ask to pair again). */
+    fun reset() { runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(ALIAS) } }
+
     fun publicKey(): RSAPublicKey = ensure().getCertificate(ALIAS).publicKey as RSAPublicKey
 
     /** Opens a mutual-TLS socket: our keystore cert as the client, [pin] checks the TV. */
@@ -170,6 +174,10 @@ internal object ClientCert {
  * [askCode] shows the pairing dialog and returns what the user typed, or null if they cancelled.
  * Its argument is an error to show from the previous attempt (null on the first try).
  */
+/** Voice message sizes Google TV accepts: 20 KB normally, never under 8 KB. */
+const val VOICE_CHUNK = 20 * 1024
+const val VOICE_MIN = 8 * 1024
+
 class AndroidTvAdapter(
     private val host: String,
     private val pin: String?,
@@ -179,6 +187,25 @@ class AndroidTvAdapter(
     @Volatile private var sock: SSLSocket? = null
     @Volatile private var io: Framed? = null
     private var scope: CoroutineScope? = null
+    override var onVolume: ((TvVolume) -> Unit)? = null
+    override var onDropped: (() -> Unit)? = null
+    @Volatile private var closing = false
+    /** The TV's keyboard link: counters it last sent, and the app in front. */
+    @Volatile private var imeCounter = 0L
+    @Volatile private var fieldCounter = 0L
+    @Volatile private var currentApp: String? = null
+    /** Counters came from a RemoteImeBatchEdit (the source androidtvremote2 uses). */
+    @Volatile private var fromBatch = false
+    /** When the TV last told us about a text box, and a wait for the next one. */
+    @Volatile private var fieldAt = 0L
+    @Volatile private var fieldWait: CompletableDeferred<Unit>? = null
+    @Volatile private var ourEditAt = 0L
+    @Volatile private var awaitBox = false
+    /** The TV decided the speech is over (sent back a voice payload). */
+    @Volatile var onVoiceDone: (() -> Unit)? = null
+    override var onKeyboard: (() -> Unit)? = null
+    /** Voice: the session id the TV hands out after Search is pressed. */
+    @Volatile private var voiceWait: CompletableDeferred<Long>? = null
 
     private val keys = mapOf(
         RemoteKey.UP to 19, RemoteKey.DOWN to 20, RemoteKey.LEFT to 21, RemoteKey.RIGHT to 22,
@@ -186,7 +213,13 @@ class AndroidTvAdapter(
         RemoteKey.PLAY_PAUSE to 85, RemoteKey.POWER to 26,
         RemoteKey.VOL_UP to 24, RemoteKey.VOL_DOWN to 25, RemoteKey.MUTE to 164,
         RemoteKey.VOICE to 84, // SEARCH: opens the TV's search, which offers voice
-    )
+        RemoteKey.REWIND to 89, RemoteKey.FAST_FORWARD to 90,
+        RemoteKey.CH_UP to 166, RemoteKey.CH_DOWN to 167,
+        RemoteKey.GUIDE to 172, RemoteKey.CH_LIST to 172, RemoteKey.INFO to 165,
+        RemoteKey.INPUT to 178, RemoteKey.MENU to 82, RemoteKey.AUDIO to 222,
+        RemoteKey.SUBTITLES to 175, RemoteKey.SETTINGS to 176,
+        RemoteKey.RED to 183, RemoteKey.GREEN to 184, RemoteKey.YELLOW to 185, RemoteKey.BLUE to 186,
+    ) + RemoteKey.entries.filter { it.digit != null }.associateWith { 7 + (it.digit!! - '0') }
 
     override suspend fun connect() {
         close()
@@ -282,12 +315,54 @@ class AndroidTvAdapter(
                             val v = m.sub(8)?.long(1) ?: 0L
                             f.send(Pb().apply { msg(9) { int(1, v) } }.toBytes())
                         }
-                        m[3] != null -> error("TV reported an error")
+                        // RemoteSetVolumeLevel: the TV's volume (max 6, level 7, muted 8), sent whenever it changes.
+                        // RemoteImeKeyInject: which app is in front (app_info.app_package), sent as it changes.
+                        // RemoteImeKeyInject: the app in front (app_info.app_package) and the keyboard
+                        // counters our edits must carry (app_info.counter, text_field_status.counter_field).
+                        m[20] != null -> m.sub(20)?.let { k ->
+                            k.sub(1)?.let { info ->
+                                info.text(12)?.takeIf { it.isNotEmpty() }?.let { currentApp = it }
+                                if (!fromBatch) info.long(1)?.let { imeCounter = it }
+                            }
+                            if (!fromBatch) k.sub(2)?.long(1)?.let { fieldCounter = it }
+                        }
+                        // RemoteImeBatchEdit from the TV: a text box is active; these are the counters
+                        // our edits must carry. A new box (none for a while, and not an echo of our
+                        // own typing) also offers the phone keyboard.
+                        m[21] != null -> m.sub(21)?.let { b ->
+                            b.long(1)?.let { imeCounter = it }
+                            b.long(2)?.let { fieldCounter = it }
+                            fromBatch = true
+                            val now = System.currentTimeMillis()
+                            val fresh = now - fieldAt > 4000 && now - ourEditAt > 4000
+                            fieldAt = now
+                            fieldWait?.complete(Unit)
+                            if (fresh) onKeyboard?.invoke()
+                        }
+                        // RemoteImeShowRequest: a text box got focus.
+                        m[22] != null -> {
+                            m.sub(22)?.sub(2)?.long(1)?.let { fieldCounter = it }
+                            val now = System.currentTimeMillis()
+                            val fresh = now - fieldAt > 4000
+                            fieldAt = now; fieldWait?.complete(Unit)
+                            if (fresh) onKeyboard?.invoke()
+                        }
+                        // RemoteVoiceBegin: the TV opened a voice session for us.
+                        m[30] != null -> voiceWait?.complete(m.sub(30)?.long(1) ?: 0L)
+                        // RemoteVoicePayload back from the TV: it heard the end of speech.
+                        m[31] != null -> onVoiceDone?.invoke()
+                        m[50] != null -> m.sub(50)?.let { v ->
+                            val max = v.long(6)?.toInt() ?: 0
+                            if (max > 0) onVolume?.invoke(TvVolume((v.long(7) ?: 0L).toInt(), max, (v.long(8) ?: 0L) != 0L))
+                        }
+                        // RemoteError: the TV didn't like one message (e.g. a key it lacks). Not fatal.
+                        m[3] != null -> {}
                     }
                 }
             } catch (e: Exception) {
+                val wasUp = ready.isCompleted
                 ready.completeExceptionally(e)
-                if (io === f) io = null
+                if (io === f) { io = null; if (wasUp && !closing) onDropped?.invoke() }
             }
         }
         try { withTimeout(10_000) { ready.await() } } catch (e: Exception) { close(); throw e }
@@ -299,10 +374,119 @@ class AndroidTvAdapter(
         f.send(Pb().apply { msg(10) { int(1, code.toLong()); int(2, 3) } }.toBytes()) // 3 = SHORT press
     }
 
-    override suspend fun send(key: RemoteKey) = key(keys.getValue(key))
+    override suspend fun send(key: RemoteKey) = key(keys[key] ?: missing(key, "this TV"))
+    override fun supports(key: RemoteKey) = key in keys
+
+    private fun isLauncher(p: String) = "launcher" in p.lowercase() || p == "com.google.android.apps.tv.launcherx" || p == "com.google.android.tvlauncher"
+
+    /** True when the TV shows its home screen (or we don't know yet). */
+    val onHome: Boolean get() = currentApp?.let(::isLauncher) ?: true
+
+    /**
+     * Opens search: in an app, that app's own search (a full Search key press: down, then up);
+     * on the home screen, the TV's search. Some TVs start voice search from the key: that
+     * session is answered and closed right away, which leaves the search screen with its keyboard.
+     */
+    override suspend fun openSearch() {
+        fieldAt = 0L; awaitBox = true // the search box will be a new text box: typing waits for it
+        withContext(Dispatchers.IO) {
+            val f = io ?: error("Not connected")
+            f.send(Pb().apply { msg(10) { int(1, 84); int(2, 1) } }.toBytes()) // down
+            f.send(Pb().apply { msg(10) { int(1, 84); int(2, 2) } }.toBytes()) // up
+        }
+        val w = CompletableDeferred<Long>().also { voiceWait = it }
+        val id = kotlinx.coroutines.withTimeoutOrNull(1500) { w.await() }
+        voiceWait = null
+        if (id != null) { withContext(Dispatchers.IO) { io?.send(Pb().apply { msg(30) { int(1, id) } }.toBytes()) }; voiceEnd(id) }
+    }
+
+    /** Opens an app: a package name (launched through the Play Store link) or a full app link. */
+    /** The app's Play Store page on the TV (install, open or uninstall there). */
+    override suspend fun openStore(id: String) = launchApp("market://details?id=${id.substringAfter("id=")}")
+
+    override suspend fun launchApp(id: String) = withContext(Dispatchers.IO) {
+        val f = io ?: error("Not connected")
+        val link = if ("://" in id) id else "market://launch?id=$id"
+        f.send(Pb().apply { msg(90) { str(1, link) } }.toBytes())
+    }
 
     /** Types letters, digits and a few symbols as key presses (the TV's IME protocol is far heavier). */
-    override suspend fun typeText(text: String) {
+    /**
+     * Voice to the TV's Assistant: presses Search, waits for the TV's voice session, and
+     * answers it. Returns the session id, or null if the TV didn't open one (then the search
+     * screen is simply open). Audio then goes with [voiceChunk] (16-bit mono PCM, 8 kHz).
+     */
+    suspend fun voiceBegin(): Long? {
+        val w = CompletableDeferred<Long>().also { voiceWait = it }
+        key(84)
+        val id = kotlinx.coroutines.withTimeoutOrNull(2500) { w.await() } ?: return null
+        voiceWait = null
+        withContext(Dispatchers.IO) { (io ?: error("Not connected")).send(Pb().apply { msg(30) { int(1, id) } }.toBytes()) }
+        return id
+    }
+
+    /** One voice message: 16-bit mono PCM at 8 kHz, at least 8 KB (padded with silence), at most 20 KB. TVs ignore smaller ones. */
+    suspend fun voiceChunk(id: Long, pcm: ByteArray) = withContext(Dispatchers.IO) {
+        val f = io ?: error("Not connected")
+        var i = 0
+        while (i < pcm.size) {
+            var part = pcm.copyOfRange(i, minOf(pcm.size, i + VOICE_CHUNK))
+            if (part.size < VOICE_MIN) part = part.copyOf(VOICE_MIN)
+            f.send(Pb().apply { msg(31) { int(1, id); bytes(2, part) } }.toBytes())
+            i += VOICE_CHUNK
+        }
+    }
+
+    suspend fun voiceEnd(id: Long) = withContext(Dispatchers.IO) {
+        runCatching { (io ?: error("Not connected")).send(Pb().apply { msg(32) { int(1, id) } }.toBytes()) }
+        Unit
+    }
+
+    /**
+     * Inserts [text] at the cursor of the TV's focused box through its keyboard link (any
+     * characters): a RemoteImeBatchEdit with start = end = the text's length, as Google's remote
+     * does. Live typing sends what's new, and deletions as Delete key presses.
+     */
+    override suspend fun setText(text: String) = withContext(Dispatchers.IO) {
+        if (text.isEmpty()) return@withContext
+        val f = io ?: error("Not connected")
+        // No text box seen yet (search still opening): wait up to 3 s for the TV to report it,
+        // so the letters land in the box with its current counters.
+        if (awaitBox && fieldAt == 0L) {
+            awaitBox = false
+            val w = CompletableDeferred<Unit>().also { fieldWait = it }
+            kotlinx.coroutines.withTimeoutOrNull(3000) { w.await() }
+            fieldWait = null
+        }
+        ourEditAt = System.currentTimeMillis()
+        // As androidtvremote2's send_text: insert, with start = end = length - 1.
+        val n = (text.length - 1).toLong()
+        f.send(Pb().apply {
+            msg(21) {
+                int(1, imeCounter); int(2, fieldCounter)
+                msg(3) { int(1, 1); msg(2) { int(1, n); int(2, n); str(3, text) } }
+            }
+        }.toBytes())
+    }
+
+    /** Live TV apps (tuners) by package name. */
+    private fun isLive(pkg: String): Boolean {
+        val p = pkg.lowercase()
+        return p == "com.google.android.tv" || p == "com.android.tv" || p.endsWith(".tvinput") || "tvcenter" in p ||
+            "livetv" in p || "live_tv" in p || ".dtv" in p || "tvplayer" in p || ".tuner" in p || "channels" in p || "inputplayer" in p ||
+            // India's TV services on Android TV: Tata Play, Airtel Xstream, Dish TV / d2h (Watcho), JioTV, Sun Direct.
+            "tatasky" in p || "tataplay" in p || "airtel" in p || "dishtv" in p || "d2h" in p || "watcho" in p || "jiotv" in p || "jioplay" in p || "sundirect" in p
+    }
+
+    override suspend fun nowOn(): NowOn {
+        val app = currentApp ?: return NowOn("", false)
+        return NowOn(if (isLauncher(app)) "Home" else app, isLive(app))
+    }
+
+    override suspend fun typeText(text: String) = setText(text)
+
+    @Suppress("unused")
+    private suspend fun typeKeys(text: String) {
         val codes = text.lowercase().map { c ->
             when (c) {
                 in 'a'..'z' -> 29 + (c - 'a')
@@ -317,11 +501,21 @@ class AndroidTvAdapter(
         codes.forEach { key(it) }
     }
 
-    override suspend fun backspace() = key(67)
+    override suspend fun backspace() { ourEditAt = System.currentTimeMillis(); key(67) }
+    /** Enter: the TV's keyboard runs the search. */
+    override suspend fun submit() { ourEditAt = System.currentTimeMillis(); key(66) }
+    /** To the end of the box (Move end), then delete everything: what we typed and what was there. */
+    override suspend fun clearBox(known: Int) {
+        ourEditAt = System.currentTimeMillis()
+        key(123)
+        repeat(known + 40) { key(67) }
+    }
 
     override fun close() {
+        closing = true
         scope?.cancel(); scope = null
         io = null
         runCatching { sock?.close() }; sock = null
+        closing = false
     }
 }

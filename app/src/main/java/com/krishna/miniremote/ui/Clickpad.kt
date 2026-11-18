@@ -69,7 +69,23 @@ fun Clickpad(
     /** No TV connected: the pad dims, shows a hint, and any tap calls [onOffline]. */
     offline: Boolean = false,
     onOffline: () -> Unit = {},
+    /** Watch mode: up / down are volume, so they show + and −. */
+    watch: Boolean = false,
+    /** Two-finger slides: volume (up / down) and channel (sideways). */
+    onTwoFinger: ((RemoteKey) -> Unit)? = null,
+    /** Two fingers tapped (no slide); two of these quickly switch dial / trackpad. */
+    onTwoFingerTap: () -> Unit = {},
+    /** Inside a volume ring: touches outside the round pad belong to the ring. */
+    roundOnly: Boolean = false,
+    /** The finger left OK after a hold (voice ends). */
+    onVoiceEnd: () -> Unit = {},
 ) {
+    val twoStepPx = with(LocalDensity.current) { 30.dp.toPx() }
+    val twoCb = androidx.compose.runtime.rememberUpdatedState(onTwoFinger)
+    val twoTapCb = androidx.compose.runtime.rememberUpdatedState(onTwoFingerTap)
+    // While two fingers slide, the arrows hide and the well shows the direction instead.
+    var twoMode by remember { mutableStateOf(false) }
+    var twoKey by remember { mutableStateOf<RemoteKey?>(null) }
     val isOffline = androidx.compose.runtime.rememberUpdatedState(offline)
     val density = LocalDensity.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -93,9 +109,10 @@ fun Clickpad(
             .pointerInput(stepPx) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
+                    if (roundOnly && (down.position - Offset(this.size.width / 2f, this.size.height / 2f)).getDistance() > this.size.width / 2f) return@awaitEachGesture
                     if (isOffline.value) {
-                        do { val e = awaitPointerEvent() } while (e.changes.any { it.pressed })
-                        onOffline()
+                        // Only a real tap opens the TV list; a swipe doesn't.
+                        if (tappedOnly(down.id, deadPx)) onOffline()
                         return@awaitEachGesture
                     }
                     val c = Offset(this.size.width / 2f, this.size.height / 2f)
@@ -133,8 +150,15 @@ fun Clickpad(
                     }
 
                     var last = down.position
+                    val two = twoCb.value?.let { cb -> TwoFinger(twoStepPx) { k -> twoKey = k; cb(k) } }
                     while (true) {
                         val ev = awaitPointerEvent()
+                        if (two != null && two.feed(ev)) {
+                            twoMode = true
+                            if (!moved) { moved = true; hold.cancel(); litDir = null; wellDown = false }
+                            if (ev.changes.none { it.pressed }) break
+                            continue
+                        }
                         val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
                         if (!ch.pressed) { ch.consume(); break }
                         val delta = ch.position - last
@@ -163,8 +187,10 @@ fun Clickpad(
                         ch.consume()
                     }
                     hold.cancel()
+                    if (two?.tapped == true) twoTapCb.value()
+                    if (holdFired && inWell) onVoiceEnd()
                     if (!moved && !holdFired) onKey(if (inWell) RemoteKey.OK else zoneKey)
-                    litDir = null; wellDown = false; listening = false; touch = null
+                    litDir = null; wellDown = false; listening = false; touch = null; twoMode = false; twoKey = null
                 }
             },
         contentAlignment = Alignment.Center,
@@ -176,25 +202,25 @@ fun Clickpad(
             insideStadium {
                 touch?.let { t ->
                     if (!wellDown) drawCircle(Brush.radialGradient(
-                        0f to Color.White.copy(0.10f), 0.7f to Color.Transparent, center = t, radius = this.size.width * 260f / 780f),
+                        0f to T.Ink.copy(0.10f), 0.7f to Color.Transparent, center = t, radius = this.size.width * 260f / 780f),
                         this.size.width * 260f / 780f, t)
                 }
                 val v = rip.value
                 if (v < 1f) {
                     val r = ripD / 2f * (0.1f + 0.9f * v)
                     drawCircle(Brush.radialGradient(
-                        0f to Color.White.copy(0.20f * (1f - v)), 0.55f to Color.White.copy(0.07f * (1f - v)), 0.7f to Color.Transparent,
+                        0f to T.Ink.copy(0.20f * (1f - v)), 0.55f to T.Ink.copy(0.07f * (1f - v)), 0.7f to Color.Transparent,
                         center = ripAt, radius = r), r, ripAt)
                 }
             }
         })
-        if (!offline) Canvas(Modifier.size(size)) {
+        if (!offline && !twoMode) Canvas(Modifier.size(size)) {
             // .pchev: 76px chevrons, 52px in from the edge, stroke 2.3, lit in the accent colour.
             val u = this.size.width / 780f
             val cs = 76f * u
             val e = 52f * u
             fun chev(dir: RemoteKey, ico: Ico, x: Float, y: Float) {
-                val col = if (litDir == dir) accent else T.Dim
+                val col = if (litDir == dir) T.Ink else T.Dim
                 translate(x, y) {
                     scale(cs / 24f, cs / 24f, pivot = Offset.Zero) {
                         drawPath(ico.path, col, style = Stroke(2.3f, cap = StrokeCap.Round, join = StrokeJoin.Round))
@@ -202,8 +228,8 @@ fun Clickpad(
                 }
             }
             val mid = (this.size.width - cs) / 2f
-            chev(RemoteKey.UP, Ico.UP, mid, e)
-            chev(RemoteKey.DOWN, Ico.DOWN, mid, this.size.height - e - cs)
+            chev(RemoteKey.UP, if (watch) Ico.PLUS else Ico.UP, mid, e)
+            chev(RemoteKey.DOWN, if (watch) Ico.MINUS else Ico.DOWN, mid, this.size.height - e - cs)
             chev(RemoteKey.LEFT, Ico.LEFT, e, mid)
             chev(RemoteKey.RIGHT, Ico.RIGHT, this.size.width - e - cs, mid)
         }
@@ -217,16 +243,16 @@ fun Clickpad(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(bdp(22f)),
             ) {
-                LineIcon(Ico.TV, Color(0xFF6F6F75), bdp(110f), stroke = 1.5f)
-                Text("No TV connected", color = Color(0xFF6F6F75), fontSize = bsp(36f), fontWeight = FontWeight.SemiBold)
-                Text("Tap to choose a TV", color = Color(0xFF55555B), fontSize = bsp(30f))
+                LineIcon(Ico.TV, T.Dim, bdp(110f), stroke = 1.5f)
+                Text("No TV connected", color = T.Dim, fontSize = bsp(36f), fontWeight = FontWeight.SemiBold)
+                Text("Tap to choose a TV", color = T.Sub, fontSize = bsp(30f))
             }
             return@Box
         }
         // .well: dished centre, 300 of the pad's 780. Sinks (scale .97) and darkens while pressed;
         // tinted with the accent while holding for voice.
         val wellFace = when {
-            listening -> flat(mix(accent, 0.22f, Color(0xFF1A1A1C)), WELL.shadows)
+            listening -> flat(mix(accent, 0.22f, T.Bg), WELL.shadows)
             wellDown -> WELL_DOWN
             else -> WELL
         }
@@ -234,8 +260,10 @@ fun Clickpad(
             Modifier.size(size * WELL_FRAC).graphicsLayer { scaleX = wellScale; scaleY = wellScale }.softFace(wellFace, sheen = false),
             contentAlignment = Alignment.Center,
         ) {
-            if (toast == null) {
-                Text("OK", Modifier.clearAndSetSemantics {}, color = if (wellDown) accent else Color(0xFF55555B),
+            if (twoMode) {
+                TwoFingerHint(twoKey, accent, bdp(64f), bsp(24f))
+            } else if (toast == null) {
+                Text("OK", Modifier.clearAndSetSemantics {}, color = if (wellDown) T.Ink else T.Sub,
                     fontSize = bsp(40f), fontWeight = FontWeight.SemiBold, letterSpacing = bsp(40f * 0.06f))
             } else {
                 // .toast: accent icon (84px) over the key name, 500 28px #d4d4d9; longer messages wrap.
@@ -246,9 +274,9 @@ fun Clickpad(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(bdp(8f)),
                 ) {
-                    if (toastIcon != null) LineIcon(toastIcon, accent, bdp(84f), stroke = 1.8f)
-                    Text(toast, color = Color(0xFFD4D4D9), fontSize = bsp(28f), fontWeight = FontWeight.Medium,
-                        lineHeight = bsp(34f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    if (toastIcon != null) LineIcon(toastIcon, T.Ink, bdp(56f), stroke = 2f)
+                    Text(toast, color = T.Dim, fontSize = bsp(23f), fontWeight = FontWeight.Medium,
+                        lineHeight = bsp(29f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }
             }
         }
@@ -269,7 +297,7 @@ private const val WELL_FRAC = 300f / 780f
 
 /** Accessibility-only button over a clickpad zone. Draws nothing and takes no touches. */
 @Composable
-private fun PadZone(
+internal fun PadZone(
     label: String,
     modifier: Modifier,
     longLabel: String? = null,

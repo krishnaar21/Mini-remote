@@ -7,6 +7,13 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.Text
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -23,6 +30,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -45,7 +53,7 @@ private fun Modifier.rippleLayer(p: () -> Float) = drawWithContent {
     val v = p()
     if (v < 1f) insideStadium {
         val r = size.maxDimension * 1.6f / 2f * (0.1f + 0.9f * v)
-        drawCircle(Color.White.copy(alpha = 0.16f * (1f - v)), r, center)
+        drawCircle(T.Ink.copy(alpha = 0.16f * (1f - v)), r, center)
     }
 }
 
@@ -91,6 +99,10 @@ fun KeyButton(
     pressedScale: Float = 0.95f,
     downFace: Face = KEY_DOWN,
     restColor: Color = T.Ink,
+    /** False: shown dimmed and does nothing (not available for what's on the TV). */
+    enabled: Boolean = true,
+    /** Tapped while not [enabled]: e.g. say why it's off. */
+    onDisabled: (() -> Unit)? = null,
     onPress: () -> Unit,
     content: @Composable (color: Color, down: Boolean) -> Unit,
 ) {
@@ -101,7 +113,9 @@ fun KeyButton(
 
     Box(
         modifier
+            .graphicsLayer { alpha = if (enabled) 1f else 0.32f }
             .semantics(mergeDescendants = true) {
+                if (!enabled) disabled()
                 role = Role.Button
                 contentDescription = label
                 if (!state.isNullOrEmpty()) stateDescription = state
@@ -111,11 +125,12 @@ fun KeyButton(
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .softFace(if (down) downFace else KEY_UP, sheen = !down)
             .rippleLayer { rip.value }
-            .pressInput(repeat, scope, { down = it; if (it) scope.ripple(rip) }, onPress),
+            .then(if (enabled) Modifier.pressInput(repeat, scope, { down = it; if (it) scope.ripple(rip) }, onPress)
+                else if (onDisabled != null) Modifier.pointerInput(Unit) { detectTapGestures { onDisabled() } } else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         // Hide icons/text from TalkBack; the button's own label speaks for them.
-        Box(Modifier.clearAndSetSemantics {}, contentAlignment = Alignment.Center) { content(if (down) accent else restColor, down) }
+        Box(Modifier.clearAndSetSemantics {}, contentAlignment = Alignment.Center) { content(if (down) T.Ink else restColor, down) }
     }
 }
 
@@ -135,7 +150,7 @@ fun VolumePill(
     Row(modifier.softFace(ROCKER).clip(androidx.compose.foundation.shape.CircleShape), verticalAlignment = Alignment.CenterVertically) {
         PillSegment("Volume down", accent, first = true, repeat = true, onPress = onDown) { LineIcon(Ico.MINUS, it, bdp(48f), stroke = 1.9f) }
         PillSegment("Mute", accent, state = if (muted) "Muted" else null, onPress = onMute) {
-            LineIcon(if (muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, if (muted) accent else it, bdp(44f), stroke = 1.9f)
+            LineIcon(if (muted) Ico.SPEAKER_MUTED else Ico.SPEAKER, it, bdp(44f), stroke = 1.9f)
         }
         PillSegment("Volume up", accent, last = true, repeat = true, onPress = onUp) { LineIcon(Ico.PLUS, it, bdp(48f), stroke = 1.9f) }
     }
@@ -180,12 +195,82 @@ private fun RowScope.PillSegment(
                 val v = rip.value
                 if (v < 1f) {
                     val r = size.maxDimension * 0.8f * (0.1f + 0.9f * v)
-                    drawCircle(Color.White.copy(alpha = 0.16f * (1f - v)), r, center)
+                    drawCircle(T.Ink.copy(alpha = 0.16f * (1f - v)), r, center)
                 }
             }
             .pressInput(repeat, scope, { down = it; if (it) scope.ripple(rip) }, onPress),
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.clearAndSetSemantics {}) { content(if (down) accent else T.Ink) }
+        Box(Modifier.clearAndSetSemantics {}) { content(if (down) Color.White else T.Ink) }
+    }
+}
+
+/**
+ * A tall soft-touch rocker: [upIco] on top, [word] (VOL / CH) in the middle, [downIco] below.
+ * Both ends repeat while held and are separate buttons for TalkBack.
+ */
+@Composable
+fun VerticalRocker(
+    accent: Color,
+    word: String,
+    upLabel: String,
+    downLabel: String,
+    upIco: Ico,
+    downIco: Ico,
+    modifier: Modifier = Modifier,
+    onUp: () -> Unit,
+    onDown: () -> Unit,
+) {
+    Column(modifier.softFace(ROCKER).clip(androidx.compose.foundation.shape.CircleShape), horizontalAlignment = Alignment.CenterHorizontally) {
+        RockerSeg(upLabel, accent, onUp) { LineIcon(upIco, it, 20.dp, stroke = 1.9f) }
+        Text(word, color = T.Dim, fontSize = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.sp,
+            modifier = Modifier.clearAndSetSemantics {})
+        RockerSeg(downLabel, accent, onDown) { LineIcon(downIco, it, 20.dp, stroke = 1.9f) }
+    }
+}
+
+@Composable
+private fun ColumnScope.RockerSeg(label: String, accent: Color, onPress: () -> Unit, content: @Composable (Color) -> Unit) {
+    var down by remember { mutableStateOf(false) }
+    val rip = remember { Animatable(1f) }
+    val scope = rememberCoroutineScope()
+    Box(
+        Modifier.weight(1f).fillMaxWidth()
+            .semantics {
+                role = Role.Button
+                contentDescription = label
+                onClick { onPress(); true }
+            }
+            .drawBehind { if (down) drawRect(Color.Black.copy(0.28f)) }
+            .drawWithContent {
+                drawContent()
+                val v = rip.value
+                if (v < 1f) drawCircle(T.Ink.copy(alpha = 0.16f * (1f - v)), size.maxDimension * 0.8f * (0.1f + 0.9f * v), center)
+            }
+            .pressInput(true, scope, { down = it; if (it) scope.ripple(rip) }, onPress),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.clearAndSetSemantics {}) { content(if (down) Color.White else T.Ink) }
+    }
+}
+
+/** − | CH | +: down and up (both repeat while held), with a plain label between. Also used for VOL. */
+@Composable
+fun ChannelPill(
+    accent: Color,
+    modifier: Modifier = Modifier,
+    word: String = "CH",
+    downLabel: String = "Channel down",
+    upLabel: String = "Channel up",
+    onDown: () -> Unit,
+    onUp: () -> Unit,
+) {
+    Row(modifier.softFace(ROCKER).clip(androidx.compose.foundation.shape.CircleShape), verticalAlignment = Alignment.CenterVertically) {
+        // first = true on both ends: no divider lines, one calm pill.
+        PillSegment(downLabel, accent, first = true, repeat = true, onPress = onDown) { LineIcon(Ico.MINUS, it, 18.dp, stroke = 1.9f) }
+        Box(Modifier.weight(0.8f).fillMaxHeight().clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
+            Text(word, color = T.Dim, fontSize = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.sp)
+        }
+        PillSegment(upLabel, accent, first = true, repeat = true, onPress = onUp) { LineIcon(Ico.PLUS, it, 18.dp, stroke = 1.9f) }
     }
 }

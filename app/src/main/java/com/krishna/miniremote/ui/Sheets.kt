@@ -1,5 +1,6 @@
 package com.krishna.miniremote.ui
 
+import androidx.compose.foundation.layout.imePadding
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -7,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
@@ -14,6 +17,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -52,6 +56,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -96,16 +105,16 @@ import kotlin.math.roundToInt
 /* ---------------------------------------------------------------- palette */
 
 /** Sheets use the remote's own charcoal so they read as part of the same object. */
-private val SheetBg = T.Bg
-private val CardBg = Color(0xFF222223)
-private val Line = Color(0xFF2E2E30)
-private val Muted = Color(0xFF8C8C90)
-private val LeadInk = Color(0xFFC3C3C7)
-private val Fill2 = Color(0xFF2A2A2B)
-private val OkGreen = Color(0xFF4DDC88)
-private val SwitchOn = Color(0xFF34C759)
-private val DangerBg = Color(0xFF3A1E1E)
-private val DangerInk = Color(0xFFFF8A8A)
+internal val SheetBg get() = Look.p.sheet
+internal val CardBg = Color(0xFF222223)
+internal val Line get() = Look.p.line
+internal val Muted get() = Look.p.muted
+internal val LeadInk get() = Look.p.lead
+internal val Fill2 = Color(0xFF2A2A2B)
+internal val OkGreen = Color(0xFF4DDC88)
+internal val SwitchOn = Color(0xFF34C759)
+internal val DangerBg = Color(0xFF3A1E1E)
+internal val DangerInk = Color(0xFFFF8A8A)
 
 /* ------------------------------------------------------------------ pages */
 
@@ -118,6 +127,9 @@ sealed interface Page {
     data object Manual : Page
     data class Pairing(val id: String) : Page
     data object Settings : Page
+    data object Licenses : Page
+    data object Privacy : Page
+    data object Gestures : Page
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -136,10 +148,12 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
     ) {
         BackHandler(enabled = stack.size > 1) { back() }
         val canBack = stack.size > 1 || page !is Page.Devices
-        Column(Modifier.navigationBarsPadding()) {
+        val maxH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp -
+            androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues().calculateTopPadding() - 28.dp
+        Column(Modifier.heightIn(max = maxH).navigationBarsPadding()) {
             when (page) {
                 Page.Devices -> {
-                    Header("Devices", onClose, gear = { go(Page.Settings) })
+                    Header("Choose a TV", onClose, gear = { go(Page.Settings) })
                     Body { DevicesPage(vm, open = { go(Page.DeviceInfo(it)) }, add = { go(if (vm.localSeen) Page.Scan else Page.Local) }) }
                 }
                 is Page.DeviceInfo -> {
@@ -149,7 +163,7 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
                     Body { DevicePage(vm, d, accent) }
                 }
                 Page.Local -> {
-                    Header("Allow local network access", onClose, back = if (canBack) ::back else null)
+                    Header("Local network", onClose, back = if (canBack) ::back else null)
                     Body { LocalPage { vm.markLocalSeen(); replace(Page.Scan) } }
                 }
                 Page.Scan -> {
@@ -157,7 +171,7 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
                     Body { ScanPage(vm, accent, pick = { d -> vm.addAndSelect(d); go(Page.Pairing(d.id)) }, manual = { go(Page.Manual) }) }
                 }
                 Page.Manual -> {
-                    Header("Enter an address", onClose, back = ::back)
+                    Header("Enter IP", onClose, back = ::back)
                     Body { ManualPage(vm, accent) { d -> go(Page.Pairing(d.id)) } }
                 }
                 is Page.Pairing -> {
@@ -165,9 +179,22 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
                     if (d == null) { LaunchedEffect(Unit) { back() }; return@Column }
                     PairPage(vm, d, accent, onClose, back = ::back)
                 }
+                Page.Privacy -> {
+                    // From Settings: closing goes back to Settings, not out of it.
+                    Header("Privacy & data", ::back, back = ::back)
+                    Body { PrivacyPage(vm) }
+                }
+                Page.Gestures -> {
+                    Header("Gestures", ::back, back = ::back)
+                    Body { GesturesPage(accent) }
+                }
+                Page.Licenses -> {
+                    Header("Licences", ::back, back = ::back)
+                    Body { LicensesPage() }
+                }
                 Page.Settings -> {
                     Header("Settings", onClose, back = if (canBack) ::back else null)
-                    Body { SettingsPage(vm, accent, manage = { go(Page.Devices) }) }
+                    Body(side = 12.dp) { SettingsPage(vm, accent, manage = null, openLicenses = { go(Page.Licenses) }, openPrivacy = { go(Page.Privacy) }, openGestures = { go(Page.Gestures) }) }
                 }
             }
         }
@@ -176,15 +203,15 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
 
 /* ------------------------------------------------------------ building blocks */
 
-private val SheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+internal val SheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
 
 /** .grab: 38 x 4 handle, 12 above and 4 below. */
 @Composable
-private fun Grab() = Box(Modifier.padding(top = 12.dp, bottom = 4.dp).size(38.dp, 4.dp).background(Color(0xFF444444), RoundedCornerShape(4.dp)))
+internal fun Grab() = Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(28.dp, 3.dp).background(T.Sub, RoundedCornerShape(2.dp)))
 
 /** .field: label above (13, muted), 52 tall, radius 12, #141415, 1px line, 16 text. */
 @Composable
-private fun Field(
+internal fun Field(
     label: String,
     value: String,
     onChange: (String) -> Unit,
@@ -227,32 +254,32 @@ private fun Field(
 
 /** .sw: 50 x 30 track (#34c759 on, #3a3a3c off), 24px white knob that slides 20. */
 @Composable
-private fun Toggle(on: Boolean) {
-    val x by androidx.compose.animation.core.animateDpAsState(if (on) 20.dp else 0.dp, label = "sw")
-    val bg by androidx.compose.animation.animateColorAsState(if (on) SwitchOn else Color(0xFF3A3A3C), label = "swbg")
-    // Recessed track (tinted green when on) with a raised light knob.
-    Box(Modifier.size(50.dp, 30.dp).softFace(HOLLOW, sheen = false, dpUnits = true).background(bg.copy(alpha = if (on) 0.9f else 0f), CircleShape).padding(3.dp)) {
-        Box(Modifier.offset(x = x).size(24.dp).softFace(LIGHT, dpUnits = true))
-    }
+internal fun Toggle(on: Boolean) {
+    // The Material 3 switch; the whole row handles the tap, so this one only shows the state.
+    androidx.compose.material3.Switch(checked = on, onCheckedChange = null)
 }
 
 @Composable
-private fun Header(title: String, onClose: () -> Unit, back: (() -> Unit)? = null, gear: (() -> Unit)? = null) {
+internal fun Header(title: String, onClose: () -> Unit, back: (() -> Unit)? = null, gear: (() -> Unit)? = null) {
+    // Title centred between one round button on each side: back (or settings) and close.
     Row(
-        Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 10.dp, bottom = 12.dp).padding(bottom = 14.dp),
+        Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 22.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        back?.let { CircleIcon(Ico.CHEVRON_L, "Back", it) }
+        when {
+            back != null -> CircleIcon(Ico.CHEVRON_L, "Back", back)
+            gear != null -> CircleIcon(Ico.GEAR, "Settings", gear)
+            else -> Spacer(Modifier.size(44.dp))
+        }
         Text(title, color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.18).sp, maxLines = 2,
-            modifier = Modifier.weight(1f).semantics { heading() })
-        gear?.let { CircleIcon(Ico.SLIDERS, "Settings", it) }
+            textAlign = TextAlign.Center, modifier = Modifier.weight(1f).semantics { heading() })
         CircleIcon(Ico.CLOSE, "Close", onClose)
     }
 }
 
 @Composable
-private fun CircleIcon(ico: Ico, label: String, onClick: () -> Unit) {
+internal fun CircleIcon(ico: Ico, label: String, onClick: () -> Unit) {
     Box(
         Modifier.size(44.dp).pressable(CARD, CARD_DOWN, null, label = null, onClick = onClick)
             .semantics { contentDescription = label },
@@ -265,7 +292,7 @@ private fun CircleIcon(ico: Ico, label: String, onClick: () -> Unit) {
  * finger is on it. [corner] null = pill/circle. Shadows are in dp.
  */
 @Composable
-private fun Modifier.pressable(
+internal fun Modifier.pressable(
     up: Face, down: Face, corner: androidx.compose.ui.unit.Dp?, enabled: Boolean = true,
     role: Role = Role.Button, label: String? = null, onClick: () -> Unit,
 ): Modifier {
@@ -278,26 +305,26 @@ private fun Modifier.pressable(
 }
 
 @Composable
-private fun Body(content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp), content = content)
+internal fun Body(side: androidx.compose.ui.unit.Dp = 24.dp, content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = side).padding(bottom = 32.dp), content = content)
 }
 
 @Composable
-private fun Lead(text: String, center: Boolean = false) =
+internal fun Lead(text: String, center: Boolean = false) =
     Text(text, color = LeadInk, fontSize = 14.5.sp, lineHeight = 23.2.sp, textAlign = if (center) TextAlign.Center else TextAlign.Start,
         modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp))
 
 @Composable
-private fun Hint(text: String, top: Int = 18) =
+internal fun Hint(text: String, top: Int = 18) =
     Text(text, color = Muted, fontSize = 12.5.sp, lineHeight = 20.sp, modifier = Modifier.padding(top = top.dp))
 
 @Composable
-private fun SectionTitle(t: String) =
+internal fun SectionTitle(t: String) =
     Text(t.uppercase(), color = Muted, fontSize = 12.sp, letterSpacing = 0.96.sp, fontWeight = FontWeight.Medium,
         modifier = Modifier.padding(top = 32.dp, bottom = 4.dp).semantics { heading() })
 
 @Composable
-private fun Btn(text: String, kind: Int = 0, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun Btn(text: String, kind: Int = 0, enabled: Boolean = true, onClick: () -> Unit) {
     // 0 = primary (white), 1 = secondary, 2 = danger
     val (faces, fg) = when (kind) { 1 -> (CARD to CARD_DOWN) to T.Ink; 2 -> (DANGER to DANGER_DOWN) to DangerInk; else -> (LIGHT to LIGHT_DOWN) to Color(0xFF111111) }
     Box(
@@ -311,22 +338,37 @@ private fun Btn(text: String, kind: Int = 0, enabled: Boolean = true, onClick: (
 }
 
 @Composable
-private fun Hero(ico: Ico, bg: Color, fg: Color) {
+internal fun Hero(ico: Ico, bg: Color, fg: Color) {
     Box(Modifier.fillMaxWidth().padding(bottom = 18.dp).height(96.dp), contentAlignment = Alignment.Center) {
         Box(Modifier.size(56.dp).softFace(Face(listOf(mix(bg, 0.8f, Color.White), bg), CARD.shadows), dpUnits = true), contentAlignment = Alignment.Center) { LineIcon(ico, fg, 30.dp) }
     }
 }
 
+/** A TV with Wi-Fi waves over it, in soft rings: the picture for empty and first-run screens. */
 @Composable
-private fun Spinner(accent: Color) {
+internal fun TvIllustration(accent: Color) {
+    Box(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 22.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(150.dp).clip(CircleShape).background(accent.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(112.dp).clip(CircleShape).background(accent.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    LineIcon(Ico.WIFI, T.Ink, 26.dp, stroke = 2f)
+                    LineIcon(Ico.TV, T.Ink, 46.dp, stroke = 1.6f)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun Spinner(accent: Color) {
     Box(Modifier.fillMaxWidth().height(96.dp), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(color = accent, trackColor = Color(0xFF333333), strokeWidth = 3.dp, modifier = Modifier.size(38.dp))
+        CircularProgressIndicator(color = accent, trackColor = M.High, strokeWidth = 3.dp, modifier = Modifier.size(38.dp))
     }
 }
 
 /** Card-style list row: optional status dot, title + subtitle, then a trailing slot. */
 @Composable
-private fun CardRow(
+internal fun CardRow(
     title: String,
     sub: String?,
     dot: Color? = null,
@@ -358,14 +400,14 @@ private fun CardRow(
     }
 }
 
-@Composable private fun Chevron() = LineIcon(Ico.CHEVRON_R, Color(0xFF6C6C70), 18.dp)
+@Composable internal fun Chevron() = LineIcon(Ico.CHEVRON_R, T.Sub, 18.dp)
 
 @Composable
-private fun Badge(text: String) =
+internal fun Badge(text: String) =
     Text(text, color = Color(0xFFBBBBBB), fontSize = 11.5.sp, maxLines = 1,
         modifier = Modifier.background(Color(0xFF2C2C2E), RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 3.dp))
 
-private fun statusLine(vm: RemoteVM, d: Device): String {
+internal fun statusLine(vm: RemoteVM, d: Device): String {
     val st = if (vm.activeId != d.id) "" else when (vm.link) {
         Link.READY -> " · Connected"; Link.CONNECTING -> " · Connecting…"; else -> " · Not connected"
     }
@@ -374,19 +416,55 @@ private fun statusLine(vm: RemoteVM, d: Device): String {
 
 /* ---------------------------------------------------------------- devices */
 
+/**
+ * One saved TV: name and chevron on the first line, brand · address under it, and for the
+ * active TV a status line with its coloured dot ("● Connected"). All left-aligned.
+ */
 @Composable
-private fun DevicesPage(vm: RemoteVM, open: (String) -> Unit, add: () -> Unit) {
-    if (vm.devices.isEmpty()) Lead("No TVs yet. Add one to start controlling it.")
-    vm.devices.forEach { d ->
-        val on = vm.activeId == d.id && vm.link == Link.READY
-        CardRow(d.name, statusLine(vm, d), dot = if (on) OkGreen else Color(0xFF555555), onClick = { open(d.id) }, clickLabel = "open") { Chevron() }
+internal fun DeviceRow(vm: RemoteVM, d: Device, onClick: () -> Unit) {
+    val active = vm.activeId == d.id
+    val (word, dot) = when {
+        !active -> null to null
+        vm.link == Link.READY -> "Connected" to OkGreen
+        vm.link == Link.CONNECTING -> "Connecting…" to Color(0xFFFDD663)
+        else -> "Not connected" to T.Sub
     }
-    Btn("Add a TV", onClick = add)
-    Hint("Soundbar volume goes through your TV over HDMI-CEC / ARC, so there's nothing to pair for it.", top = 18)
+    Column(
+        Modifier.fillMaxWidth().padding(bottom = 12.dp)
+            .pressable(CARD, CARD_DOWN, 16.dp, label = "open", onClick = onClick)
+            .semantics(mergeDescendants = true) {}
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(d.name, color = T.Ink, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Chevron()
+        }
+        Text("${d.brand.label} · ${d.host}", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+        if (word != null && dot != null) Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Box(Modifier.size(8.dp).background(dot, CircleShape))
+            Text(word, color = if (dot == OkGreen) OkGreen else Muted, fontSize = 13.sp)
+        }
+    }
 }
 
 @Composable
-private fun DevicePage(vm: RemoteVM, d: Device, accent: Color) {
+internal fun DevicesPage(vm: RemoteVM, open: (String) -> Unit, add: () -> Unit) {
+    if (vm.devices.isEmpty()) {
+        TvIllustration(com.krishna.miniremote.ui.accentColor(vm.settings.accentHex))
+        Text("No TVs yet", color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp))
+        Spacer(Modifier.height(14.dp))
+    }
+    vm.devices.forEach { d ->
+        val on = vm.activeId == d.id && vm.link == Link.READY
+        DeviceRow(vm, d) { open(d.id) }
+    }
+    Btn("Add a TV", onClick = add)
+}
+
+@Composable
+internal fun DevicePage(vm: RemoteVM, d: Device, accent: Color) {
     val on = vm.activeId == d.id && vm.link == Link.READY
     var name by remember(d.id) { mutableStateOf(d.name) }
     var arm by remember(d.id) { mutableStateOf(false) }
@@ -396,26 +474,53 @@ private fun DevicePage(vm: RemoteVM, d: Device, accent: Color) {
     Spacer(Modifier.height(8.dp))
     Field("Name", name, { name = it.take(30) })
     if (on) Btn("Disconnect") { vm.disconnect() } else Btn("Connect") { vm.select(d) }
-    Btn("Save name", kind = 1, enabled = name.isNotBlank() && name.trim() != d.name) { vm.rename(d.id, name); vm.say("Saved") }
-    Btn(if (arm) "Tap again to forget this TV" else "Forget this TV", kind = 2) {
+    Btn("Save", kind = 1, enabled = name.isNotBlank() && name.trim() != d.name) { vm.rename(d.id, name); vm.say("Saved") }
+    // Bluetooth: the TV pairs with the phone as a remote, so keys work without Wi-Fi.
+    if (vm.btAvailable) {
+        vm.btTick
+        SectionTitle("Bluetooth")
+        Group {
+            val pairing = vm.btPairing == d.id
+            Column(Modifier.padding(vertical = 14.dp)) {
+                Text(when {
+                    pairing -> "Waiting for the TV…"
+                    d.bt != null && vm.btReady && vm.activeId == d.id -> "Paired · connected"
+                    d.bt != null -> "Paired · used when Wi-Fi can't reach the TV"
+                    else -> "Not paired"
+                }, color = T.Ink, fontSize = 15.sp)
+                Text(
+                    if (pairing) "On the TV, open Settings › Remotes & Accessories (or Bluetooth) › Pair accessory, and choose Mini Remote. Keep this screen open."
+                    else if (d.bt != null) "Arrows, OK, Back, Home, volume, play and search work over Bluetooth. Apps, inputs and typing need Wi-Fi."
+                    else "Pair once and the phone works as a Bluetooth remote too: no Wi-Fi needed for the basic keys.",
+                    color = Muted, fontSize = 12.5.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
+        when {
+            vm.btPairing == d.id -> Btn("Cancel pairing", kind = 1) { vm.btCancelPairing() }
+            d.bt != null -> Btn("Forget Bluetooth", kind = 1) { vm.btForget(d) }
+            else -> Btn("Pair over Bluetooth", kind = 1) { vm.btPair(d) }
+        }
+    }
+    Btn(if (arm) "Tap to confirm" else "Forget TV", kind = 2) {
         // Removing it makes this page's TV disappear, and the sheet steps back on its own.
         if (!arm) { arm = true; vm.feel.fire(com.krishna.miniremote.Feel.HEAVY) } else vm.remove(d)
     }
 }
 
 @Composable
-private fun LocalPage(onContinue: () -> Unit) {
-    Hero(Ico.WIFI, Color(0xFF1D2A3A), Color(0xFF6FB1FF))
-    Lead("Remote will look for TVs on your Wi-Fi. It only talks to devices on your own network, and it needs no account.")
+internal fun LocalPage(onContinue: () -> Unit) {
+    TvIllustration(Color(0xFF6FB1FF))
+    Lead("Finds TVs on your Wi-Fi. No account needed.", center = true)
     Btn("Continue", onClick = onContinue)
 }
 
 @Composable
-private fun ScanPage(vm: RemoteVM, accent: Color, pick: (Device) -> Unit, manual: () -> Unit) {
+internal fun ScanPage(vm: RemoteVM, accent: Color, pick: (Device) -> Unit, manual: () -> Unit) {
     LaunchedEffect(Unit) { vm.scan() }
     if (vm.scanning) {
         Spinner(accent)
-        Lead("Looking for TVs on your Wi-Fi…", center = true)
+        Lead("Looking for TVs…", center = true)
         return
     }
     val n = vm.found.size
@@ -426,13 +531,13 @@ private fun ScanPage(vm: RemoteVM, accent: Color, pick: (Device) -> Unit, manual
         modifier = Modifier.padding(bottom = 20.dp).semantics { liveRegion = LiveRegionMode.Polite },
     )
     vm.found.forEach { d -> CardRow(d.name, d.host, onClick = { pick(d) }, clickLabel = "add and connect") { Badge(d.brand.label) } }
-    Btn("Enter an IP address", kind = 1, onClick = manual)
+    Btn("Enter IP", kind = 1, onClick = manual)
     if (n == 0) Btn("Scan again", kind = 1) { vm.scan() }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ManualPage(vm: RemoteVM, accent: Color, onAdded: (Device) -> Unit) {
+internal fun ManualPage(vm: RemoteVM, accent: Color, onAdded: (Device) -> Unit) {
     var ip by remember { mutableStateOf("") }
     var brand by remember { mutableStateOf(Brand.ROKU) }
     var open by remember { mutableStateOf(false) }
@@ -452,25 +557,25 @@ private fun ManualPage(vm: RemoteVM, accent: Color, onAdded: (Device) -> Unit) {
         val (e, d) = vm.addManual(ip, brand)
         if (e != null) { err = e; vm.feel.fire(com.krishna.miniremote.Feel.ERROR) } else if (d != null) onAdded(d)
     }
-    Hint("Find it on your TV under Settings › Network. Only home-network addresses (like 192.168…) are accepted.")
+    Hint("On the TV: Settings › Network.")
 }
 
 /* ----------------------------------------------------------------- pairing */
 
 @Composable
-private fun PairPage(vm: RemoteVM, d: Device, accent: Color, onClose: () -> Unit, back: () -> Unit) {
+internal fun PairPage(vm: RemoteVM, d: Device, accent: Color, onClose: () -> Unit, back: () -> Unit) {
     val active = vm.activeId == d.id
     val prompt = vm.pairPrompt
     when {
         prompt != null -> {
-            Header("Enter the code", onClose, back = { vm.answerCode(null); back() })
+            Header("Enter code", onClose, back = { vm.answerCode(null); back() })
             Body { CodeEntry(vm, prompt) }
         }
         active && vm.link == Link.READY -> {
             Header("Connected", onClose)
             Body {
                 Hero(Ico.CHECK, Color(0xFF1D3A29), OkGreen)
-                Lead("${d.name} is ready. Try the clickpad.", center = true)
+                Lead("${d.name} is ready.", center = true)
                 Btn("Done", onClick = onClose)
             }
         }
@@ -510,7 +615,7 @@ private fun PairPage(vm: RemoteVM, d: Device, accent: Color, onClose: () -> Unit
             }
         }
         else -> {
-            Header("Connect ${d.name}", onClose, back = back)
+            Header("Connect", onClose, back = back)
             Body {
                 Hero(Ico.TV, Color(0xFF2A2140), Color(0xFFB69CFF))
                 brandHelp(d.brand)?.let { Lead(it) }
@@ -520,7 +625,7 @@ private fun PairPage(vm: RemoteVM, d: Device, accent: Color, onClose: () -> Unit
     }
 }
 
-private fun brandHelp(b: Brand): String? = when (b) {
+internal fun brandHelp(b: Brand): String? = when (b) {
     Brand.ROKU -> "Roku doesn't need a pairing code. If it can't connect, open Settings › System › Advanced system settings › Control by mobile apps on the TV and choose Default."
     Brand.SAMSUNG -> "On Samsung, check Settings › General › External Device Manager › Device Connect Manager. Menu names vary by model."
     Brand.LG -> "On LG, make sure LG Connect Apps / Mobile TV On is turned on. Menu names vary by model."
@@ -529,10 +634,14 @@ private fun brandHelp(b: Brand): String? = when (b) {
 
 /** Six boxes, one per character, backed by a single text field so paste and TalkBack work normally. */
 @Composable
-private fun CodeEntry(vm: RemoteVM, prompt: PairPrompt) {
+internal fun CodeEntry(vm: RemoteVM, prompt: PairPrompt) {
     var code by remember(prompt) { mutableStateOf("") }
     val ok = code.length == 6
-    Lead("${prompt.tvName} is showing a 6-character code. Type it here.")
+    // The keyboard comes up as soon as the code entry shows.
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    LaunchedEffect(prompt) { kotlinx.coroutines.delay(250); runCatching { focus.requestFocus() }; kb?.show() }
+    Lead("Type the code on the TV.")
     BasicTextField(
         code,
         // Codes are hex: keep 0-9 and A-F only, uppercase, max 6.
@@ -542,7 +651,7 @@ private fun CodeEntry(vm: RemoteVM, prompt: PairPrompt) {
         cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.Transparent),
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { if (ok) vm.answerCode(code) }),
-        modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Pairing code, 6 characters" },
+        modifier = Modifier.fillMaxWidth().focusRequester(focus).semantics { contentDescription = "Pairing code, 6 characters" },
         decorationBox = { inner ->
             Box {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
@@ -566,113 +675,142 @@ private fun CodeEntry(vm: RemoteVM, prompt: PairPrompt) {
 }
 
 /** The inner text field fills the boxes' area so taps anywhere focus it. */
-private fun Modifier.matchParentSizeCompat(): Modifier = this.fillMaxWidth().height(56.dp)
+internal fun Modifier.matchParentSizeCompat(): Modifier = this.fillMaxWidth().height(56.dp)
 
 /* ---------------------------------------------------------------- settings */
 
+/**
+ * A settings section as one card that folds: the title and a one-line summary of what's set,
+ * and the rows when open. Remembered while Settings stays open.
+ */
 @Composable
-private fun SettingsPage(vm: RemoteVM, accent: Color, manage: () -> Unit) {
-    val s = vm.settings
-    SectionTitle("Accent colour")
-    Row(Modifier.selectableGroup().padding(top = 8.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        ACCENTS.forEach { (name, hex) ->
-            val sel = s.accentHex.equals(hex, true)
-            Box(
-                Modifier.size(44.dp)
-                    .selectable(sel, role = Role.RadioButton) { vm.update(s.copy(accentHex = hex)) }
-                    .semantics { contentDescription = name },
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(Modifier.size(44.dp).background(accentColor(hex), CircleShape).border(2.dp, Color.Black.copy(0.25f), CircleShape))
-                // ::after ring: 2px white, 5px outside the swatch
-                if (sel) Box(Modifier.requiredSize(54.dp).border(2.dp, Color.White, CircleShape))
-            }
-        }
+internal fun Fold(title: String, summary: String, startOpen: Boolean = false, collapsible: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
+    // Native settings style: no cards. A small accent heading, then the rows; only the big
+    // sections (Appearance, About) fold away, with a one-line summary while folded.
+    val accent = LocalAccent.current
+    if (!collapsible) {
+        Text(title, color = accent, fontSize = 13.5.sp, fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(top = 28.dp, bottom = 2.dp, start = 2.dp).semantics { heading() })
+        Column(Modifier.fillMaxWidth(), content = content)
+        return
     }
-    Hint("Pressed icons, the active arrow and the transmit light use this colour.", top = 6)
-
-    SectionTitle("Feel")
-    ToggleRow("Haptics", "Physical feedback on every press and scrub", s.haptics) { vm.update(s.copy(haptics = it)) }
-    SegRow("Strength", HAPTIC_STRENGTHS, s.hapticStrength) { vm.update(s.copy(hapticStrength = it)) }
-    ToggleRow("Sound", "Soft click with every press and scrub", s.sound) { vm.update(s.copy(sound = it)) }
-    SegRow("Sound level", SOUND_LEVELS, s.soundLevel) { vm.update(s.copy(soundLevel = it)); vm.feel.fire(com.krishna.miniremote.Feel.PRESS) }
-    Column(Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 2.dp)) {
-        Row(verticalAlignment = Alignment.Top) {
+    var open by androidx.compose.runtime.saveable.rememberSaveable(title) { mutableStateOf(startOpen) }
+    val turn by androidx.compose.animation.core.animateFloatAsState(if (open) 180f else 0f, label = "fold")
+    Column(Modifier.fillMaxWidth().padding(top = 16.dp)) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 60.dp)
+                .clickable(onClickLabel = if (open) "collapse $title" else "expand $title", role = Role.Button) { open = !open }
+                .semantics { stateDescription = if (open) "Expanded" else "Collapsed"; heading() }
+                .padding(horizontal = 2.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Column(Modifier.weight(1f)) {
-                Text("Scrub distance", color = T.Ink, fontSize = 15.sp)
-                Text("Shorter = faster scrolling", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
+                Text(title, color = accent, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
+                if (!open) Text(summary, color = Muted, fontSize = 13.sp, maxLines = 1, modifier = Modifier.padding(top = 3.dp))
             }
-            Text("${s.scrubStepDp.roundToInt()} dp", color = Muted, fontSize = 13.sp, fontFamily = Mono)
+            Box(Modifier.graphicsLayer { rotationZ = turn }) { LineIcon(Ico.DOWN, T.Dim, 18.dp, stroke = 2.2f) }
         }
-        Fader(s.scrubStepDp, 24f..60f, accent, label = "Scrub distance", valueText = "${s.scrubStepDp.roundToInt()} dp", steps = 17) {
-            vm.update(s.copy(scrubStepDp = it))
-        }
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-            Text("FAST", color = Color(0xFF6C6C70), fontSize = 11.sp, letterSpacing = 0.88.sp, fontFamily = Mono, modifier = Modifier.weight(1f))
-            Text("SLOW", color = Color(0xFF6C6C70), fontSize = 11.sp, letterSpacing = 0.88.sp, fontFamily = Mono)
+        androidx.compose.animation.AnimatedVisibility(open, enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()) {
+            Column(Modifier.fillMaxWidth(), content = content)
         }
     }
-    Divider()
-    ToggleRow("Gyroscope lighting", "Highlights shift as you tilt the phone", s.gyro) { vm.update(s.copy(gyro = it)) }
-    ToggleRow("Keep screen on", "While the remote is open", s.keepAwake) { vm.update(s.copy(keepAwake = it)) }
+}
 
-    SectionTitle("Devices")
+/** Settings rows draw no lines between them (native style); other pages keep theirs. */
+internal val LocalRowLines = androidx.compose.runtime.compositionLocalOf { true }
+/** The accent colour, for section headings. */
+internal val LocalAccent = androidx.compose.runtime.compositionLocalOf { Color(0xFF8AB4F8) }
+
+/** A tonal button with an icon, for the profile card. */
+@Composable
+internal fun ProfileAction(ico: Ico, label: String, modifier: Modifier, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 68.dp).clickable(role = Role.Button, onClick = manage).padding(vertical = 16.dp, horizontal = 2.dp),
+        modifier.height(46.dp).clip(RoundedCornerShape(14.dp)).background(T.Ink.copy(alpha = 0.08f))
+            .clickable(role = Role.Button, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
+    ) {
+        LineIcon(ico, T.Ink, 18.dp)
+        Text(label, color = T.Ink, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
+    }
+}
+
+/** A row that opens another page. */
+@Composable
+internal fun LinkRow(title: String, sub: String, last: Boolean = false, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable(role = Role.Button, onClick = onClick).padding(vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text("Manage TVs", color = T.Ink, fontSize = 15.sp)
-            Text("${vm.devices.size} saved", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
+            Text(title, color = T.Ink, fontSize = 15.sp)
+            Text(sub, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
         }
         Chevron()
     }
-    Divider()
-    SectionTitle("Updates")
-    ToggleRow("Automatic updates", "Download new builds in the background, then ask to install", s.autoUpdate) {
-        vm.update(s.copy(autoUpdate = it)); if (it) vm.checkForUpdate()
-    }
-    val u = vm.update
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 68.dp)
-            .clickable(role = Role.Button, enabled = u !is RemoteVM.Update.Checking && u !is RemoteVM.Update.Downloading) {
-                if (u is RemoteVM.Update.Ready) vm.installUpdate() else vm.checkForUpdate(manual = true)
-            }
-            .padding(vertical = 16.dp, horizontal = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
-            Text(if (u is RemoteVM.Update.Ready) "Install update" else "Check for updates", color = T.Ink, fontSize = 15.sp)
-            Text(
-                when (u) {
-                    RemoteVM.Update.Idle -> "Looks at the latest build on GitHub"
-                    RemoteVM.Update.Checking -> "Checking…"
-                    RemoteVM.Update.UpToDate -> "You're on the latest build"
-                    is RemoteVM.Update.Downloading -> "Downloading ${u.info.name}… ${(u.progress * 100).toInt()}%"
-                    is RemoteVM.Update.Ready -> "Version ${u.info.name} is downloaded"
-                    is RemoteVM.Update.Failed -> u.message
-                },
-                color = if (u is RemoteVM.Update.Failed) DangerInk else Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp),
-            )
-        }
-        Chevron()
-    }
-    Divider()
-    SectionTitle("About")
-    Hint("Remote talks only to devices on your local network. No account, no tracking. Pairing keys stay on this phone.", top = 4)
-    // Lets you tell builds apart: CI numbers every build (0.2.<run>).
-    val ctx = androidx.compose.ui.platform.LocalContext.current
-    val version = remember {
-        runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "dev"
-    }
-    Text("Version $version", color = Muted, fontSize = 12.5.sp, fontFamily = Mono, modifier = Modifier.padding(top = 10.dp))
+    if (!last) Divider()
 }
 
+/** Edit profile: name and email (both optional, kept on this phone and in backups). */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun Divider() = Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF262627)))
+internal fun ProfileEditSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
+    val s = vm.settings
+    var name by remember { mutableStateOf(s.profileName) }
+    var email by remember { mutableStateOf(s.profileEmail) }
+    val st = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onClose, sheetState = st, containerColor = SheetBg, contentColor = T.Ink,
+        shape = SheetShape, scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
+    ) {
+        Column(Modifier.navigationBarsPadding().imePadding().padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Avatar(initials(name), accent, 52.dp)
+                SheetTitle("Profile", "Stays on this phone and in backups.", Modifier.weight(1f))
+            }
+            @Composable fun field(label: String, value: String, hint: String, type: KeyboardType, cap: KeyboardCapitalization, set: (String) -> Unit) {
+                Text(label, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp, start = 2.dp))
+                BasicTextField(
+                    value, set, singleLine = true,
+                    textStyle = TextStyle(color = T.Ink, fontSize = 16.sp, fontFamily = Inter), cursorBrush = SolidColor(T.Ink),
+                    keyboardOptions = KeyboardOptions(capitalization = cap, keyboardType = type, imeAction = ImeAction.Next),
+                    modifier = Modifier.fillMaxWidth().height(52.dp).semantics { contentDescription = label },
+                    decorationBox = { inner ->
+                        Box(Modifier.fillMaxSize().softFace(HOLLOW, sheen = false, corner = 14.dp, dpUnits = true).padding(horizontal = 14.dp), contentAlignment = Alignment.CenterStart) {
+                            if (value.isEmpty()) Text(hint, color = T.Sub, fontSize = 16.sp); inner()
+                        }
+                    },
+                )
+            }
+            field("Name", name, "Your name", KeyboardType.Text, KeyboardCapitalization.Words) { name = it.take(30) }
+            field("Email", email, "Optional", KeyboardType.Email, KeyboardCapitalization.None) { email = it.take(80).trim() }
+            val bad = email.isNotEmpty() && !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
+            if (bad) Text("That doesn't look like an email address", color = DangerInk, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp, start = 2.dp))
+            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.weight(1f)) { Btn("Cancel", kind = 1) { onClose() } }
+                Box(Modifier.weight(1.4f)) { Btn("Save", enabled = !bad) {
+                    vm.update(s.copy(profileName = name.trim(), profileEmail = email.trim())); vm.say("Profile saved"); onClose()
+                } }
+            }
+        }
+    }
+}
+
+/** A settings section's rows on one rounded card, with thin lines between rows. */
+@Composable
+internal fun Group(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(20.dp)).background(M.Container).padding(horizontal = 16.dp),
+        content = content,
+    )
+}
+
 
 @Composable
-private fun ToggleRow(title: String, sub: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
+internal fun Divider() { if (LocalRowLines.current) Box(Modifier.fillMaxWidth().height(1.dp).background(M.High)) }
+
+@Composable
+internal fun ToggleRow(title: String, sub: String?, checked: Boolean, last: Boolean = false, onChange: (Boolean) -> Unit) {
     // Whole row is one switch for TalkBack and one big touch target for fingers.
     Row(
         Modifier.fillMaxWidth().heightIn(min = 68.dp).toggleable(checked, role = Role.Switch, onValueChange = onChange).padding(vertical = 16.dp, horizontal = 2.dp),
@@ -685,11 +823,11 @@ private fun ToggleRow(title: String, sub: String?, checked: Boolean, onChange: (
         }
         Toggle(checked)
     }
-    Divider()
+    if (!last) Divider()
 }
 
 @Composable
-private fun SegRow(title: String, opts: List<Pair<Float, String>>, value: Float, onPick: (Float) -> Unit) {
+internal fun <V> SegRow(title: String, opts: List<Pair<V, String>>, value: V, last: Boolean = false, onPick: (V) -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).padding(vertical = 16.dp, horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(title, color = T.Ink, fontSize = 15.sp, modifier = Modifier.weight(1f))
         Row(Modifier.softFace(HOLLOW, sheen = false, corner = 10.dp, dpUnits = true).padding(3.dp).selectableGroup()) {
@@ -706,7 +844,7 @@ private fun SegRow(title: String, opts: List<Pair<Float, String>>, value: Float,
             }
         }
     }
-    Divider()
+    if (!last) Divider()
 }
 
 /* ------------------------------------------------------------- keyboard etc. */
@@ -715,7 +853,7 @@ fun statusColor(l: Link, accent: Color): Color = when (l) {
     Link.READY -> Color(0xFF30D158)
     Link.CONNECTING -> Color(0xFFFFD60A)
     Link.ERROR -> T.Danger
-    Link.IDLE -> Color(0xFF55555B)
+    Link.IDLE -> T.Sub
 }
 fun linkWord(l: Link) = when (l) { Link.READY -> "Connected"; Link.CONNECTING -> "Connecting..."; Link.ERROR -> "Can't reach"; Link.IDLE -> "" }
 
@@ -724,13 +862,38 @@ fun linkWord(l: Link) = when (l) { Link.READY -> "Connected"; Link.CONNECTING ->
  * the phone keyboard never covers it. The text box takes focus as soon as it opens.
  */
 @Composable
-fun KeyboardSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
+fun KeyboardSheet(vm: RemoteVM, accent: Color, openSearch: Boolean = true, startVoice: Boolean = false, onClose: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     var text by remember { mutableStateOf("") }
     val shown = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
     val shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
+    val voice = remember { VoiceInput(ctx) }
+    DisposableEffect(Unit) { onDispose { voice.destroy() } }
+    /** Every change goes to the TV as you type: new letters typed, removed ones deleted. */
+    fun change(new: String) { vm.liveType(text, new); text = new }
+    // Spoken words are added to what's there (with a space) and typed on the TV.
+    /** Runs the search on the TV (Enter in its box; Roku searches) and closes. */
+    fun submit() { if (text.isNotBlank()) { vm.submitSearch(text); onClose() } }
+    /** Clears the whole box, on the phone and on the TV (not just what was typed from here). */
+    fun clearAll() { if (voice.on) voice.cancel(); val n = text.length; text = ""; vm.clearTvBox(n) }
+    // Spoken words go into the box, are typed on the TV, and searched: no extra tap.
+    voice.onFinal = { said -> change(said.trim()); voice.cancel(); submit() }
+    val askMic = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { ok -> if (ok) voice.start() else vm.say("Microphone permission is off") }
+    fun mic() {
+        when {
+            voice.on -> voice.cancel()
+            !voice.available -> vm.say("No speech service on this phone")
+            androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED -> voice.start()
+            else -> askMic.launch(android.Manifest.permission.RECORD_AUDIO)
+        }
+    }
     BackHandler { onClose() }
-    LaunchedEffect(Unit) { kotlinx.coroutines.delay(250); runCatching { focus.requestFocus() } }
+    // Open the TV's search screen right away, then focus the box.
+    LaunchedEffect(Unit) { if (openSearch) vm.openTvSearch(); kotlinx.coroutines.delay(250); if (startVoice) mic() else runCatching { focus.requestFocus() } }
     Box(Modifier.fillMaxSize()) {
         androidx.compose.animation.AnimatedVisibility(shown, enter = androidx.compose.animation.fadeIn()) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(0.55f)).pointerInput(Unit) { detectTapGestures { onClose() } })
@@ -744,21 +907,175 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
                     .pointerInput(Unit) { detectTapGestures { } }
                     .statusBarsPadding().padding(top = 8.dp),
             ) {
-                Header("Type on TV", onClose)
+                Header("Search", onClose)
                 Body {
-                    Lead("Open a search box on the TV, then type here and send.")
-                    Field("Text for the TV", text, { text = it }, modifier = Modifier.focusRequester(focus),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        keyboardActions = KeyboardActions(onSend = { if (text.isNotEmpty()) { vm.typeText(text); text = "" } }))
-                    // .two: 1fr 1.4fr, gap 12
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Box(Modifier.weight(1f)) { Btn("Delete", kind = 1) { vm.backspace() } }
-                        Box(Modifier.weight(1.4f)) { Btn("Send", enabled = text.isNotEmpty()) { vm.typeText(text); text = "" } }
+                    // 1 · The box and the mic.
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Box(Modifier.weight(1f).height(54.dp)) {
+                            if (voice.on) {
+                                // Voice mode: the box makes way for one calm line (and what you've said so far).
+                                Row(
+                                    Modifier.fillMaxSize().softFace(HOLLOW, sheen = false, corner = 14.dp, dpUnits = true).padding(horizontal = 16.dp)
+                                        .semantics { liveRegion = LiveRegionMode.Polite },
+                                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    Box(Modifier.size(8.dp).background(if (voice.listening) accent else Muted, CircleShape))
+                                    Text(voice.partial.ifEmpty { "Voice mode on…" }, color = T.Ink, fontSize = 16.sp, maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                }
+                            } else {
+                                BasicTextField(
+                                    text, { change(it) }, singleLine = true,
+                                    textStyle = TextStyle(color = T.Ink, fontSize = 16.sp, fontFamily = Inter),
+                                    cursorBrush = SolidColor(T.Ink),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                    keyboardActions = KeyboardActions(onSearch = { submit() }),
+                                    modifier = Modifier.fillMaxSize().focusRequester(focus).semantics { contentDescription = "Search on TV" },
+                                    decorationBox = { inner ->
+                                        Row(
+                                            Modifier.fillMaxSize().softFace(HOLLOW, sheen = false, corner = 14.dp, dpUnits = true).padding(horizontal = 14.dp),
+                                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        ) {
+                                            LineIcon(Ico.SEARCH, Muted, 18.dp)
+                                            Box(Modifier.weight(1f)) {
+                                                if (text.isEmpty()) Text("Search or type", color = T.Sub, fontSize = 16.sp)
+                                                inner()
+                                            }
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                        Box(
+                            Modifier.size(54.dp).clip(RoundedCornerShape(14.dp))
+                                .background(if (voice.on) accent.copy(alpha = 0.25f) else M.High)
+                                .clickable(onClickLabel = if (voice.on) "stop voice" else "voice mode", role = Role.Button) { mic() }
+                                .semantics { contentDescription = "Voice" },
+                            contentAlignment = Alignment.Center,
+                        ) { LineIcon(if (voice.on) Ico.CLOSE else Ico.MIC, if (voice.on) accent else T.Ink, 22.dp) }
+                    }
+                    // 2 · One line on what happens.
+                    Text(
+                        when {
+                            voice.on -> "Speak: it's searched when you stop."
+                            voice.error != null -> voice.error!!
+                            vm.searchesApps -> "Typed into the box selected on the TV."
+                            else -> "Typed on the TV as you go."
+                        },
+                        color = Muted, fontSize = 12.5.sp,
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp, start = 4.dp).semantics { liveRegion = LiveRegionMode.Polite },
+                    )
+                    // 3 · Clear (all of the TV's box) and Search.
+                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.weight(1f)) { Btn("Clear", kind = 1) { clearAll() } }
+                        Box(Modifier.weight(1.4f)) { Btn("Search", enabled = text.isNotBlank() || voice.on) { if (voice.on) voice.cancel(); submit() } }
+                    }
+                    // 4 · Search an app straight away, and the arrows to pick a box on the TV.
+                    if (vm.searchesApps) {
+                        Row(Modifier.fillMaxWidth().padding(top = 22.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Search in", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(end = 4.dp))
+                            listOf("youtube" to "YouTube", "play" to "Play Store").forEach { (w, label) ->
+                                val ok = text.isNotBlank()
+                                Box(
+                                    Modifier.weight(1f).height(38.dp).clip(CircleShape).background(M.High)
+                                        .clickable(role = Role.Button, enabled = ok) { vm.searchIn(w, text); onClose() }
+                                        .padding(horizontal = 14.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) { Text(label, color = if (ok) T.Ink else Muted, fontSize = 13.sp, fontWeight = FontWeight.Medium) }
+                            }
+                        }
+                        Box(Modifier.padding(top = 18.dp)) { NavPad(vm) }
                     }
                 }
             }
         }
     }
+}
+
+/**
+ * Speech to text inside the app (no system popup): Android's SpeechRecognizer, preferring
+ * on-device recognition. [level] drives the wave, [partial] shows words as they're heard,
+ * [onFinal] gets the result. Listens only while the user asks.
+ */
+internal class VoiceInput(private val ctx: android.content.Context) {
+    /** Voice mode: keeps listening, phrase after phrase, until [cancel]. */
+    var on by mutableStateOf(false); private set
+    var listening by mutableStateOf(false); private set
+    var level by mutableStateOf(0f); private set
+    var partial by mutableStateOf(""); private set
+    var error by mutableStateOf<String?>(null); private set
+    var onFinal: (String) -> Unit = {}
+    /** Speech works on the phone: its own on-device recogniser (Android 13+), or a speech service. */
+    val available: Boolean get() = onDevice() || android.speech.SpeechRecognizer.isRecognitionAvailable(ctx)
+    private var rec: android.speech.SpeechRecognizer? = null
+
+    /** The on-device recogniser said it can't do this language: use the speech service instead. */
+    private var useService = false
+
+    private fun onDevice(): Boolean = !useService && android.os.Build.VERSION.SDK_INT >= 33 &&
+        runCatching { android.speech.SpeechRecognizer.isOnDeviceRecognitionAvailable(ctx) }.getOrDefault(false)
+
+    /** On-device first (private, works offline: Android 13+), else the phone's speech service (Android 8+). */
+    private fun create(): android.speech.SpeechRecognizer =
+        if (onDevice() && android.os.Build.VERSION.SDK_INT >= 33) android.speech.SpeechRecognizer.createOnDeviceSpeechRecognizer(ctx)
+        else android.speech.SpeechRecognizer.createSpeechRecognizer(ctx)
+
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private fun again() { if (on) main.postDelayed({ if (on) listen() }, 250) }
+
+    fun start() { on = true; listen() }
+
+    private fun listen() {
+        error = null; partial = ""; level = 0f
+        val r = rec ?: runCatching { create() }.getOrNull()?.also { rec = it }
+        if (r == null) { on = false; error = "No speech service on this phone"; return }
+        r.setRecognitionListener(object : android.speech.RecognitionListener {
+            override fun onReadyForSpeech(params: android.os.Bundle?) { listening = true }
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) { level = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f) }
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() { level = 0f }
+            override fun onError(code: Int) {
+                listening = false; level = 0f
+                // Silence or nothing understood: keep listening in voice mode.
+                if (on && (code == android.speech.SpeechRecognizer.ERROR_NO_MATCH || code == android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT)) { again(); return }
+                // On-device can't do this language (12 / 13 on Android 12+): switch to the speech service.
+                if (on && (code == 12 || code == 13) && !useService) { useService = true; runCatching { rec?.destroy() }; rec = null; again(); return }
+                // A stuck recogniser (busy / client error): start a fresh one and carry on.
+                if (on && (code == android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY || code == android.speech.SpeechRecognizer.ERROR_CLIENT)) {
+                    runCatching { rec?.destroy() }; rec = null; again(); return
+                }
+                on = false
+                error = when (code) {
+                    android.speech.SpeechRecognizer.ERROR_NO_MATCH, android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Didn't catch that. Tap the mic and try again."
+                    android.speech.SpeechRecognizer.ERROR_NETWORK, android.speech.SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Speech needs a connection on this phone."
+                    android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission is off."
+                    else -> "Couldn't listen. Try again."
+                }
+            }
+            override fun onResults(results: android.os.Bundle?) {
+                listening = false; level = 0f
+                val said = results?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+                partial = ""
+                if (said.isNotBlank()) onFinal(said)
+                again()
+            }
+            override fun onPartialResults(partialResults: android.os.Bundle?) {
+                partial = partialResults?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+            }
+            override fun onEvent(eventType: Int, params: android.os.Bundle?) {}
+        })
+        val i = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+        listening = true
+        runCatching { r.startListening(i) }.onFailure { listening = false; on = false; error = "Couldn't listen. Try again." }
+    }
+
+    /** Leaves voice mode; whatever was half heard is dropped. */
+    fun cancel() { on = false; main.removeCallbacksAndMessages(null); runCatching { rec?.cancel() }; listening = false; level = 0f; partial = "" }
+    fun destroy() { cancel(); runCatching { rec?.destroy() }; rec = null }
 }
 
 /** Fallback when a pairing code is needed while the sheet is closed. */
@@ -772,4 +1089,91 @@ fun PairCodeDialog(vm: RemoteVM, prompt: PairPrompt, accent: Color) {
         confirmButton = {},
         dismissButton = { TextButton(onClick = { vm.answerCode(null) }) { Text("Cancel", color = Muted) } },
     )
+}
+
+/** "Are you sure?" as a small sheet: title, one line, the action, and Cancel. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ConfirmSheet(title: String, text: String, action: String, danger: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val st = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss, sheetState = st, containerColor = SheetBg, contentColor = T.Ink,
+        shape = SheetShape, scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
+    ) {
+        Column(Modifier.navigationBarsPadding().padding(horizontal = 24.dp).padding(top = 8.dp, bottom = 24.dp)) {
+            Text(title, color = T.Ink, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().semantics { heading() })
+            Text(text, color = Muted, fontSize = 14.sp, lineHeight = 20.sp, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp))
+            Btn(action, kind = if (danger) 2 else 0) { onConfirm(); onDismiss() }
+            Btn("Cancel", kind = 1, onClick = onDismiss)
+        }
+    }
+}
+
+@Composable
+internal fun InfoBlock(title: String, body: String) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 14.dp)) {
+        Text(title, color = T.Ink, fontSize = 15.sp)
+        Text(body, color = Muted, fontSize = 12.5.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+/** Third-party software in the app, its licence, and the full licence texts (shipped in res/raw). */
+private val THIRD_PARTY = listOf(
+    Triple("AndroidX, Jetpack Compose, Material 3", "Google LLC · The Android Open Source Project", "Apache License 2.0"),
+    Triple("Kotlin standard library, kotlinx.coroutines", "JetBrains s.r.o. and contributors", "Apache License 2.0"),
+    Triple("OkHttp, Okio", "Square, Inc.", "Apache License 2.0"),
+    Triple("AndroidSVG", "Paul LeBeau, Cave Rock Software Ltd.", "Apache License 2.0"),
+    Triple("Hugeicons (free Stroke Rounded icons)", "Hugeicons", "MIT License"),
+    Triple("Simple Icons (app logos, downloaded when enabled)", "Simple Icons contributors", "CC0 1.0 Universal; logos remain trademarks of their owners"),
+)
+
+@Composable
+internal fun LicensesPage() {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var shown by remember { mutableStateOf<Int?>(null) }
+    Group {
+        THIRD_PARTY.forEachIndexed { i, (name, who, lic) ->
+            Column(Modifier.fillMaxWidth().padding(vertical = 14.dp)) {
+                Text(name, color = T.Ink, fontSize = 15.sp)
+                Text(who, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
+                Text(lic, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
+            }
+            if (i < THIRD_PARTY.lastIndex) Divider()
+        }
+    }
+    Hint("Tap to read in full.", top = 10)
+    listOf("Apache License 2.0" to com.krishna.miniremote.R.raw.apache_2_0, "CC0 1.0 Universal" to com.krishna.miniremote.R.raw.cc0_1_0, "MIT License (Hugeicons)" to com.krishna.miniremote.R.raw.mit_hugeicons)
+        .forEach { (title, res) ->
+            Btn(if (shown == res) "Hide $title" else title, kind = 1) { shown = if (shown == res) null else res }
+            if (shown == res) {
+                val text = remember(res) { runCatching { ctx.resources.openRawResource(res).bufferedReader().use { it.readText() } }.getOrDefault("") }
+                Text(text, color = Muted, fontSize = 11.sp, lineHeight = 15.sp, fontFamily = Mono, modifier = Modifier.padding(top = 12.dp))
+            }
+        }
+}
+
+/** Privacy & data: what's kept, what goes online, permissions, and the erase buttons. */
+@Composable
+internal fun PrivacyPage(vm: RemoteVM) {
+    Group {
+        InfoBlock("Storage", "TVs, pairing keys (encrypted), quick access and settings. On this phone only; never backed up.")
+        Divider()
+        InfoBlock("Network", "Only TVs on your Wi-Fi. Updates from GitHub; logos from Google Play, Simple Icons, the apps' own websites or Google's favicon service. Both optional.")
+        Divider()
+        InfoBlock("Voice", "The mic listens only while you tap it in Search. Speech is turned into text on the phone where possible (otherwise by the phone's speech service); only the text goes to your TV. Nothing is saved.")
+        Divider()
+        InfoBlock("Permissions", "Network, Bluetooth (only if you pair a TV over Bluetooth), microphone (voice search and talking to the TV, only while listening), vibration, notifications (updates, the remote), installing updates. No location, contacts or files.")
+    }
+    var ask by remember { mutableStateOf<String?>(null) }
+    Btn("Forget all TVs", kind = 1) { ask = "tvs" }
+    Btn("Erase data", kind = 2) { ask = "all" }
+    when (ask) {
+        "tvs" -> ConfirmSheet("Forget all TVs?", "Removes every TV and its pairing keys. You'll pair each TV again to use it.",
+            "Forget all", danger = true, onConfirm = { vm.forgetAllTvs() }, onDismiss = { ask = null })
+        "all" -> ConfirmSheet("Erase all data?", "Removes TVs, pairing keys, quick access, channels and settings. The app starts fresh.",
+            "Erase", danger = true, onConfirm = { vm.eraseAll() }, onDismiss = { ask = null })
+    }
+
 }
