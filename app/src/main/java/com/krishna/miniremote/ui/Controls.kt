@@ -101,6 +101,8 @@ fun KeyButton(
     restColor: Color = T.Ink,
     /** False: shown dimmed and does nothing (not available for what's on the TV). */
     enabled: Boolean = true,
+    /** Tapped while not [enabled]: e.g. say why it's off. */
+    onDisabled: (() -> Unit)? = null,
     onPress: () -> Unit,
     content: @Composable (color: Color, down: Boolean) -> Unit,
 ) {
@@ -123,7 +125,8 @@ fun KeyButton(
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .softFace(if (down) downFace else KEY_UP, sheen = !down)
             .rippleLayer { rip.value }
-            .then(if (enabled) Modifier.pressInput(repeat, scope, { down = it; if (it) scope.ripple(rip) }, onPress) else Modifier),
+            .then(if (enabled) Modifier.pressInput(repeat, scope, { down = it; if (it) scope.ripple(rip) }, onPress)
+                else if (onDisabled != null) Modifier.pointerInput(Unit) { androidx.compose.foundation.gestures.detectTapGestures { onDisabled() } } else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         // Hide icons/text from TalkBack; the button's own label speaks for them.

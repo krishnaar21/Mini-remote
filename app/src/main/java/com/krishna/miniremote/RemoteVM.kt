@@ -852,13 +852,39 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     fun can(k: RemoteKey): Boolean {
         val a = adapter
         if (a != null && link == Link.READY && !a.supports(k)) return false
+        return whyNot(k) == null
+    }
+
+    private val playbackKeys = setOf(RemoteKey.PLAY_PAUSE, RemoteKey.REWIND, RemoteKey.FAST_FORWARD)
+    private val liveKeys = setOf(RemoteKey.CH_UP, RemoteKey.CH_DOWN, RemoteKey.GUIDE, RemoteKey.CH_LIST)
+    private val colourKeys = setOf(RemoteKey.RED, RemoteKey.GREEN, RemoteKey.YELLOW, RemoteKey.BLUE)
+
+    /** Why [k] isn't available right now, in a few words for a toast; null when it is. */
+    fun whyNot(k: RemoteKey): String? {
+        val a = adapter
+        if (a != null && link == Link.READY && !a.supports(k)) return "${active?.name ?: "This TV"} doesn't have ${k.word}"
         return when (screen) {
-            Screen.HOME -> k !in setOf(RemoteKey.PLAY_PAUSE, RemoteKey.REWIND, RemoteKey.FAST_FORWARD, RemoteKey.SUBTITLES, RemoteKey.AUDIO,
-                RemoteKey.CH_UP, RemoteKey.CH_DOWN, RemoteKey.GUIDE, RemoteKey.CH_LIST)
-            Screen.APP -> k !in setOf(RemoteKey.CH_UP, RemoteKey.CH_DOWN, RemoteKey.GUIDE, RemoteKey.CH_LIST)
-            else -> true
+            Screen.HOME -> when (k) {
+                in playbackKeys -> "Playback keys work while something's playing"
+                RemoteKey.SUBTITLES, RemoteKey.AUDIO -> "${k.word} works while something's playing"
+                in liveKeys -> "Channel keys work on live TV"
+                in colourKeys -> "Colour keys work on live TV"
+                else -> null
+            }
+            Screen.APP -> when (k) {
+                in liveKeys -> "Channel keys work on live TV"
+                in colourKeys -> "Colour keys work on live TV"
+                else -> null
+            }
+            else -> null
         }
     }
+
+    /** Whether the TV has [k] at all (whatever is on screen). */
+    fun adapterHas(k: RemoteKey): Boolean { val a = adapter; return a == null || link != Link.READY || a.supports(k) }
+
+    /** A dimmed key was tapped: say why. */
+    fun explain(k: RemoteKey) { whyNot(k)?.let { feel.fire(Feel.ERROR); say(it) } }
 
     /* ------------------------------------------------------------- profile */
 

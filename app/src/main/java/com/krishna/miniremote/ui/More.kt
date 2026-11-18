@@ -80,14 +80,14 @@ fun MoreSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
                     Triple(RemoteKey.SETTINGS, Ico.GEAR, "Settings"),
                 ))
                 val colours = listOf(RemoteKey.RED to Color(0xFFE5484D), RemoteKey.GREEN to Color(0xFF30A46C), RemoteKey.YELLOW to Color(0xFFF5D90A), RemoteKey.BLUE to Color(0xFF3E63DD))
-                if (colours.any { vm.can(it.first) }) {
+                if (colours.any { vm.adapterHas(it.first) }) {
                     Divider()
                     Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         colours.forEach { (k, c) ->
                             val on = vm.can(k)
                             Box(
                                 Modifier.weight(1f).height(26.dp).clip(CircleShape).background(if (on) c else c.copy(alpha = 0.25f))
-                                    .clickable(enabled = on, role = Role.Button) { vm.press(k) }.semantics { contentDescription = k.word },
+                                    .clickable(role = Role.Button) { if (on) vm.press(k) else vm.explain(k) }.semantics { contentDescription = k.word },
                             )
                         }
                     }
@@ -161,7 +161,7 @@ private fun KeyGrid(vm: RemoteVM, accent: Color, keys: List<Triple<RemoteKey, Ic
                     val on = vm.can(k)
                     Column(Modifier.width(66.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         KeyButton(accent, label, Modifier.size(58.dp), repeat = k == RemoteKey.REWIND || k == RemoteKey.FAST_FORWARD,
-                            pressedScale = 0.94f, enabled = on, onPress = { vm.press(k) }) { c, _ -> LineIcon(ico, c, 21.dp) }
+                            pressedScale = 0.94f, enabled = on, onDisabled = { vm.explain(k) }, onPress = { vm.press(k) }) { c, _ -> LineIcon(ico, c, 21.dp) }
                         Text(label, color = if (on) Muted else Muted.copy(alpha = 0.4f), fontSize = 11.sp, maxLines = 1, modifier = Modifier.padding(top = 6.dp))
                     }
                 }
