@@ -1,5 +1,6 @@
 package com.krishna.miniremote.ui
 
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -119,7 +120,7 @@ fun AppShell(vm: RemoteVM) {
     /** Opened from a "+" place: tapping an app adds it to quick access. */
     var picking by remember { mutableStateOf(false) }
     /** Home's pages of circles: their dots sit at the bottom of the screen. */
-    val keyPager = rememberPagerState { if (vm.settings.appsIn == "more") 2 else 3 }
+    val keyPager = rememberPagerState { if (vm.settings.appsIn == "more") 2 else 4 }
     val scope = rememberCoroutineScope()
     var sheet by remember { mutableStateOf<Page?>(null) }
     var keys by remember { mutableStateOf(false) }
@@ -200,7 +201,7 @@ fun AppShell(vm: RemoteVM) {
                     }
                     // Which page of circles: a pill for the one showing, dots for the others.
                     if (!apps) PagePills(keyPager.pageCount, keyPager.currentPage, accent,
-                        listOf("Main keys", "More keys", "Apps"), Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp)) { i ->
+                        listOf("Main keys", "More keys", "Apps", "More apps"), Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp)) { i ->
                         vm.feel.fire(com.krishna.miniremote.Feel.TICK); scope.launch { keyPager.animateScrollToPage(i) }
                     }
                     androidx.compose.animation.AnimatedVisibility(
@@ -213,7 +214,28 @@ fun AppShell(vm: RemoteVM) {
                         var pull by remember { mutableStateOf(0f) }
                         val shown by androidx.compose.animation.core.animateFloatAsState(pull, label = "pull")
                         val close = with(androidx.compose.ui.platform.LocalDensity.current) { 120.dp.toPx() }
-                        Column(Modifier.fillMaxSize().graphicsLayer { translationY = shown }.background(T.Bg)) {
+                        // Pulling down anywhere once the list is at its top drags the screen too.
+                        val pullDown = remember {
+                            object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+                                override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                                    // Pulled down and now pushing up: shrink the pull first.
+                                    if (pull > 0f && available.y < 0f) { val used = maxOf(available.y, -pull); pull += used; return androidx.compose.ui.geometry.Offset(0f, used) }
+                                    return androidx.compose.ui.geometry.Offset.Zero
+                                }
+                                override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                                    if (available.y > 0f && source == androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput) { pull += available.y; return androidx.compose.ui.geometry.Offset(0f, available.y) }
+                                    return androidx.compose.ui.geometry.Offset.Zero
+                                }
+                                override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                                    if (pull <= 0f) return androidx.compose.ui.unit.Velocity.Zero
+                                    if (pull > close || available.y > 2500f) apps = false
+                                    pull = 0f
+                                    return available
+                                }
+                            }
+                        }
+                        Column(Modifier.fillMaxSize().graphicsLayer { translationY = shown }.background(T.Bg)
+                            .nestedScroll(pullDown)) {
                             Box(Modifier.fillMaxWidth().height(52.dp)
                                 .pointerInput(Unit) {
                                     detectVerticalDragGestures(
@@ -224,7 +246,7 @@ fun AppShell(vm: RemoteVM) {
                                 .clickable(onClickLabel = "back to the remote") { apps = false }, contentAlignment = Alignment.Center) {
                                 Box(Modifier.size(width = 36.dp, height = 4.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.25f)))
                             }
-                            Box(Modifier.weight(1f)) { ChannelsScreen(vm, accent, openDevices = { sheet = Page.Devices }, picking = picking) }
+                            Box(Modifier.weight(1f)) { ChannelsScreen(vm, accent, openDevices = { sheet = Page.Devices }, picking = picking, onFull = { apps = false; vm.say("Quick access is full") }) }
                         }
                     }
                     // The dial shows messages in its well; everywhere else they float near the bottom.

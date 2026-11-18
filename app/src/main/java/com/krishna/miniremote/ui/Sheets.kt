@@ -678,157 +678,6 @@ internal fun Modifier.matchParentSizeCompat(): Modifier = this.fillMaxWidth().he
 
 /* ---------------------------------------------------------------- settings */
 
-@Composable
-internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, openLicenses: (() -> Unit)? = null, openPrivacy: (() -> Unit)? = null, openGestures: (() -> Unit)? = null) {
-    val s = vm.settings
-    val ctx = androidx.compose.ui.platform.LocalContext.current
-
-    androidx.compose.runtime.CompositionLocalProvider(LocalAccent provides accent) {
-    // Profile: your name, and everything you've set up, saved to a file (and loaded back).
-    ProfileCard(vm, accent)
-
-    androidx.compose.runtime.CompositionLocalProvider(LocalRowLines provides false) {
-    Fold("Remote", "", collapsible = false) {
-        SegRow("Quick access", listOf("home" to "Home page", "more" to "More sheet"), s.appsIn) { vm.update(s.copy(appsIn = it)) }
-        SegRow("Control", listOf("dial" to "Dial", "trackpad" to "Trackpad"), s.controlStyle) { vm.update(s.copy(controlStyle = it)) }
-        ToggleRow("Volume keys", "Phone keys change TV volume", s.volumeKeys) { vm.update(s.copy(volumeKeys = it)) }
-        ToggleRow("Auto keyboard", "Opens when the TV asks for text", s.autoKeyboard) { vm.update(s.copy(autoKeyboard = it)) }
-        ToggleRow("Notification remote", "Volume and play in the background", s.notifRemote, last = openGestures == null) { vm.update(s.copy(notifRemote = it)) }
-        if (openGestures != null) LinkRow("Gestures", "Swipes and taps, with demos", last = true, onClick = openGestures)
-    }
-
-    Fold("Appearance", "${com.krishna.miniremote.AppIcon.all.firstOrNull { it.first == com.krishna.miniremote.AppIcon.current(ctx) }?.second ?: "Dial"} icon · ${ACCENTS.firstOrNull { it.second.equals(s.accentHex, true) }?.first ?: "Accent"}") {
-        Text("App icon", color = T.Ink, fontSize = 15.sp, modifier = Modifier.padding(top = 16.dp))
-        val ctx = androidx.compose.ui.platform.LocalContext.current
-        var icon by remember { mutableStateOf(com.krishna.miniremote.AppIcon.current(ctx)) }
-        Row(Modifier.fillMaxWidth().selectableGroup().padding(vertical = 18.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            com.krishna.miniremote.AppIcon.all.forEach { (key, label) ->
-                val sel = icon == key
-                Column(
-                    Modifier.selectable(sel, role = Role.RadioButton) {
-                        if (!sel) { com.krishna.miniremote.AppIcon.set(ctx, key); icon = key; vm.say("App icon: $label") }
-                    },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    // Preview as the launcher masks it (a circle here); the art keeps to the safe zone.
-                    Box(
-                        Modifier.size(54.dp).then(if (sel) Modifier.border(2.dp, Color.White, CircleShape).padding(4.dp) else Modifier.padding(4.dp))
-                            .clip(CircleShape),
-                    ) {
-                        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.krishna.miniremote.AppIcon.bg(key)), null,
-                            Modifier.matchParentSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
-                        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.krishna.miniremote.AppIcon.fg(key)), null,
-                            Modifier.matchParentSize().graphicsLayer { scaleX = 1.5f; scaleY = 1.5f }, contentScale = androidx.compose.ui.layout.ContentScale.Fit)
-                    }
-                    Text(label, color = if (sel) T.Ink else Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
-                }
-            }
-        }
-            Divider()
-        Text("Accent colour", color = T.Ink, fontSize = 15.sp, modifier = Modifier.padding(top = 16.dp))
-    Row(Modifier.fillMaxWidth().selectableGroup().padding(vertical = 18.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        ACCENTS.forEach { (name, hex) ->
-            val sel = s.accentHex.equals(hex, true)
-            Box(
-                Modifier.size(42.dp)
-                    .selectable(sel, role = Role.RadioButton) { vm.update(s.copy(accentHex = hex)) }
-                    .semantics { contentDescription = name },
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(Modifier.size(32.dp).background(accentColor(hex), CircleShape).border(2.dp, Color.Black.copy(0.25f), CircleShape))
-                // Selected: a white ring 4dp outside the swatch.
-                if (sel) Box(Modifier.requiredSize(42.dp).border(2.dp, Color.White, CircleShape))
-            }
-        }
-    }
-        }
-
-    Fold("Touch & sound", "", collapsible = false) {
-        ToggleRow("Haptics", "On every press", s.haptics) { vm.update(s.copy(haptics = it)) }
-        if (s.haptics) SegRow("Strength", HAPTIC_STRENGTHS, s.hapticStrength) { vm.update(s.copy(hapticStrength = it)) }
-        ToggleRow("Sound", "Click on press", s.sound) { vm.update(s.copy(sound = it)) }
-        if (s.sound) SegRow("Level", SOUND_LEVELS, s.soundLevel) { vm.update(s.copy(soundLevel = it)); vm.feel.fire(com.krishna.miniremote.Feel.PRESS) }
-    Column(Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 2.dp)) {
-        Row(verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f)) {
-                Text("Scrub step", color = T.Ink, fontSize = 15.sp)
-                Text("Shorter is faster", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
-            }
-            Text("${s.scrubStepDp.roundToInt()} dp", color = accent, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-        }
-        Fader(s.scrubStepDp, 24f..60f, accent, label = "Scrub distance", valueText = "${s.scrubStepDp.roundToInt()} dp", steps = 17) {
-            vm.update(s.copy(scrubStepDp = it))
-        }
-        Row(Modifier.fillMaxWidth()) {
-            Text("Fast", color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
-            Text("Slow", color = Muted, fontSize = 12.sp)
-        }
-    }
-        }
-
-    Fold("General", "", collapsible = false) {
-        ToggleRow("App logos", "Download logos", s.logos) { vm.update(s.copy(logos = it)) }
-        ToggleRow("Stay awake", "While open", s.keepAwake) { vm.update(s.copy(keepAwake = it)) }
-        if (manage != null) { LinkRow("TVs", "${vm.devices.size} saved", onClick = manage) }
-    ToggleRow("Auto updates", "Notify when ready", s.autoUpdate) {
-        vm.update(s.copy(autoUpdate = it)); if (it) vm.checkForUpdate()
-    }
-    val u = vm.update
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 68.dp)
-            .clickable(role = Role.Button, enabled = u !is RemoteVM.Update.Checking && u !is RemoteVM.Update.Downloading) {
-                when (u) {
-                    is RemoteVM.Update.Ready -> vm.installUpdate()
-                    is RemoteVM.Update.Manual -> vm.openReleasePage()
-                    else -> vm.checkForUpdate(manual = true)
-                }
-            }
-            .padding(vertical = 16.dp, horizontal = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
-            Text(when (u) { is RemoteVM.Update.Ready -> "Install update"; is RemoteVM.Update.Manual -> "Get update"; else -> "Check now" }, color = T.Ink, fontSize = 15.sp)
-            Text(
-                when (u) {
-                    RemoteVM.Update.Idle -> "Latest build on GitHub"
-                    RemoteVM.Update.Checking -> "Checking…"
-                    RemoteVM.Update.UpToDate -> "You're on the latest build"
-                    is RemoteVM.Update.Downloading -> "Downloading ${u.info.name}… ${(u.progress * 100).toInt()}%"
-                    is RemoteVM.Update.Ready -> "Version ${u.info.name} is downloaded"
-                    is RemoteVM.Update.Failed -> u.message
-                    is RemoteVM.Update.Manual -> "Version ${u.info.name} needs a reinstall: tap to download it"
-                },
-                color = if (u is RemoteVM.Update.Failed) DangerInk else Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp),
-            )
-        }
-        Chevron()
-    }
-            if (openPrivacy != null) { Divider(); LinkRow("Privacy & data", "Storage, network, erase", last = true, onClick = openPrivacy) }
-    }
-
-    val version = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "dev" }
-    Fold("About", "Version $version") {
-    Text("Mini Remote needs no account and has no ads, analytics or tracking.",
-        color = Muted, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 16.dp))
-    Text("Roku, Samsung, LG, webOS, Android TV, Google TV and the app names and logos shown are trademarks of their owners. " +
-        "Mini Remote is an independent app, not affiliated with or endorsed by them; it uses the TVs' published or documented remote-control interfaces on your own network.",
-        color = Muted, fontSize = 12.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 10.dp))
-    Text("Version $version", color = T.Ink, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
-    if (openLicenses != null) {
-        Divider()
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(role = Role.Button, onClick = openLicenses).padding(vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Licences", color = T.Ink, fontSize = 15.sp, modifier = Modifier.weight(1f))
-            Chevron()
-        }
-    } else Spacer(Modifier.height(10.dp))
-        }
-    }
-    }
-}
-
 /**
  * A settings section as one card that folds: the title and a one-line summary of what's set,
  * and the rows when open. Remembered while Settings stays open.
@@ -874,7 +723,7 @@ internal val LocalAccent = androidx.compose.runtime.compositionLocalOf { Color(0
 
 /** A tonal button with an icon, for the profile card. */
 @Composable
-private fun ProfileAction(ico: Ico, label: String, modifier: Modifier, onClick: () -> Unit) {
+internal fun ProfileAction(ico: Ico, label: String, modifier: Modifier, onClick: () -> Unit) {
     Row(
         modifier.height(46.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.08f))
             .clickable(role = Role.Button, onClick = onClick),
@@ -901,62 +750,10 @@ internal fun LinkRow(title: String, sub: String, last: Boolean = false, onClick:
     if (!last) Divider()
 }
 
-/** Profile: name and initials, and the whole setup saved to (or loaded from) a file. */
-@Composable
-internal fun ProfileCard(vm: RemoteVM, accent: Color) {
-    val ctx = androidx.compose.ui.platform.LocalContext.current
-    val s = vm.settings
-    var name by remember(s.profileName) { mutableStateOf(s.profileName) }
-    val save = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        if (uri != null) runCatching {
-            ctx.contentResolver.openOutputStream(uri)?.use { it.write(vm.exportProfile(com.krishna.miniremote.AppIcon.current(ctx)).toByteArray()) }
-            vm.say("Profile saved")
-        }.onFailure { vm.say("Couldn't save the profile") }
-    }
-    val load = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            val text = runCatching { ctx.contentResolver.openInputStream(uri)?.use { it.readBytes().take(400_000).toByteArray().decodeToString() } }.getOrNull()
-            if (text == null) vm.say("Couldn't read that file")
-            else vm.importProfile(text)?.let { icon -> if (icon != com.krishna.miniremote.AppIcon.current(ctx)) com.krishna.miniremote.AppIcon.set(ctx, icon) }
-        }
-    }
-    val apps = vm.shortcuts.count { it.pinned }
-    val stats = listOf(
-        "${vm.devices.size} TV${if (vm.devices.size == 1) "" else "s"}",
-        "$apps app${if (apps == 1) "" else "s"}",
-    ).joinToString(" · ")
-    var editing by remember { mutableStateOf(false) }
-    if (editing) ProfileEditSheet(vm, accent) { editing = false }
-    // A plain card: you (tap Edit for name and email), then backup and restore.
-    Column(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(24.dp)).background(M.Container).padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Avatar(initials(s.profileName), accent, 56.dp)
-            Column(Modifier.weight(1f)) {
-                Text(s.profileName.ifBlank { "Add your name" }, color = if (s.profileName.isBlank()) Muted else T.Ink, fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                Text(s.profileEmail.ifBlank { stats }, color = Muted, fontSize = 12.5.sp, maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-            }
-            Box(Modifier.height(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).clickable(role = Role.Button, onClickLabel = "edit profile") { editing = true }
-                .padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    LineIcon(Ico.EDIT, T.Ink, 15.dp)
-                    Text("Edit", color = T.Ink, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
-                }
-            }
-        }
-        Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ProfileAction(Ico.BACKUP, "Back up", Modifier.weight(1f)) { save.launch("Mini Remote profile${if (s.profileName.isNotBlank()) " - " + s.profileName else ""}.json") }
-            ProfileAction(Ico.RESTORE, "Restore", Modifier.weight(1f)) { load.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
-        }
-        Text("Backs up settings and apps. TVs pair again on a new phone.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp, start = 2.dp))
-    }
-}
-
 /** Edit profile: name and email (both optional, kept on this phone and in backups). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ProfileEditSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
+internal fun ProfileEditSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
     val s = vm.settings
     var name by remember { mutableStateOf(s.profileName) }
     var email by remember { mutableStateOf(s.profileEmail) }
@@ -966,11 +763,10 @@ private fun ProfileEditSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
         shape = SheetShape, scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
     ) {
         Column(Modifier.navigationBarsPadding().imePadding().padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Avatar(initials(name), accent, 72.dp) }
-            Text("Profile", color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
-            Text("Shown here and on Home. Stays on this phone.", color = Muted, fontSize = 12.5.sp, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Avatar(initials(name), accent, 52.dp)
+                SheetTitle("Profile", "Stays on this phone and in backups.", Modifier.weight(1f))
+            }
             @Composable fun field(label: String, value: String, hint: String, type: KeyboardType, cap: KeyboardCapitalization, set: (String) -> Unit) {
                 Text(label, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp, start = 2.dp))
                 BasicTextField(

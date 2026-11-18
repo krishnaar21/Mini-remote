@@ -59,14 +59,13 @@ fun MoreSheet(vm: RemoteVM, accent: Color, openApps: (Boolean) -> Unit = {}, onC
     ) {
         Column(Modifier.navigationBarsPadding()) {
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 16.dp)) {
-            Text("More", color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             val what = when (vm.screen) {
                 RemoteVM.Screen.HOME -> "On the home screen: playback and channel keys are off."
                 RemoteVM.Screen.APP -> "In an app: channel keys are off."
                 RemoteVM.Screen.LIVE -> "On live TV."
                 RemoteVM.Screen.UNKNOWN -> null
             }
-            what?.let { Text(it, color = Muted, fontSize = 12.5.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) }
+            SheetTitle("More", what, Modifier.padding(top = 4.dp))
 
             // Quick access, when it lives here (Settings › Remote › Quick access).
             if (vm.settings.appsIn == "more") {
@@ -190,26 +189,29 @@ private fun MediaBar(vm: RemoteVM) {
  */
 @Composable
 private fun AppSquares(vm: RemoteVM, openApps: (Boolean) -> Unit) {
-    val pinned = vm.shortcuts.filter { it.pinned }.take(7)
+    val pinned = vm.shortcuts.filter { it.pinned }
     val ready = vm.active != null && vm.link == com.krishna.miniremote.Link.READY
     val shape = RoundedCornerShape(18.dp)
-    val cells: List<Any?> = pinned + List((7 - pinned.size).coerceAtLeast(0)) { null } + "all"
-    Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        cells.chunked(4).forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                row.forEach { cell ->
-                    val m = Modifier.weight(1f).height(68.dp)
-                    when (cell) {
-                        is com.krishna.miniremote.Shortcut -> AppCircle(vm, cell, 68.dp, shape, m) { if (ready) vm.launch(cell) else vm.explain(RemoteKey.HOME) }
-                        "all" -> Box(m.clip(shape).background(M.High).clickable(role = Role.Button, onClickLabel = "all apps") { openApps(false) }
-                            .semantics(mergeDescendants = true) { contentDescription = "All apps" }, contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                LineIcon(Ico.GRID, T.Ink, 20.dp)
-                                Text("All apps", color = Muted, fontSize = 11.sp, lineHeight = 13.sp, modifier = Modifier.padding(top = 3.dp))
+    // Two pages (swipe across; no dots here): seven apps and All apps, then eight more.
+    val pager = androidx.compose.foundation.pager.rememberPagerState { 2 }
+    androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.fillMaxWidth().padding(top = 12.dp), pageSpacing = 16.dp) { part ->
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            com.krishna.miniremote.ui.appCells(pinned.size, part).chunked(4).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    row.forEach { cell ->
+                        val m = Modifier.weight(1f).height(68.dp)
+                        when {
+                            cell == -1 -> Box(m.clip(shape).background(M.High).clickable(role = Role.Button, onClickLabel = "all apps") { openApps(false) }
+                                .semantics(mergeDescendants = true) { contentDescription = "All apps" }, contentAlignment = Alignment.Center) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    LineIcon(Ico.GRID, T.Ink, 20.dp)
+                                    Text("All apps", color = Muted, fontSize = 11.sp, lineHeight = 13.sp, modifier = Modifier.padding(top = 3.dp))
+                                }
                             }
+                            cell != null -> { val s = pinned[cell]; AppCircle(vm, s, 68.dp, shape, m) { if (ready) vm.launch(s) else vm.explain(RemoteKey.HOME) } }
+                            else -> Box(m.clip(shape).border(1.dp, Color.White.copy(alpha = 0.10f), shape).clickable(onClickLabel = "add apps") { openApps(true) },
+                                contentAlignment = Alignment.Center) { LineIcon(Ico.PLUS, T.Ink.copy(alpha = 0.3f), 16.dp) }
                         }
-                        else -> Box(m.clip(shape).border(1.dp, Color.White.copy(alpha = 0.10f), shape).clickable(onClickLabel = "add apps") { openApps(true) },
-                            contentAlignment = Alignment.Center) { LineIcon(Ico.PLUS, T.Ink.copy(alpha = 0.3f), 16.dp) }
                     }
                 }
             }
@@ -285,8 +287,7 @@ fun SleepSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
             SleepArt(accent, Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp).height(120.dp))
-            Text("Sleep timer", color = T.Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-            Text("The TV turns itself off when the time's up.", color = Muted, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp))
+            SheetTitle("Sleep timer", "The TV turns itself off when the time's up.")
             SleepCard(vm, accent, card = false)
         }
     }

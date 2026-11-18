@@ -130,7 +130,7 @@ private class AppEntry(
  * long-press it (or tap, when opened to add apps) to put it in quick access; again for its options.
  */
 @Composable
-fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit, picking: Boolean = false) {
+fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit, picking: Boolean = false, onFull: () -> Unit = {}) {
     var adding by remember { mutableStateOf<ShortcutKind?>(null) }
     var details by remember { mutableStateOf<AppEntry?>(null) }
     /** Index of the quick access item whose actions sheet is open. */
@@ -152,7 +152,12 @@ fun ChannelsScreen(vm: RemoteVM, accent: Color, openDevices: () -> Unit, picking
     /** Quick access options for an app already in it (open, move, remove). */
     fun options(e: AppEntry) { e.pinnedAs?.let { s -> quickMenu = vm.shortcuts.filter { it.pinned }.indexOfFirst { it.id == s.id }.takeIf { it >= 0 } } }
     /** Adding to quick access: the first tap adds the app, a second tap opens its options. */
-    fun pick(e: AppEntry) { if (e.pinned) options(e) else { e.pin(); vm.feel.fire(com.krishna.miniremote.Feel.SUCCESS) } }
+    fun pick(e: AppEntry) {
+        if (e.pinned) { options(e); return }
+        e.pin(); vm.feel.fire(com.krishna.miniremote.Feel.SUCCESS)
+        // Adding mode: once every place is filled, go back to the remote.
+        if (picking && vm.shortcuts.count { it.pinned } >= vm.maxPinned) scope.launch { kotlinx.coroutines.delay(450); onFull() }
+    }
     /** Tap: in adding mode, add; otherwise the app's details. */
     fun tap(e: AppEntry) { if (picking) pick(e) else details = e }
     // Long-press does the same as a tap in adding mode, from anywhere.

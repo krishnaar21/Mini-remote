@@ -1,5 +1,7 @@
 package com.krishna.miniremote.ui
 
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.zIndex
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -179,7 +181,7 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
     var sleep by remember { mutableStateOf(false) }
     if (sleep) SleepSheet(vm, accent) { sleep = false }
     // Two pages of eight: swipe across the circles for playback, sleep timer and the TV's keys.
-    val pages = if (vm.settings.appsIn == "more") 2 else 3
+    val pages = if (vm.settings.appsIn == "more") 2 else 4
     // The page dots live at the bottom of the screen (Shell), so the pager state comes from there.
     val own = androidx.compose.foundation.pager.rememberPagerState { pages }
     val pager = pager0 ?: own
@@ -194,7 +196,7 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
         val sc = 1f - 0.08f * off
         scaleX = sc; scaleY = sc
     }) {
-    if (page == 2) AppsPage(vm, accent, k, openApps) else
+    if (page >= 2) AppsPage(vm, accent, k, openApps, part = page - 2) else
     if (page == 1) KeyPage2(vm, accent, k) { sleep = true } else
     Column(verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -221,22 +223,68 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
     }
 }
 
-/** Home's third page: up to seven quick access apps as circles, and All apps (the apps screen). */
+/**
+ * Quick access cells, page by page: the first apps page holds seven apps and All apps, the
+ * second eight more (fifteen in all). Empty places are faint rings; the first one shows a +.
+ * [part] is the page (0 or 1).
+ */
+internal fun appCells(count: Int, part: Int): List<Int?> =
+    if (part == 0) (0 until 7).map { if (it < count) it else null } + listOf(-1)
+    else (7 until 15).map { if (it < count) it else null }
+
+/**
+ * A page of quick access circles. Long-press an app and drag it to another place on the page
+ * to reorder; tap to open it on the TV.
+ */
 @Composable
-internal fun AppsPage(vm: RemoteVM, accent: Color, k: Dp, openApps: (Boolean) -> Unit) {
-    val pinned = vm.shortcuts.filter { it.pinned }.take(7)
+internal fun AppsPage(vm: RemoteVM, accent: Color, k: Dp, openApps: (Boolean) -> Unit, part: Int = 0) {
+    val pinned = vm.shortcuts.filter { it.pinned }
     val ready = vm.active != null && vm.link == com.krishna.miniremote.Link.READY
-    val cells: List<(@Composable () -> Unit)?> = pinned.map { s -> @Composable { AppCircle(vm, s, k) { if (ready) vm.launch(s) else vm.explain(RemoteKey.HOME) } } } +
-        List(7 - pinned.size) { null } + listOf(@Composable { StripKey(accent, "All apps", k, ico = Ico.GRID) { openApps(false) } })
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        cells.chunked(4).forEachIndexed { r, row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                row.forEachIndexed { c, cell ->
-                    if (cell != null) cell()
-                    // Empty places: a faint ring; the first one says how to fill them.
-                    else Box(Modifier.size(k).clip(CircleShape).border(1.dp, Color.White.copy(alpha = 0.10f), CircleShape)
-                        .clickable(onClickLabel = "add apps") { openApps(true) }, contentAlignment = Alignment.Center) {
-                        if (r * 4 + c == pinned.size) LineIcon(Ico.PLUS, T.Ink.copy(alpha = 0.35f), 18.dp)
+    val cells = appCells(pinned.size, part)
+    val gap = 14.dp
+    val step = with(androidx.compose.ui.platform.LocalDensity.current) { (k + gap).toPx() }
+    var dragging by remember { mutableStateOf<Int?>(null) }
+    var dragBy by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    // Where the dragged app would land (a place on this page that holds an app).
+    val target = dragging?.let { i ->
+        val from = cells.indexOf(i)
+        val col = (from % 4 + kotlin.math.round(dragBy.x / step).toInt()).coerceIn(0, 3)
+        val row = (from / 4 + kotlin.math.round(dragBy.y / step).toInt()).coerceIn(0, 1)
+        cells.getOrNull(row * 4 + col)?.takeIf { it >= 0 } ?: i
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(gap), horizontalAlignment = Alignment.CenterHorizontally) {
+        cells.chunked(4).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                row.forEach { cell ->
+                    when {
+                        cell == -1 -> StripKey(accent, "All apps", k, ico = Ico.GRID) { openApps(false) }
+                        cell != null -> {
+                            val s = pinned[cell]
+                            val me = dragging == cell
+                            Box(
+                                Modifier.size(k)
+                                    .zIndex(if (me) 1f else 0f)
+                                    .graphicsLayer {
+                                        if (me) { translationX = dragBy.x; translationY = dragBy.y; scaleX = 1.12f; scaleY = 1.12f; shadowElevation = 16f }
+                                        else if (target == cell && dragging != null) { alpha = 0.45f }
+                                    }
+                                    .pointerInput(s.id) {
+                                        detectDragGesturesAfterLongPress(
+                                            onDragStart = { dragging = cell; dragBy = androidx.compose.ui.geometry.Offset.Zero; vm.feel.fire(com.krishna.miniremote.Feel.HEAVY) },
+                                            onDragEnd = {
+                                                val to = target
+                                                if (to != null && to != cell) { vm.movePinned(s, to - cell); vm.feel.fire(com.krishna.miniremote.Feel.TICK) }
+                                                dragging = null; dragBy = androidx.compose.ui.geometry.Offset.Zero
+                                            },
+                                            onDragCancel = { dragging = null; dragBy = androidx.compose.ui.geometry.Offset.Zero },
+                                        ) { c, by -> c.consume(); dragBy += by }
+                                    },
+                            ) { AppCircle(vm, s, k) { if (ready) vm.launch(s) else vm.explain(RemoteKey.HOME) } }
+                        }
+                        else -> Box(Modifier.size(k).clip(CircleShape).border(1.dp, Color.White.copy(alpha = 0.10f), CircleShape)
+                            .clickable(onClickLabel = "add apps") { openApps(true) }, contentAlignment = Alignment.Center) {
+                            LineIcon(Ico.PLUS, T.Ink.copy(alpha = 0.3f), 16.dp)
+                        }
                     }
                 }
             }
