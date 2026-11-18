@@ -143,17 +143,12 @@ struct CoachTour: View {
                 let corner = s.round ? hole.width / 2 : 24
                 let below = hole.maxY + 220 < g.size.height
                 ZStack(alignment: .topLeading) {
-                    // The dim, with the spotlight cut out.
-                    Rectangle().fill(.black.opacity(0.72))
-                        .mask {
-                            ZStack {
-                                Rectangle()
-                                RoundedRectangle(cornerRadius: corner, style: .continuous).frame(width: hole.width, height: hole.height)
-                                    .position(x: hole.midX, y: hole.midY).blendMode(.destinationOut)
-                            }
-                            .compositingGroup()
-                        }
-                        .ignoresSafeArea()
+                    // The dim, with the spotlight cut out (even-odd fill; reaching past the safe area).
+                    Path { p in
+                        p.addRect(CGRect(x: -200, y: -300, width: g.size.width + 400, height: g.size.height + 600))
+                        p.addRoundedRect(in: hole, cornerSize: CGSize(width: corner, height: corner), style: .continuous)
+                    }
+                    .fill(Color.black.opacity(0.72), style: FillStyle(eoFill: true))
                     RoundedRectangle(cornerRadius: corner, style: .continuous).stroke(accent, lineWidth: 2)
                         .frame(width: hole.width, height: hole.height).position(x: hole.midX, y: hole.midY)
                     card(s.title, s.text, number: min(i, steps.count - 1) + 1, of: steps.count, last: i >= steps.count - 1)
