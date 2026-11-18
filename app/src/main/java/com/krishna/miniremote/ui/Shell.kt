@@ -113,7 +113,8 @@ fun keyIcon(k: RemoteKey, muted: Boolean, playing: Boolean = false): Ico? = when
 @Composable
 fun AppShell(vm: RemoteVM) {
     val accent = accentColor(vm.settings.accentHex)
-    val pager = rememberPagerState { Tab.entries.size }
+    /** The apps screen, slid up over the remote (from All apps on Home's third page). */
+    var apps by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var sheet by remember { mutableStateOf<Page?>(null) }
     var keys by remember { mutableStateOf(false) }
@@ -151,16 +152,16 @@ fun AppShell(vm: RemoteVM) {
     var numpad by remember { mutableStateOf(false) }
     val deck = if (numpad) Deck.NUMPAD else if (style == "trackpad") Deck.TRACKPAD else Deck.DIAL
     var tray by remember { mutableStateOf(false) }
-    val onRemote = pager.currentPage == Tab.HOME.ordinal
+    val onRemote = !apps
     // The tray tucks itself away a few seconds after the last command, and when you leave the page.
     LaunchedEffect(tray, vm.txCount) { if (tray) { kotlinx.coroutines.delay(7000); tray = false } }
     // Closing the tray puts the dial (or trackpad) back.
     LaunchedEffect(tray) { if (!tray) numpad = false }
-    val layout = vm.settings.layout
+    val layout = "strip"
     LaunchedEffect(layout) { numpad = false; tray = false }
     // The number pad belongs to live TV: put the dial back when an app takes over.
     LaunchedEffect(vm.nowOn?.live) { if (vm.nowOn?.live != true) numpad = false }
-    fun go(t: Tab) { scope.launch { pager.animateScrollToPage(t.ordinal) } }
+    fun go(t: Tab) { apps = t == Tab.CHANNELS }
     // Once a TV finishes connecting, the TV sheet has done its job: close it.
     var connecting by remember { mutableStateOf(false) }
     LaunchedEffect(vm.link) {
@@ -178,17 +179,30 @@ fun AppShell(vm: RemoteVM) {
             val k = (maxWidth.value - 32f).coerceAtMost(420f) / 920f
             CompositionLocalProvider(LocalK provides k) {
                 Box(Modifier.fillMaxSize().systemBarsPadding()) {
-                    HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { p ->
-                        when (Tab.entries[p]) {
-                            Tab.HOME -> HomeScreen(
+                    run {
+                        run {
+                            HomeScreen(
                                 vm, accent, deck,
                                 openDevices = { sheet = Page.Devices },
                                 openKeys = { keys = true },
                                 tray = tray, numpad = numpad, onNumpad = { numpad = !numpad },
                                 onTray = { open -> if (open != tray) vm.feel.fire(com.krishna.miniremote.Feel.TICK); tray = open },
                                 openMore = { more = true },
+                                openApps = { apps = true },
                             )
-                            Tab.CHANNELS -> ChannelsScreen(vm, accent, openDevices = { sheet = Page.Devices })
+                        }
+                    }
+                    androidx.compose.animation.AnimatedVisibility(
+                        apps,
+                        enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.tween(320)) { it },
+                        exit = androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(260)) { it },
+                    ) {
+                        Column(Modifier.fillMaxSize().background(T.Bg)) {
+                            // A close bar on top: the apps screen is a sheet over the remote.
+                            Box(Modifier.fillMaxWidth().height(44.dp).clickable(onClickLabel = "back to the remote") { apps = false }, contentAlignment = Alignment.Center) {
+                                Box(Modifier.size(width = 36.dp, height = 4.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.25f)))
+                            }
+                            Box(Modifier.weight(1f)) { ChannelsScreen(vm, accent, openDevices = { sheet = Page.Devices }) }
                         }
                     }
                     // The dial shows messages in its well; everywhere else they float near the bottom.
@@ -205,16 +219,12 @@ fun AppShell(vm: RemoteVM) {
                             }
                         else -> {}
                     }
-                    PageDots(pager.currentPage, accent, Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp), onSwipe = { by ->
-                        val to = (pager.currentPage + by).coerceIn(0, Tab.entries.lastIndex)
-                        if (to != pager.currentPage) { vm.feel.fire(com.krishna.miniremote.Feel.TICK); go(Tab.entries[to]) }
-                    }) { go(it) }
                 }
             }
         }
         sheet?.let { start -> RemoteSheet(vm, accent, start) { sheet = null } }
         if (keys) KeyboardSheet(vm, accent, openSearch = !keysFromTv && !keysVoice, startVoice = keysVoice) { keys = false; keysFromTv = false; keysVoice = false }
-        if (more) MoreSheet(vm, accent) { more = false }
+        if (more) MoreSheet(vm, accent, openApps = { apps = true }) { more = false }
         if (sheet == null) vm.pairPrompt?.let { PairCodeDialog(vm, it, accent) }
     }
 }

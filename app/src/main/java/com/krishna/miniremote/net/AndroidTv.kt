@@ -500,6 +500,14 @@ class AndroidTvAdapter(
     }
 
     override suspend fun backspace() { ourEditAt = System.currentTimeMillis(); key(67) }
+    /** Enter: the TV's keyboard runs the search. */
+    override suspend fun submit() { ourEditAt = System.currentTimeMillis(); key(66) }
+    /** To the end of the box (Move end), then delete everything: what we typed and what was there. */
+    override suspend fun clearBox(known: Int) {
+        ourEditAt = System.currentTimeMillis()
+        key(123)
+        repeat(known + 40) { key(67) }
+    }
 
     override fun close() {
         closing = true

@@ -1,5 +1,6 @@
 package com.krishna.miniremote.ui
 
+import androidx.compose.ui.semantics.contentDescription
 import android.graphics.BitmapFactory
 import android.util.LruCache
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -482,6 +483,35 @@ private fun QuickTile(s: Shortcut, accent: Color, icon: String?, logoOn: Boolean
         }
         Text(s.name, color = T.Ink, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 6.dp))
+    }
+}
+
+/** A quick access app as one of Home's circles: its logo on its colour; tap to open it on the TV. */
+@Composable
+internal fun AppCircle(vm: RemoteVM, s: Shortcut, size: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
+    val cat = if (s.kind == ShortcutKind.APP && s.brand == null) Catalog.byKey(s.value) else null
+    val bg = when {
+        s.kind == ShortcutKind.CHANNEL -> ChannelBg
+        cat != null -> Color(cat.bg)
+        else -> tint(s.name)
+    }
+    val ink = cat?.let { Color(it.ink) } ?: Color.White
+    val icon = s.icon ?: vm.tvApps.firstOrNull { it.name.equals(s.name, true) }?.icon
+    Box(
+        Modifier.size(size).clip(CircleShape).background(bg)
+            .clickable(onClickLabel = "open ${s.name}", role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = s.name },
+        contentAlignment = Alignment.Center,
+    ) {
+        val short: @Composable () -> Unit = {
+            Text(if (s.kind == ShortcutKind.CHANNEL) s.value else s.name.take(2).uppercase(), color = ink,
+                fontSize = 17.sp, fontWeight = FontWeight.Bold, fontFamily = if (s.kind == ShortcutKind.CHANNEL) Mono else Inter, maxLines = 1)
+        }
+        val slug = if (s.kind == ShortcutKind.CHANNEL) null else cat?.logo ?: Logos.slugFor(s.name)
+        val pkg = if (s.kind == ShortcutKind.CHANNEL) null else ((cat ?: Catalog.apps.firstOrNull { it.name.equals(s.name, true) })?.let { Catalog.iconPkg(it) }
+            ?: if (s.brand == Brand.ANDROID_TV) s.value.takeIf { "://" !in it } else null)
+        val logo: @Composable () -> Unit = { AppLogo(slug, ink, size * 0.46f, vm.settings.logos, cat?.site, pkg, short) }
+        if (icon != null) TvIcon(icon, Modifier.fillMaxSize().padding(10.dp), logo) else logo()
     }
 }
 

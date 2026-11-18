@@ -97,6 +97,8 @@ data class Settings(
     val notifRemote: Boolean = true,
     /** Home layout: "strip" (Black) or "cards" (see ui.HomeLayout). */
     val layout: String = "strip",
+    /** Where quick access apps live: "home" (a third page of circles) or "more" (top of the More sheet). */
+    val appsIn: String = "home",
 )
 
 enum class ShortcutKind { APP, CHANNEL }

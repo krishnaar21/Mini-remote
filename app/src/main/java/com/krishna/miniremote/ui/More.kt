@@ -44,12 +44,12 @@ import com.krishna.miniremote.RemoteKey
 import com.krishna.miniremote.RemoteVM
 
 /**
- * More: the keys that don't fit on Home (menu, info, guide, subtitles, audio, rewind / fast
- * forward, channel list, the four colour keys), the TV's inputs by name, and a sleep timer.
+ * More: the keys not on Home's pages (subtitles, audio, channel list, menu, the colour keys),
+ * the TV's inputs by name, quick access when it's set to live here, and arrows to move around.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoreSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
+fun MoreSheet(vm: RemoteVM, accent: Color, openApps: () -> Unit = {}, onClose: () -> Unit) {
     val st = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     LaunchedEffect(vm.activeId, vm.link) { vm.loadInputs() }
     ModalBottomSheet(
@@ -67,19 +67,20 @@ fun MoreSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
             }
             what?.let { Text(it, color = Muted, fontSize = 12.5.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) }
 
-            // 1 · Controls: every key in one card (5 across), colour keys under them.
-            // Playback as one bar (no circles), then the other keys as labelled tiles.
+            // Quick access, when it lives here (Settings › Remote › Quick access).
+            if (vm.settings.appsIn == "more") {
+                SectionTitle("Quick access")
+                Box(Modifier.fillMaxWidth().padding(top = 12.dp), contentAlignment = Alignment.Center) {
+                    AppsPage(vm, accent, 64.dp) { onClose(); openApps() }
+                }
+            }
+
+            // Keys not on Home's pages: subtitles, audio, channel list, menu; colour keys under them.
             Column(Modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                MediaBar(vm)
-                listOf(
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     listOf(Triple(RemoteKey.SUBTITLES, Ico.CC, "Subtitles"), Triple(RemoteKey.AUDIO, Ico.AUDIO, "Audio"),
-                        Triple(RemoteKey.INFO, Ico.INFO, "Info"), Triple(RemoteKey.GUIDE, Ico.GUIDE, "Guide")),
-                    listOf(Triple(RemoteKey.CH_LIST, Ico.LIST, "Channels"), Triple(RemoteKey.INPUT, Ico.INPUT, "Input"),
-                        Triple(RemoteKey.MENU, Ico.MORE, "Menu"), Triple(RemoteKey.SETTINGS, Ico.GEAR, "Settings")),
-                ).forEach { row ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        row.forEach { (k, ico, label) -> KeyTile(vm, k, ico, label, Modifier.weight(1f)) }
-                    }
+                        Triple(RemoteKey.CH_LIST, Ico.LIST, "Channels"), Triple(RemoteKey.MENU, Ico.MORE, "Menu"),
+                    ).forEach { (k, ico, label) -> KeyTile(vm, k, ico, label, Modifier.weight(1f)) }
                 }
                 val colours = listOf(RemoteKey.RED to Color(0xFFE5484D), RemoteKey.GREEN to Color(0xFF30A46C), RemoteKey.YELLOW to Color(0xFFF5D90A), RemoteKey.BLUE to Color(0xFF3E63DD))
                 if (colours.any { vm.adapterHas(it.first) }) {
@@ -126,9 +127,6 @@ fun MoreSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
                 }
             }
 
-            // 3 · Sleep timer: one row.
-            SectionTitle("Sleep timer")
-            SleepCard(vm, accent)
         }
         // Always at hand, under the scrolling keys: move around and select without going back Home.
         Box(Modifier.fillMaxWidth().background(SheetBg).padding(horizontal = 24.dp).padding(top = 8.dp, bottom = 16.dp)) { NavPad(vm) }

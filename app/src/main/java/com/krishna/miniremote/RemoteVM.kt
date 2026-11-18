@@ -228,6 +228,8 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                     when {
                         op.startsWith("\u0001") -> a.setText(op.substring(1))
                         op == "\b" -> a.backspace()
+                        op == "\u0002" -> a.submit()
+                        op.startsWith("\u0003") -> a.clearBox(op.substring(1).toIntOrNull() ?: 0)
                         else -> a.typeText(op)
                     }
                     txCount++
@@ -236,6 +238,19 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
+    }
+
+    /** Runs the search: Roku searches for [text]; other TVs press Enter in their box (after the typing). */
+    fun submitSearch(text: String) {
+        if (active == null) { say("Choose a TV first"); return }
+        if (active?.brand == Brand.ROKU) { search(text); return }
+        textOps.trySend("\u0002")
+    }
+
+    /** Clears the TV's box: all of it, not only what was typed from here. */
+    fun clearTvBox(typed: Int) {
+        if (active == null) return
+        textOps.trySend("\u0003$typed")
     }
 
     /** Mirrors an edit of the search box on the TV: deletes what changed, types what's new. */
@@ -982,7 +997,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 .put("sound", st.sound).put("soundLevel", st.soundLevel.toDouble())
                 .put("accentHex", st.accentHex).put("scrubStepDp", st.scrubStepDp.toDouble())
                 .put("keepAwake", st.keepAwake).put("autoUpdate", st.autoUpdate)
-                .put("controlStyle", st.controlStyle).put("layout", st.layout)
+                .put("controlStyle", st.controlStyle).put("layout", st.layout).put("appsIn", st.appsIn)
                 .put("volumeKeys", st.volumeKeys).put("logos", st.logos)
                 .put("autoKeyboard", st.autoKeyboard).put("notifRemote", st.notifRemote))
             .put("shortcuts", org.json.JSONArray(Shortcut.listToJson(shortcuts)))
@@ -1008,6 +1023,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
             autoUpdate = j.optBoolean("autoUpdate", d.autoUpdate),
             controlStyle = j.optString("controlStyle", d.controlStyle).takeIf { it == "dial" || it == "trackpad" } ?: d.controlStyle,
             layout = j.optString("layout", d.layout).takeIf { it == "strip" || it == "cards" } ?: d.layout,
+            appsIn = j.optString("appsIn", d.appsIn).takeIf { it == "home" || it == "more" } ?: d.appsIn,
             volumeKeys = j.optBoolean("volumeKeys", d.volumeKeys),
             logos = j.optBoolean("logos", d.logos),
             autoKeyboard = j.optBoolean("autoKeyboard", d.autoKeyboard),

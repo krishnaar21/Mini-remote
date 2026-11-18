@@ -84,6 +84,10 @@ interface RemoteAdapter {
     suspend fun send(key: RemoteKey)
     suspend fun typeText(text: String) { throw Unsupported("Typing isn't supported on this TV yet") }
     suspend fun backspace() { throw Unsupported("Typing isn't supported on this TV yet") }
+    /** Runs the search typed in the TV's box (Enter); by default the OK key. */
+    suspend fun submit() { send(RemoteKey.OK) }
+    /** Empties the TV's text box, including what was there before we typed. */
+    suspend fun clearBox(known: Int) { repeat(known) { backspace() } }
 
     /** Apps installed on the TV. */
     suspend fun listApps(): List<TvApp> { throw Unsupported("This TV can't list its apps") }

@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -172,16 +173,18 @@ fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ic
  * numbers and input, and in apps volume down / up, mute and input.
  */
 @Composable
-fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, openKeys: () -> Unit, openMore: () -> Unit = {}) {
+fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, openKeys: () -> Unit, openMore: () -> Unit = {}, openApps: () -> Unit = {}) {
     val tv = vm.nowOn?.live == true
     val k = 68.dp
     var sleep by remember { mutableStateOf(false) }
     if (sleep) SleepSheet(vm, accent) { sleep = false }
     // Two pages of eight: swipe across the circles for playback, sleep timer and the TV's keys.
-    val pager = androidx.compose.foundation.pager.rememberPagerState { 2 }
+    val pages = if (vm.settings.appsIn == "more") 2 else 3
+    val pager = androidx.compose.foundation.pager.rememberPagerState { pages }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
     androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.width(k * 4 + 14.dp * 3), beyondViewportPageCount = 1, pageSpacing = 24.dp) { page ->
+    if (page == 2) AppsPage(vm, accent, k, openApps) else
     if (page == 1) KeyPage2(vm, accent, k) { sleep = true } else
     Column(verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -200,20 +203,43 @@ fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, 
                 StripKey(accent, "Volume up", k, ico = Ico.VOL_PLUS, enabled = vm.can(RemoteKey.VOL_UP), onDisabled = { vm.explain(RemoteKey.VOL_UP) }) { vm.press(RemoteKey.VOL_UP, quiet = true) }
                 VoiceKey(vm, k)
             }
-            StripKey(accent, "More: keys, inputs, sleep timer", k, ico = Ico.MORE, onClick = openMore)
+            StripKey(accent, "More: keys, inputs and apps", k, ico = Ico.MORE, onClick = openMore)
         }
     }
     }
     // Which page: two dots (tap one to jump).
     Row(Modifier.padding(top = 10.dp).height(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        repeat(2) { i ->
+        repeat(pages) { i ->
             val sel = pager.currentPage == i
             Box(
                 Modifier.size(if (sel) 7.dp else 6.dp).clip(CircleShape).background(if (sel) T.Ink.copy(alpha = 0.85f) else T.Ink.copy(alpha = 0.25f))
-                    .clickable(onClickLabel = if (i == 0) "main keys" else "more keys") { scope.launch { pager.animateScrollToPage(i) } },
+                    .clickable(onClickLabel = listOf("main keys", "more keys", "apps")[i]) { scope.launch { pager.animateScrollToPage(i) } },
             )
         }
     }
+    }
+}
+
+/** Home's third page: up to seven quick access apps as circles, and All apps (the apps screen). */
+@Composable
+internal fun AppsPage(vm: RemoteVM, accent: Color, k: Dp, openApps: () -> Unit) {
+    val pinned = vm.shortcuts.filter { it.pinned }.take(7)
+    val ready = vm.active != null && vm.link == com.krishna.miniremote.Link.READY
+    val cells: List<(@Composable () -> Unit)?> = pinned.map { s -> @Composable { AppCircle(vm, s, k) { if (ready) vm.launch(s) else vm.explain(RemoteKey.HOME) } } } +
+        List(7 - pinned.size) { null } + listOf(@Composable { StripKey(accent, "All apps", k, ico = Ico.GRID, onClick = openApps) })
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        cells.chunked(4).forEachIndexed { r, row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                row.forEachIndexed { c, cell ->
+                    if (cell != null) cell()
+                    // Empty places: a faint ring; the first one says how to fill them.
+                    else Box(Modifier.size(k).clip(CircleShape).border(1.dp, Color.White.copy(alpha = 0.10f), CircleShape)
+                        .clickable(onClickLabel = "add apps", onClick = openApps), contentAlignment = Alignment.Center) {
+                        if (r * 4 + c == pinned.size) LineIcon(Ico.PLUS, T.Ink.copy(alpha = 0.35f), 18.dp)
+                    }
+                }
+            }
+        }
     }
 }
 

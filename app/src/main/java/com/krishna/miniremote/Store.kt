@@ -49,6 +49,7 @@ class Store(ctx: Context) {
             autoKeyboard = p.getBoolean("autoKeyboard", d.autoKeyboard),
             notifRemote = p.getBoolean("notifRemote", d.notifRemote),
             layout = p.getString("layout", d.layout)?.takeIf { it in setOf("cards", "strip") } ?: d.layout,
+            appsIn = p.getString("appsIn", d.appsIn)?.takeIf { it == "home" || it == "more" } ?: d.appsIn,
         )
     }
 
@@ -59,7 +60,7 @@ class Store(ctx: Context) {
         .putBoolean("gyro", s.gyro).putBoolean("awake", s.keepAwake)
         .putBoolean("autoupdate", s.autoUpdate)
         .putString("control", s.controlStyle).putString("profileName", s.profileName)
-        .putBoolean("volumeKeys", s.volumeKeys).putBoolean("logos", s.logos).putString("layout", s.layout)
+        .putBoolean("volumeKeys", s.volumeKeys).putBoolean("logos", s.logos).putString("layout", s.layout).putString("appsIn", s.appsIn)
         .putBoolean("autoKeyboard", s.autoKeyboard).putBoolean("notifRemote", s.notifRemote).apply()
 
     fun loadShortcuts(): List<Shortcut> = Shortcut.listFromJson(p.getString("shortcuts", null))

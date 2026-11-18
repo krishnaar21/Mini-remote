@@ -99,6 +99,7 @@ fun HomeScreen(
     onNumpad: () -> Unit,
     onTray: (open: Boolean) -> Unit,
     openMore: () -> Unit = {},
+    openApps: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val pendingOk = remember { arrayOfNulls<Job>(1) }
@@ -150,7 +151,7 @@ fun HomeScreen(
         )
     }
 
-    val layout = HomeLayout.of(vm.settings.layout)
+    val layout = HomeLayout.STRIP // Black is the only layout now
     val voice = { vm.feel.fire(Feel.HEAVY); vm.voiceStart(); Unit }
     val voiceEnd = { vm.voiceStop() }
     val offlineTap = { vm.feel.fire(Feel.PRESS); openDevices() }
@@ -265,7 +266,7 @@ fun HomeScreen(
     val keysBlock: @Composable () -> Unit = {
         when (layout) {
             HomeLayout.CARDS -> FourKeys(vm, accent, openKeys)
-            HomeLayout.STRIP -> KeyRows(vm, accent, numpad, onNumpad, openKeys, openMore)
+            HomeLayout.STRIP -> KeyRows(vm, accent, numpad, onNumpad, openKeys, openMore, openApps)
         }
     }
 

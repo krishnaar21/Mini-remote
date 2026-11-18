@@ -685,8 +685,8 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
     // Profile: your name, and everything you've set up, saved to a file (and loaded back).
     ProfileCard(vm, accent)
 
-    Fold("Remote", "${if (s.layout == "cards") "Cards" else "Black"} · ${if (s.controlStyle == "trackpad") "Trackpad" else "Dial"}", startOpen = true) {
-        LayoutPicker(s.layout, accent) { vm.update(s.copy(layout = it)) }
+    Fold("Remote", "${if (s.controlStyle == "trackpad") "Trackpad" else "Dial"} · Apps ${if (s.appsIn == "more") "in More" else "on Home"}", startOpen = true) {
+        SegRow("Quick access", listOf("home" to "Home page", "more" to "More sheet"), s.appsIn) { vm.update(s.copy(appsIn = it)) }
         SegRow("Control", listOf("dial" to "Dial", "trackpad" to "Trackpad"), s.controlStyle) { vm.update(s.copy(controlStyle = it)) }
         ToggleRow("Volume keys", "Phone keys change TV volume", s.volumeKeys) { vm.update(s.copy(volumeKeys = it)) }
         ToggleRow("Auto keyboard", "Opens when the TV asks for text", s.autoKeyboard) { vm.update(s.copy(autoKeyboard = it)) }
@@ -908,7 +908,7 @@ internal fun ProfileCard(vm: RemoteVM, accent: Color) {
     val stats = listOf(
         "${vm.devices.size} TV${if (vm.devices.size == 1) "" else "s"}",
         "$apps in Quick access",
-        if (s.layout == "cards") "Cards" else "Black",
+        if (s.controlStyle == "trackpad") "Trackpad" else "Dial",
     ).joinToString("  ·  ")
     // A card with a soft wash of your accent colour: you, what you've set up, and the backup.
     Column(
@@ -1024,7 +1024,12 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, openSearch: Boolean = true, start
     /** Every change goes to the TV as you type: new letters typed, removed ones deleted. */
     fun change(new: String) { vm.liveType(text, new); text = new }
     // Spoken words are added to what's there (with a space) and typed on the TV.
-    voice.onFinal = { said -> change(if (text.isBlank()) said else text.trimEnd() + " " + said) }
+    /** Runs the search on the TV (Enter in its box; Roku searches) and closes. */
+    fun submit() { if (text.isNotBlank()) { vm.submitSearch(text); onClose() } }
+    /** Clears the whole box, on the phone and on the TV (not just what was typed from here). */
+    fun clearAll() { if (voice.on) voice.cancel(); val n = text.length; text = ""; vm.clearTvBox(n) }
+    // Spoken words go into the box, are typed on the TV, and searched: no extra tap.
+    voice.onFinal = { said -> change(said.trim()); voice.cancel(); submit() }
     val askMic = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
     ) { ok -> if (ok) voice.start() else vm.say("Microphone permission is off") }
@@ -1055,25 +1060,27 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, openSearch: Boolean = true, start
             ) {
                 Header("Search", onClose)
                 Body {
+                    // 1 · The box and the mic.
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Box(Modifier.weight(1f).height(52.dp)) {
+                        Box(Modifier.weight(1f).height(54.dp)) {
                             if (voice.on) {
-                                // Voice mode: the box and the mic make way for one calm line.
+                                // Voice mode: the box makes way for one calm line (and what you've said so far).
                                 Row(
                                     Modifier.fillMaxSize().softFace(HOLLOW, sheen = false, corner = 14.dp, dpUnits = true).padding(horizontal = 16.dp)
                                         .semantics { liveRegion = LiveRegionMode.Polite },
                                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 ) {
                                     Box(Modifier.size(8.dp).background(if (voice.listening) accent else Muted, CircleShape))
-                                    Text("Voice mode on…", color = T.Ink, fontSize = 16.sp)
+                                    Text(voice.partial.ifEmpty { "Voice mode on…" }, color = T.Ink, fontSize = 16.sp, maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                 }
                             } else {
                                 BasicTextField(
                                     text, { change(it) }, singleLine = true,
                                     textStyle = TextStyle(color = T.Ink, fontSize = 16.sp, fontFamily = Inter),
                                     cursorBrush = SolidColor(T.Ink),
-                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                                    keyboardActions = KeyboardActions(onDone = { onClose() }),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                    keyboardActions = KeyboardActions(onSearch = { submit() }),
                                     modifier = Modifier.fillMaxSize().focusRequester(focus).semantics { contentDescription = "Search on TV" },
                                     decorationBox = { inner ->
                                         Row(
@@ -1090,52 +1097,45 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, openSearch: Boolean = true, start
                                 )
                             }
                         }
-                        // The mic: its own square key, outside the box. Hidden in voice mode.
-                        if (!voice.on) Box(
-                            Modifier.size(52.dp).clip(RoundedCornerShape(14.dp))
-                                .background(M.High)
-                                .clickable(onClickLabel = "voice mode", role = Role.Button) { mic() }
+                        Box(
+                            Modifier.size(54.dp).clip(RoundedCornerShape(14.dp))
+                                .background(if (voice.on) accent.copy(alpha = 0.25f) else M.High)
+                                .clickable(onClickLabel = if (voice.on) "stop voice" else "voice mode", role = Role.Button) { mic() }
                                 .semantics { contentDescription = "Voice" },
                             contentAlignment = Alignment.Center,
-                        ) { LineIcon(Ico.MIC, T.Ink, 22.dp) }
+                        ) { LineIcon(if (voice.on) Ico.CLOSE else Ico.MIC, if (voice.on) accent else T.Ink, 22.dp) }
                     }
-                    // What you're saying, as you say it.
+                    // 2 · One line on what happens.
                     Text(
                         when {
-                            voice.on && voice.partial.isNotEmpty() -> voice.partial
-                            voice.on && text.isNotEmpty() -> text
-                            voice.on -> "Speak now"
+                            voice.on -> "Speak: it's searched when you stop."
                             voice.error != null -> voice.error!!
-                            vm.searchesApps -> "Typed into the box selected on the TV. Use the arrows to pick one, or search an app below."
+                            vm.searchesApps -> "Typed into the box selected on the TV."
                             else -> "Typed on the TV as you go."
                         },
-                        color = if (voice.on && (voice.partial.isNotEmpty() || text.isNotEmpty())) T.Ink else Muted,
-                        fontSize = if (voice.on) 16.sp else 12.5.sp,
-                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp, start = 4.dp).semantics { liveRegion = LiveRegionMode.Polite },
+                        color = Muted, fontSize = 12.5.sp,
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp, start = 4.dp).semantics { liveRegion = LiveRegionMode.Polite },
                     )
-                    if (!voice.on && vm.searchesApps) {
-                        Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("Search in", color = Muted, fontSize = 12.5.sp)
+                    // 3 · Clear (all of the TV's box) and Search.
+                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.weight(1f)) { Btn("Clear", kind = 1) { clearAll() } }
+                        Box(Modifier.weight(1.4f)) { Btn("Search", enabled = text.isNotBlank() || voice.on) { if (voice.on) voice.cancel(); submit() } }
+                    }
+                    // 4 · Search an app straight away, and the arrows to pick a box on the TV.
+                    if (vm.searchesApps) {
+                        Row(Modifier.fillMaxWidth().padding(top = 22.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Search in", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(end = 4.dp))
                             listOf("youtube" to "YouTube", "play" to "Play Store").forEach { (w, label) ->
                                 val ok = text.isNotBlank()
                                 Box(
-                                    Modifier.height(34.dp).clip(CircleShape).background(M.High)
+                                    Modifier.weight(1f).height(38.dp).clip(CircleShape).background(M.High)
                                         .clickable(role = Role.Button, enabled = ok) { vm.searchIn(w, text); onClose() }
                                         .padding(horizontal = 14.dp),
                                     contentAlignment = Alignment.Center,
                                 ) { Text(label, color = if (ok) T.Ink else Muted, fontSize = 13.sp, fontWeight = FontWeight.Medium) }
                             }
                         }
-                        Box(Modifier.padding(top = 12.dp)) { NavPad(vm) }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (voice.on) {
-                            Box(Modifier.weight(1f)) { Btn("Clear", kind = 1) { change("") } }
-                            Box(Modifier.weight(1.4f)) { Btn("Cancel") { voice.cancel() } }
-                        } else {
-                            Box(Modifier.weight(1f)) { Btn("Delete", kind = 1) { if (text.isNotEmpty()) change(text.dropLast(1)) else vm.backspace() } }
-                            Box(Modifier.weight(1.4f)) { Btn("Done") { onClose() } }
-                        }
+                        Box(Modifier.padding(top = 18.dp)) { NavPad(vm) }
                     }
                 }
             }
