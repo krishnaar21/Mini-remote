@@ -56,6 +56,6 @@ jobs:
         run: |
           cd ios/shots
           git init -q -b ios-screenshots
-          git -c user.name=ci -c user.email=ci@users.noreply.github.com add -A
-          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "iOS screenshots for ${GITHUB_SHA::7}"
+          git -c user.name="github-actions[bot]" -c user.email=41898282+github-actions[bot]@users.noreply.github.com add -A
+          git -c user.name="github-actions[bot]" -c user.email=41898282+github-actions[bot]@users.noreply.github.com commit -qm "iOS screenshots for ${GITHUB_SHA::7}"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ios-screenshots
