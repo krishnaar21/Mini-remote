@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import CoreImage
 
 /**
  * App logos for Quick access and the app tiles: the app's own website icon (apple-touch-icon,
@@ -105,11 +104,10 @@ extension Logos {
     /** How an icon sits on a tile: its edges stretched out (plain edges), or as a smaller plate (busy or see-through edges). */
     enum Fit { case extend(UIImage), plate(Color?) }
 
-    private static let ctx = CIContext()
 
     /**
      * Prepares an icon for a [side]-point tile: the icon at three quarters of the tile, with its
-     * own edge pixels stretched to the tile's edge (Core Image's clamp), so its background
+     * own edge pixels stretched to the tile's edge, so its background
      * carries on. Icons with see-through corners or artwork reaching the edge are left as plates.
      */
     static func fit(_ img: UIImage, side: CGFloat, scale: CGFloat) -> Fit {
@@ -119,24 +117,43 @@ extension Logos {
         // to just inside the rounding so the icon's own background can carry on to the circle's
         // edge, as the Android tiles do, instead of a square sitting on a plate.
         if !stats.opaque && stats.sides {
-            let inset = CGFloat(min(cg.width, cg.height)) * 0.1
+            let inset = CGFloat(min(cg.width, cg.height)) * 0.14
             if let inner = cg.cropping(to: CGRect(x: inset, y: inset, width: CGFloat(cg.width) - 2 * inset, height: CGFloat(cg.height) - 2 * inset)),
                let s2 = edgeStats(inner), s2.opaque { cg = inner; stats = s2; trimmed = true }
         }
         // See-through corners: the icon on the tile's colour. Artwork to the edge: a smaller plate on its edge colour.
         guard stats.opaque else { return .plate(nil) }
         guard !stats.busy else { return .plate(stats.edge) }
-        let inset = CGFloat(min(cg.width, cg.height)) * 0.035
-        let src = CIImage(cgImage: cg).cropped(to: CGRect(x: inset, y: inset, width: CGFloat(cg.width) - 2 * inset, height: CGFloat(cg.height) - 2 * inset))
-        let px = side * scale
+        // Trim the soft, anti-aliased outer pixels, then draw the icon centred with its edge rows
+        // and columns stretched out to the tile's edge (and the corner pixels filling the corners).
+        let t = Int((CGFloat(min(cg.width, cg.height)) * 0.035).rounded())
+        guard let src = cg.cropping(to: CGRect(x: t, y: t, width: cg.width - 2 * t, height: cg.height - 2 * t)) else { return .plate(nil) }
+        let sw = src.width, sh = src.height
+        let px = Int((side * scale).rounded())
+        guard px > 0, sw > 2, sh > 2,
+              let c = CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0,
+                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return .plate(nil) }
         // A trimmed icon has lost its outer margin: draw it a little smaller so the mark keeps its size.
-        let k = px * (trimmed ? 0.62 : 0.74) / src.extent.width
-        let moved = src.transformed(by: CGAffineTransform(translationX: -src.extent.minX, y: -src.extent.minY))
-            .clampedToExtent()
-            .transformed(by: CGAffineTransform(scaleX: k, y: k))
-            .transformed(by: CGAffineTransform(translationX: (px - src.extent.width * k) / 2, y: (px - src.extent.height * k) / 2))
-            .cropped(to: CGRect(x: 0, y: 0, width: px, height: px))
-        guard let out = ctx.createCGImage(moved, from: CGRect(x: 0, y: 0, width: px, height: px)) else { return .plate(nil) }
+        let k = CGFloat(px) * (trimmed ? 0.58 : 0.74) / CGFloat(max(sw, sh))
+        let iw = CGFloat(sw) * k, ih = CGFloat(sh) * k
+        let x0 = (CGFloat(px) - iw) / 2, y0 = (CGFloat(px) - ih) / 2
+        let x1 = x0 + iw, y1 = y0 + ih, P = CGFloat(px)
+        func piece(_ x: Int, _ y: Int, _ w: Int, _ h: Int, into r: CGRect) {
+            guard r.width > 0, r.height > 0, let part = src.cropping(to: CGRect(x: x, y: y, width: w, height: h)) else { return }
+            c.draw(part, in: r)
+        }
+        c.interpolationQuality = .high
+        // Image rows run top-down; Core Graphics' y runs bottom-up.
+        piece(0, 0, sw, 1, into: CGRect(x: x0, y: y1, width: iw, height: P - y1))            // top edge, upwards
+        piece(0, sh - 1, sw, 1, into: CGRect(x: x0, y: 0, width: iw, height: y0))           // bottom edge, downwards
+        piece(0, 0, 1, sh, into: CGRect(x: 0, y: y0, width: x0, height: ih))                // left edge
+        piece(sw - 1, 0, 1, sh, into: CGRect(x: x1, y: y0, width: P - x1, height: ih))      // right edge
+        piece(0, 0, 1, 1, into: CGRect(x: 0, y: y1, width: x0, height: P - y1))             // corners
+        piece(sw - 1, 0, 1, 1, into: CGRect(x: x1, y: y1, width: P - x1, height: P - y1))
+        piece(0, sh - 1, 1, 1, into: CGRect(x: 0, y: 0, width: x0, height: y0))
+        piece(sw - 1, sh - 1, 1, 1, into: CGRect(x: x1, y: 0, width: P - x1, height: y0))
+        c.draw(src, in: CGRect(x: x0, y: y0, width: iw, height: ih))
+        guard let out = c.makeImage() else { return .plate(nil) }
         return .extend(UIImage(cgImage: out, scale: scale, orientation: .up))
     }
 
