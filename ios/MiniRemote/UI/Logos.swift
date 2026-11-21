@@ -126,7 +126,7 @@ extension Logos {
         guard !stats.busy else { return .plate(stats.edge) }
         // Trim the soft, anti-aliased outer pixels, then draw the icon centred with its edge rows
         // and columns stretched out to the tile's edge (and the corner pixels filling the corners).
-        let t = Int((CGFloat(min(cg.width, cg.height)) * 0.035).rounded())
+        let t = Int((CGFloat(min(cg.width, cg.height)) * 0.06).rounded())
         guard let src = cg.cropping(to: CGRect(x: t, y: t, width: cg.width - 2 * t, height: cg.height - 2 * t)) else { return .plate(nil) }
         let sw = src.width, sh = src.height
         let px = Int((side * scale).rounded())
