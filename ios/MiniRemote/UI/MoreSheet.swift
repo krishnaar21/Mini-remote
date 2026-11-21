@@ -113,11 +113,12 @@ struct SheetTitle: View {
     var center = false
     var small = false
     var body: some View {
-        VStack(alignment: center ? .center : .leading, spacing: 2) {
-            Text(title).font(.system(size: small ? 17 : 20, weight: .semibold)).foregroundStyle(T.ink)
-            if let sub { Text(sub).font(.system(size: small ? 12.5 : 13)).foregroundStyle(T.sub).multilineTextAlignment(center ? .center : .leading) }
+        VStack(alignment: center ? .center : .leading, spacing: 6) {
+            Text(title).font(.system(size: small ? 18 : 22, weight: .semibold)).foregroundStyle(T.ink)
+            if let sub { Text(sub).font(.system(size: small ? 13 : 14)).foregroundStyle(T.sub).lineSpacing(2).multilineTextAlignment(center ? .center : .leading).fixedSize(horizontal: false, vertical: true) }
         }
         .frame(maxWidth: .infinity, alignment: center ? .center : .leading)
+        .padding(.bottom, 6)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
@@ -144,7 +145,7 @@ struct MoreSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-                SheetTitle(title: "More", sub: what).padding(.top, 22)
+                SheetTitle(title: "More", sub: what).padding(.top, 28)
 
                 if vm.settings.appsIn == "more" {
                     SectionTitle(text: "Quick access")

@@ -25,7 +25,7 @@ struct KeyboardSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-                SheetTitle(title: "Search", sub: caption).padding(.top, 22)
+                SheetTitle(title: "Search", sub: caption).padding(.top, 28)
                 HStack(spacing: 10) {
                     Group {
                         if voice.on {

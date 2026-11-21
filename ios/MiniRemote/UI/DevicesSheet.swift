@@ -12,10 +12,23 @@ struct DevicesSheet: View {
     /** Pages to open straight away (screenshots). */
     var start: [Route] = []
     @State private var path: [Route] = []
+    /** How tall each page's content is, so the sheet fits the page showing (and grows with it). */
+    @State private var heights: [String: CGFloat] = [:]
+
+    /** The bar with the title and buttons, the grabber above it, and room at the foot. */
+    private let chrome: CGFloat = 96
+
+    /** Fits the page showing; Settings (and the pages under it) are long, so they get the full height. */
+    private var detent: PresentationDetent {
+        if path.contains(.settings) { return .large }
+        guard let h = heights[path.last.map { "\($0)" } ?? "root"] else { return .large }
+        return .height(max(260, h + chrome))
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
             DevicesList(vm: vm, accent: accent, path: $path)
+                .environment(\.pageKey, "root")
                 .onAppear { if path.isEmpty && !start.isEmpty { path = start } }
                 .navigationTitle("Choose a TV").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -37,18 +50,45 @@ struct DevicesSheet: View {
                         }
                     }
                     .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Close") } }
+                    .environment(\.pageKey, "\(r)")
                 }
         }
+        .environment(\.pageHeight) { key, h in if heights[key] != h { heights[key] = h } }
         .tint(T.ink)
-        .presentationDetents([.large])
+        .background(T.sheet)
+        .presentationBackground(T.sheet)
+        .presentationDetents([detent])
+        .animation(.spring(response: 0.35, dampingFraction: 0.9), value: detent)
         .presentationDragIndicator(.visible)
     }
 }
 
+private struct PageKey: EnvironmentKey { static let defaultValue = "" }
+private struct PageHeight: EnvironmentKey { static let defaultValue: (String, CGFloat) -> Void = { _, _ in } }
+extension EnvironmentValues {
+    /** Which page of the TV sheet this is (its route). */
+    fileprivate var pageKey: String { get { self[PageKey.self] } set { self[PageKey.self] = newValue } }
+    /** Reports a page's content height to the TV sheet. */
+    fileprivate var pageHeight: (String, CGFloat) -> Void { get { self[PageHeight.self] } set { self[PageHeight.self] = newValue } }
+}
+
+/**
+ * A page of the TV sheet: comfortable margins, an opaque background (so the page sliding in
+ * covers the one under it), and its height reported so the sheet fits it.
+ */
 private struct Page<Content: View>: View {
     @ViewBuilder let content: () -> Content
+    @Environment(\.pageKey) private var key
+    @Environment(\.pageHeight) private var report
     var body: some View {
-        ScrollView { VStack(alignment: .leading, spacing: 0) { content() }.padding(.horizontal, 24).padding(.bottom, 32) }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) { content() }
+                .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 32)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { report(key, $0) }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .focusEffectDisabled()
+        .background(T.sheet.ignoresSafeArea())
     }
 }
 
@@ -165,7 +205,7 @@ private struct ScanPage: View {
     var body: some View {
         Page {
             if vm.scanning {
-                ProgressView().tint(accent).frame(maxWidth: .infinity).padding(.vertical, 30)
+                ProgressView().controlSize(.large).tint(accent).frame(maxWidth: .infinity).padding(.vertical, 30)
                 Text("Looking for TVs on your Wi-Fi…").foregroundStyle(T.muted).frame(maxWidth: .infinity)
             } else {
                 Text(vm.found.isEmpty ? "No new TVs found. Check that your phone and TV are on the same Wi-Fi, or enter the TV's address." : "Found \(vm.found.count) on your network.")
@@ -251,7 +291,7 @@ private struct PairPage: View {
                     Text(vm.lastError ?? "The TV didn't answer.").foregroundStyle(Color(hex: 0xE0E0E4)).multilineTextAlignment(.center).frame(maxWidth: .infinity)
                     WideButton(title: "Try again") { vm.connect(d) }
                 } else if active && vm.link == .connecting {
-                    ProgressView().tint(accent).frame(maxWidth: .infinity).padding(.vertical, 30)
+                    ProgressView().controlSize(.large).tint(accent).frame(maxWidth: .infinity).padding(.vertical, 30)
                     Text(d.brand == .SAMSUNG || d.brand == .LG ? "Choose Allow on the TV when it asks. Waiting… \(left)s"
                          : (d.brand == .ANDROID_TV ? "Connecting to \(d.name). It will show a 6-character code." : "Connecting to \(d.name)…"))
                         .foregroundStyle(Color(hex: 0xE0E0E4)).multilineTextAlignment(.center).frame(maxWidth: .infinity)
@@ -355,7 +395,9 @@ private struct SettingsPage: View {
             }
             .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 32)
         }
-        .background(T.sheet)
+        .background(T.sheet.ignoresSafeArea())
+        .focusEffectDisabled()
+        .sheetBackdrop(open != nil)
         .navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
         .sheet(item: Binding(get: { open.map { Opened(id: $0) } }, set: { open = $0?.id })) { o in
             SettingsSheets(vm: vm, accent: accent, which: o.id, openLicenses: { open = nil; path.append(.licenses) })
@@ -420,7 +462,7 @@ private struct SettingsSheets: View {
         VStack(alignment: .leading, spacing: 12) {
             switch which {
             case "profile":
-                SheetTitle(title: "Profile", sub: "Stays on this iPhone and in backups.").padding(.top, 22)
+                SheetTitle(title: "Profile", sub: "Stays on this iPhone and in backups.").padding(.top, 28)
                 SCard {
                     field("Your name", $name).textContentType(.name)
                     SLine(inset: 16)
@@ -431,28 +473,28 @@ private struct SettingsSheets: View {
                     vm.say("Profile saved"); dismiss()
                 }
             case "control":
-                SheetTitle(title: "Control", sub: "What the middle of the remote is.").padding(.top, 22)
+                SheetTitle(title: "Control", sub: "What the middle of the remote is.").padding(.top, 28)
                 SCard {
                     choice("circle.circle", "Dial", "Ring with arrows, OK in the middle; turn the ring for volume", s.controlStyle == "dial") { set { $0.controlStyle = "dial" } }
                     SLine()
                     choice("hand.draw", "Trackpad", "Swipe to move, tap to select", s.controlStyle == "trackpad") { set { $0.controlStyle = "trackpad" } }
                 }
             case "apps":
-                SheetTitle(title: "Quick access", sub: "Where your apps sit.").padding(.top, 22)
+                SheetTitle(title: "Quick access", sub: "Where your apps sit.").padding(.top, 28)
                 SCard {
                     choice("house", "Home page", "Two pages of circles: swipe across", s.appsIn != "more") { set { $0.appsIn = "home" } }
                     SLine()
                     choice("ellipsis", "More sheet", "At the top of More", s.appsIn == "more") { set { $0.appsIn = "more" } }
                 }
             case "tv":
-                SheetTitle(title: "TV controls", sub: "How the iPhone works with the TV.").padding(.top, 22)
+                SheetTitle(title: "TV controls", sub: "How the iPhone works with the TV.").padding(.top, 28)
                 SCard {
                     SToggle(symbol: "keyboard", title: "Auto keyboard", sub: "When the TV asks for text", accent: accent, on: bind({ $0.autoKeyboard }, { $0.autoKeyboard = $1 }))
                     SLine()
                     SToggle(symbol: "timer", title: "Close idle TV menus", sub: "Back after 10 s without use", accent: accent, on: bind({ $0.autoClose }, { $0.autoClose = $1 }))
                 }
             case "feel":
-                SheetTitle(title: "Touch & sound", sub: "How presses feel and sound.").padding(.top, 22)
+                SheetTitle(title: "Touch & sound", sub: "How presses feel and sound.").padding(.top, 28)
                 SCard {
                     SToggle(symbol: "iphone.radiowaves.left.and.right", title: "Haptics", accent: accent, on: bind({ $0.haptics }, { $0.haptics = $1 }))
                     if s.haptics {
@@ -477,7 +519,7 @@ private struct SettingsSheets: View {
                     .padding(16)
                 }
             case "look":
-                SheetTitle(title: "Appearance", sub: "Theme, colour and depth.").padding(.top, 22)
+                SheetTitle(title: "Appearance", sub: "Theme, colour and depth.").padding(.top, 28)
                 SCard {
                     SToggle(symbol: "square.3.layers.3d", title: "Depth", sub: "Raised keys, dial and trackpad, with light and shadow", accent: accent, on: bind({ $0.depth }, { $0.depth = $1 }))
                 }
@@ -520,7 +562,7 @@ private struct SettingsSheets: View {
                     .padding(.vertical, 18).padding(.horizontal, 8)
                 }
             case "support":
-                SheetTitle(title: "Help & feedback", sub: "Ideas, problems or questions: they go straight to the developer.").padding(.top, 22)
+                SheetTitle(title: "Help & feedback", sub: "Ideas, problems or questions: they go straight to the developer.").padding(.top, 28)
                 SCard {
                     SRow(symbol: "lightbulb", title: "Request a feature") { contact("Feature request") }
                     SLine()
@@ -535,14 +577,14 @@ private struct SettingsSheets: View {
                     SRow(symbol: "sparkles", title: "Show the welcome again") { set { $0.onboarded = false; $0.toured = false }; dismiss() }
                 }
             case "backup":
-                SheetTitle(title: "Backup & restore", sub: "Settings, quick access and channels in one file. TVs pair again on a new iPhone.").padding(.top, 22)
+                SheetTitle(title: "Backup & restore", sub: "Settings, quick access and channels in one file. TVs pair again on a new iPhone.").padding(.top, 28)
                 SCard {
                     SRow(symbol: "square.and.arrow.up", title: "Back up", sub: "Save a file to Files or share it") { exporting = true }
                     SLine()
                     SRow(symbol: "square.and.arrow.down", title: "Restore", sub: "From a backup file") { importing = true }
                 }
             default:
-                SheetTitle(title: "Mini Remote", sub: "Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")").padding(.top, 22)
+                SheetTitle(title: "Mini Remote", sub: "Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")").padding(.top, 28)
                 SCard {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("No account, no ads, no analytics or tracking.").font(.system(size: 16)).foregroundStyle(T.ink)
@@ -555,7 +597,7 @@ private struct SettingsSheets: View {
                 }
             }
         }
-        .padding(.horizontal, 20).padding(.bottom, 28)
+        .padding(.horizontal, 24).padding(.bottom, 32)
         .tint(T.ink)
         .fitSheet()
         .onAppear { name = vm.settings.profileName; email = vm.settings.profileEmail }
@@ -596,6 +638,7 @@ private struct PrivacyPage: View {
             WideButton(title: "Forget all TVs", kind: .secondary) { ask = "tvs" }
             WideButton(title: "Erase all data", kind: .danger) { ask = "all" }
         }
+        .sheetBackdrop(ask != nil)
         .navigationTitle("Privacy & data").navigationBarTitleDisplayMode(.inline)
         .sheet(item: Binding(get: { ask.map { Ask(id: $0) } }, set: { ask = $0?.id })) { a in
             if a.id == "tvs" {

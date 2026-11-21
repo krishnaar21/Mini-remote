@@ -30,6 +30,8 @@ struct ContentView: View {
     @State private var keysFromTv = false
     /** The apps screen; picking = opened from a + place (tapping an app adds it to quick access). */
     @State private var apps: Bool? = nil
+    /** Home's circle size for this screen (see [Layout]). */
+    @State private var keySize: CGFloat = Layout.key
     #if DEBUG
     @State private var showIcons = false
     #endif
@@ -39,7 +41,9 @@ struct ContentView: View {
 
     var body: some View {
         // The theme: every colour reads from it; the whole tree is rebuilt when it changes.
-        let _ = { Look.p = Palettes.resolve(vm.settings.theme, dark: scheme == .dark); Look.depth = vm.settings.depth }()
+        let _ = { Look.p = Palettes.resolve(vm.settings.theme, dark: scheme == .dark); Look.depth = vm.settings.depth; Layout.key = keySize }()
+        // Something is open over the remote: blur and darken it.
+        let covered = showDevices || showKeys || showMore || showSleep || apps != nil || (!showDevices && vm.pairPrompt != nil)
         ZStack(alignment: .bottom) {
             T.screen.ignoresSafeArea()
             HomeView(vm: vm, accent: accent, numpad: $numpad, keyPage: $keyPage,
@@ -54,8 +58,14 @@ struct ContentView: View {
 
             foot
         }
+        .sheetBackdrop(covered)
+        // The screen's short side sets the circle size; the remote is rebuilt once when it changes.
+        .onGeometryChange(for: CGFloat.self) { min($0.size.width, $0.size.height) } action: { side in
+            let k = Layout.keyFor(side: side)
+            if k != keySize { keySize = k }
+        }
         .overlayPreferenceValue(CoachKey.self) { anchors in tour(anchors) }
-        .id(vm.settings.theme + (scheme == .dark ? "-d" : "-l") + (vm.settings.depth ? "-3d" : ""))
+        .id(vm.settings.theme + (scheme == .dark ? "-d" : "-l") + (vm.settings.depth ? "-3d" : "") + "-k\(Int(keySize))")
         .fullScreenCover(isPresented: Binding(get: { !vm.settings.onboarded }, set: { _ in })) {
             OnboardingView(accent: accent) { var s = vm.settings; s.onboarded = true; vm.update(s) }
         }
@@ -149,6 +159,7 @@ extension ContentView {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             switch s {
             case "more": showMore = true
+            case "depthmore": var st = vm.settings; st.depth = true; vm.update(st); DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showMore = true }
             case "sleep": showSleep = true
             case "homeicons": showIcons = true
             case "depth": var st = vm.settings; st.depth = true; vm.update(st)

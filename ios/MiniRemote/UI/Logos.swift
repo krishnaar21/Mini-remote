@@ -113,14 +113,24 @@ extension Logos {
      * carries on. Icons with see-through corners or artwork reaching the edge are left as plates.
      */
     static func fit(_ img: UIImage, side: CGFloat, scale: CGFloat) -> Fit {
-        guard let cg = img.cgImage, let stats = edgeStats(cg) else { return .plate(nil) }
+        guard var cg = img.cgImage, var stats = edgeStats(cg) else { return .plate(nil) }
+        var trimmed = false
+        // App Store artwork often comes already rounded (see-through corners, solid sides). Trim
+        // to just inside the rounding so the icon's own background can carry on to the circle's
+        // edge, as the Android tiles do, instead of a square sitting on a plate.
+        if !stats.opaque && stats.sides {
+            let inset = CGFloat(min(cg.width, cg.height)) * 0.1
+            if let inner = cg.cropping(to: CGRect(x: inset, y: inset, width: CGFloat(cg.width) - 2 * inset, height: CGFloat(cg.height) - 2 * inset)),
+               let s2 = edgeStats(inner), s2.opaque { cg = inner; stats = s2; trimmed = true }
+        }
         // See-through corners: the icon on the tile's colour. Artwork to the edge: a smaller plate on its edge colour.
         guard stats.opaque else { return .plate(nil) }
         guard !stats.busy else { return .plate(stats.edge) }
         let inset = CGFloat(min(cg.width, cg.height)) * 0.035
         let src = CIImage(cgImage: cg).cropped(to: CGRect(x: inset, y: inset, width: CGFloat(cg.width) - 2 * inset, height: CGFloat(cg.height) - 2 * inset))
         let px = side * scale
-        let k = px * 0.74 / src.extent.width
+        // A trimmed icon has lost its outer margin: draw it a little smaller so the mark keeps its size.
+        let k = px * (trimmed ? 0.62 : 0.74) / src.extent.width
         let moved = src.transformed(by: CGAffineTransform(translationX: -src.extent.minX, y: -src.extent.minY))
             .clampedToExtent()
             .transformed(by: CGAffineTransform(scaleX: k, y: k))
@@ -131,7 +141,7 @@ extension Logos {
     }
 
     /** Corners opaque? Border one plain colour (low spread of brightness)? */
-    private static func edgeStats(_ cg: CGImage) -> (opaque: Bool, busy: Bool, edge: Color)? {
+    private static func edgeStats(_ cg: CGImage) -> (opaque: Bool, busy: Bool, edge: Color, sides: Bool)? {
         let w = 64, h = 64
         var px = [UInt8](repeating: 0, count: w * h * 4)
         // Draw while the buffer's pointer is valid (an &px argument only lives for the call).
@@ -161,7 +171,9 @@ extension Logos {
         let cs = [rgb(i, i), rgb(w - 1 - i, i), rgb(i, h - 1 - i), rgb(w - 1 - i, h - 1 - i)]
         var edge = Color(red: cs.map(\.0).reduce(0, +) / 4, green: cs.map(\.1).reduce(0, +) / 4, blue: cs.map(\.2).reduce(0, +) / 4)
         if !Look.p.light && cs.allSatisfy({ 0.299 * $0.0 + 0.587 * $0.1 + 0.114 * $0.2 < 0.08 }) { edge = T.high }
-        return (opaque, sd > 0.16, edge)
+        // The middle of each side: solid even when the corners are rounded off.
+        let sides = [at(w / 2, i), at(w / 2, h - 1 - i), at(i, h / 2), at(w - 1 - i, h / 2)].allSatisfy { $0.1 > 0.8 }
+        return (opaque, sd > 0.16, edge, sides)
     }
 }
 

@@ -146,6 +146,7 @@ struct AppsView: View {
             .padding(.horizontal, 20).padding(.bottom, 40)
         }
         .background(T.sheet)
+        .sheetBackdrop(details != nil || adding != nil || options != nil)
         .sheet(item: $details) { e in
             AppSheet(entry: e, accent: accent, onOpen: { if !needTv() { e.open() } },
                      onStore: { if !needTv(), let id = e.storeId { vm.openStore(e.name, id) } })
@@ -193,7 +194,7 @@ private struct QuickOptions: View {
                 if s.added { SLine(); SRow(symbol: "trash", title: "Delete", tile: Color(hex: 0x8E2B2B), trailing: nil) { vm.removeShortcut(s); dismiss() } }
             }
         }
-        .padding(.horizontal, 20).padding(.bottom, 24)
+        .padding(.horizontal, 24).padding(.bottom, 28)
         .fitSheet()
     }
 }
@@ -312,6 +313,7 @@ private struct AppSheet: View {
                 if let del = entry.delete { WideButton(title: "Delete from this list", kind: .danger) { del(); dismiss() } }
             }
             .padding(24).padding(.top, 8)
+            .sheetBackdrop(confirm)
         .fitSheet()
         .sheet(isPresented: $confirm) {
             let install = entry.installed == false

@@ -39,13 +39,45 @@ enum Look {
 
 extension View {
     /** Raised look when Depth is on: a soft shadow under the shape and light from above on it. */
-    @ViewBuilder func depth<S: Shape>(_ shape: S) -> some View {
+    /// `soft`: for things that sit on a sheet (the arrow bar in More and Search), where a full
+    /// drop shadow reads as a dark smudge: a light lift instead.
+    @ViewBuilder func depth<S: Shape>(_ shape: S, soft: Bool = false) -> some View {
         if Look.depth {
             self
-                .overlay(shape.fill(LinearGradient(colors: [.white.opacity(Look.p.light ? 0.35 : 0.10), .clear, .black.opacity(Look.p.light ? 0.04 : 0.18)], startPoint: .top, endPoint: .bottom)).allowsHitTesting(false))
-                .overlay(shape.stroke(LinearGradient(colors: [.white.opacity(Look.p.light ? 0.7 : 0.18), .clear], startPoint: .top, endPoint: .center), lineWidth: 1).allowsHitTesting(false))
-                .shadow(color: .black.opacity(Look.p.light ? 0.18 : 0.6), radius: 10, x: 0, y: 6)
+                .overlay(shape.fill(LinearGradient(colors: [.white.opacity(Look.p.light ? 0.35 : (soft ? 0.06 : 0.10)), .clear, .black.opacity(Look.p.light ? 0.04 : (soft ? 0.08 : 0.18))], startPoint: .top, endPoint: .bottom)).allowsHitTesting(false))
+                .overlay(shape.stroke(LinearGradient(colors: [.white.opacity(Look.p.light ? 0.7 : (soft ? 0.12 : 0.18)), .clear], startPoint: .top, endPoint: .center), lineWidth: 1).allowsHitTesting(false))
+                .shadow(color: .black.opacity(Look.p.light ? (soft ? 0.08 : 0.18) : (soft ? 0.22 : 0.6)), radius: soft ? 4 : 10, x: 0, y: soft ? 2 : 6)
         } else { self }
+    }
+
+    /**
+     * What's behind an open sheet: blurred and darkened, so the sheet stands on its own and
+     * nothing underneath reads through or around it (iOS 26's floating sheets leave a gap).
+     */
+    func sheetBackdrop(_ on: Bool) -> some View {
+        self
+            .blur(radius: on ? 14 : 0)
+            .overlay {
+                Color.black.opacity(on ? (Look.p.light ? 0.22 : 0.45) : 0)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
+            .animation(.easeOut(duration: 0.25), value: on)
+    }
+}
+
+/**
+ * Sizes for Home's circles. They grow with the phone: four across with comfortable sides,
+ * from 64 pt on the smallest iPhones up to 86 pt on the largest. Set once from the screen size.
+ */
+enum Layout {
+    static var key: CGFloat = 68
+    static let gap: CGFloat = 14
+
+    /** The circle size for a screen whose short side is `side` points. */
+    static func keyFor(side: CGFloat) -> CGFloat {
+        let fit = (min(side, 480) - 2 * 26 - 3 * gap) / 4
+        return (min(86, max(64, fit))).rounded()
     }
 }
 

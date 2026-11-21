@@ -4,9 +4,9 @@ enum Deck { case dial, trackpad, numpad }
 
 /** Width of the volume ring around the dial. */
 let RING_BAND: CGFloat = 26
-/** The rows of circles: 4 × 68 + 3 × 14. */
-let KEY: CGFloat = 68
-let KEYROW_W: CGFloat = 4 * 68 + 3 * 14
+/** The rows of circles: four keys of [Layout.key] with 14 pt between (sized to the screen). */
+var KEY: CGFloat { Layout.key }
+var KEYROW_W: CGFloat { 4 * Layout.key + 3 * Layout.gap }
 
 /**
  * The remote, in Liquid Glass: the TV (and what's on it) and power on top; the dial with its
@@ -87,6 +87,7 @@ struct HomeView: View {
                 .frame(maxWidth: .infinity)
             }
         }
+        .sheetBackdrop(askPower)
         .onAppear { vm.followNowOn(vm.link == .ready) }
         .onChange(of: vm.link) { _, l in vm.followNowOn(l == .ready) }
         .onDisappear { vm.followNowOn(false) }
@@ -225,9 +226,11 @@ struct GlassKey: View {
     var body: some View {
         Button(action: { if enabled { action() } else { onDisabled() } }) {
             VStack(spacing: 1) {
-                if let symbol { Image(systemName: symbol).font(.system(size: icon, weight: .medium)) }
-                if let word { Text(word).font(.system(size: 16, weight: .medium)) }
-                if let caption { Text(caption).font(.system(size: 9, weight: .semibold)).tracking(0.8).foregroundStyle(T.dim) }
+                // Icons grow with the circle (sizes are given for a 68 pt key).
+                let k = min(1.2, max(1, size / 68))
+                if let symbol { Image(systemName: symbol).font(.system(size: icon * k, weight: .medium)) }
+                if let word { Text(word).font(.system(size: 16 * k, weight: .medium)) }
+                if let caption { Text(caption).font(.system(size: 9 * k, weight: .semibold)).tracking(0.8).foregroundStyle(T.dim) }
             }
             .foregroundStyle(T.ink.opacity(enabled ? 1 : 0.32))
             .frame(width: size, height: size)
@@ -418,7 +421,7 @@ struct NavPad: View {
             }
         }
         .frame(height: 54)
-        .background(Capsule().fill(T.high)).depth(Capsule())
+        .background(Capsule().fill(T.high)).depth(Capsule(), soft: true)
     }
 }
 
