@@ -175,6 +175,8 @@ extension ContentView {
             case "devices": showDevices = true
             case "scan": startRoute = [.scan]; showDevices = true
             case "settings": startRoute = [.settings]; showDevices = true
+            case "settingsheet": Shot.openSetting = "look"; startRoute = [.settings]; showDevices = true
+            case "settingsheet2": Shot.openSetting = "apps"; startRoute = [.settings]; showDevices = true
             case "privacy": startRoute = [.settings, .privacy]; showDevices = true
             case "licenses": startRoute = [.settings, .licenses]; showDevices = true
             case "keys": showKeys = true
@@ -183,6 +185,11 @@ extension ContentView {
         }
     }
 }
+#endif
+
+#if DEBUG
+/** Screenshot runs: a Settings row to open once Settings appears. */
+enum Shot { static var openSetting: String? }
 #endif
 
 private struct PromptBox: Identifiable { let p: PairPrompt; var id: String { p.tvName + (p.error ?? "") } }

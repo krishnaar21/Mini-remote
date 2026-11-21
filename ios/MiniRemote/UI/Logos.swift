@@ -112,6 +112,7 @@ extension Logos {
      */
     static func fit(_ img: UIImage, side: CGFloat, scale: CGFloat) -> Fit {
         guard var cg = img.cgImage, var stats = edgeStats(cg) else { return .plate(nil) }
+        let orig = cg, origStats = stats
         var trimmed = false
         // App Store artwork often comes already rounded (see-through corners, solid sides). Trim
         // to just inside the rounding so the icon's own background can carry on to the circle's
@@ -121,18 +122,21 @@ extension Logos {
             if let inner = cg.cropping(to: CGRect(x: inset, y: inset, width: CGFloat(cg.width) - 2 * inset, height: CGFloat(cg.height) - 2 * inset)),
                let s2 = edgeStats(inner), s2.opaque { cg = inner; stats = s2; trimmed = true }
         }
-        // See-through corners: the icon on the tile's colour. Artwork to the edge: a smaller plate on its edge colour.
-        guard stats.opaque else { return .plate(nil) }
-        guard !stats.busy else { return .plate(stats.edge) }
+        let px = Int((side * scale).rounded())
+        guard px > 0 else { return .plate(nil) }
+        // A black icon background would melt into the dark remote: lift it to the key grey.
+        let lift = !Look.p.light && stats.lum < 0.14
+        // Still see-through (a glyph on nothing): the icon on the tile's colour.
+        if !stats.opaque && !origStats.sides { return .plate(nil) }
+        // Very rounded artwork (Disney+) or artwork that runs to the edge (SonyLIV): fill the
+        // circle with the whole icon, a touch over size, so its rounded corners fall outside.
+        if !stats.opaque || stats.busy { return cover(orig, px: px, scale: scale, lift: lift) }
         // Trim the soft, anti-aliased outer pixels, then draw the icon centred with its edge rows
         // and columns stretched out to the tile's edge (and the corner pixels filling the corners).
         let t = Int((CGFloat(min(cg.width, cg.height)) * 0.06).rounded())
         guard let src = cg.cropping(to: CGRect(x: t, y: t, width: cg.width - 2 * t, height: cg.height - 2 * t)) else { return .plate(nil) }
         let sw = src.width, sh = src.height
-        let px = Int((side * scale).rounded())
-        guard px > 0, sw > 2, sh > 2,
-              let c = CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0,
-                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return .plate(nil) }
+        guard sw > 2, sh > 2, let c = canvas(px, lift: lift) else { return .plate(nil) }
         // A trimmed icon has lost its outer margin: draw it a little smaller so the mark keeps its size.
         let k = CGFloat(px) * (trimmed ? 0.58 : 0.74) / CGFloat(max(sw, sh))
         let iw = CGFloat(sw) * k, ih = CGFloat(sh) * k
@@ -157,8 +161,33 @@ extension Logos {
         return .extend(UIImage(cgImage: out, scale: scale, orientation: .up))
     }
 
+    /** A square drawing surface; with `lift`, grey underneath and drawing in Lighten mode, so black becomes the key grey. */
+    private static func canvas(_ px: Int, lift: Bool) -> CGContext? {
+        guard let c = CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0,
+                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        c.interpolationQuality = .high
+        if lift {
+            let g = Look.p.high
+            c.setFillColor(red: CGFloat((g >> 16) & 0xFF) / 255, green: CGFloat((g >> 8) & 0xFF) / 255, blue: CGFloat(g & 0xFF) / 255, alpha: 1)
+            c.fill(CGRect(x: 0, y: 0, width: px, height: px))
+            c.setBlendMode(.lighten)
+        }
+        return c
+    }
+
+    /** The whole icon filling the tile, 6% over size so rounded corners and soft edges fall outside the circle. */
+    private static func cover(_ cg: CGImage, px: Int, scale: CGFloat, lift: Bool) -> Fit {
+        guard let c = canvas(px, lift: lift) else { return .plate(nil) }
+        let P = CGFloat(px), d = P * 1.06
+        let k = d / CGFloat(min(cg.width, cg.height))
+        let w = CGFloat(cg.width) * k, h = CGFloat(cg.height) * k
+        c.draw(cg, in: CGRect(x: (P - w) / 2, y: (P - h) / 2, width: w, height: h))
+        guard let out = c.makeImage() else { return .plate(nil) }
+        return .extend(UIImage(cgImage: out, scale: scale, orientation: .up))
+    }
+
     /** Corners opaque? Border one plain colour (low spread of brightness)? */
-    private static func edgeStats(_ cg: CGImage) -> (opaque: Bool, busy: Bool, edge: Color, sides: Bool)? {
+    private static func edgeStats(_ cg: CGImage) -> (opaque: Bool, busy: Bool, edge: Color, sides: Bool, lum: Double)? {
         let w = 64, h = 64
         var px = [UInt8](repeating: 0, count: w * h * 4)
         // Draw while the buffer's pointer is valid (an &px argument only lives for the call).
@@ -190,7 +219,7 @@ extension Logos {
         if !Look.p.light && cs.allSatisfy({ 0.299 * $0.0 + 0.587 * $0.1 + 0.114 * $0.2 < 0.08 }) { edge = T.high }
         // The middle of each side: solid even when the corners are rounded off.
         let sides = [at(w / 2, i), at(w / 2, h - 1 - i), at(i, h / 2), at(w - 1 - i, h / 2)].allSatisfy { $0.1 > 0.8 }
-        return (opaque, sd > 0.16, edge, sides)
+        return (opaque, sd > 0.16, edge, sides, m)
     }
 }
 

@@ -398,6 +398,9 @@ private struct SettingsPage: View {
         .background(T.sheet.ignoresSafeArea())
         .focusEffectDisabled()
         .sheetBackdrop(open != nil)
+        #if DEBUG
+        .task { if let o = Shot.openSetting { Shot.openSetting = nil; try? await Task.sleep(nanoseconds: 700_000_000); open = o } }
+        #endif
         .navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
         .sheet(item: Binding(get: { open.map { Opened(id: $0) } }, set: { open = $0?.id })) { o in
             SettingsSheets(vm: vm, accent: accent, which: o.id, openLicenses: { open = nil; path.append(.licenses) })
