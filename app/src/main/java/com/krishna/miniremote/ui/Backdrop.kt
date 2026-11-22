@@ -1,6 +1,7 @@
 package com.krishna.miniremote.ui
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -26,7 +27,8 @@ import androidx.compose.ui.unit.dp
  * What's behind an open sheet: blurred and darkened, at every level (the remote, the apps
  * screen, Settings under one of its own sheets), so the sheet stands on its own and nothing
  * underneath reads through it. The blur is a GPU effect on the layer (Android 12 and up), not a
- * redraw, and it starts fading the moment a sheet starts to close, so closing feels quick.
+ * redraw. It fades in as a sheet opens and is removed at once the moment the sheet starts to
+ * close, since any fade-out there reads as lag.
  */
 object Backdrop {
     /** The sheets showing, bottom to top. */
@@ -43,7 +45,7 @@ object Backdrop {
 fun Modifier.underSheets(token: Any? = null): Modifier = composed {
     val list = Backdrop.open
     val behind = if (token == null) list.isNotEmpty() else list.indexOf(token).let { it >= 0 && it < list.lastIndex }
-    val t by animateFloatAsState(if (behind) 1f else 0f, tween(if (behind) 220 else 170), label = "backdrop")
+    val t by animateFloatAsState(if (behind) 1f else 0f, if (behind) tween(160) else snap(), label = "backdrop")
     if (!Backdrop.blurs || t == 0f) this
     else graphicsLayer { renderEffect = BlurEffect(16.dp.toPx() * t, 16.dp.toPx() * t, TileMode.Clamp) }
 }

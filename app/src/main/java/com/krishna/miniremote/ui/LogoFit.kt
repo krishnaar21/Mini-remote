@@ -19,8 +19,8 @@ import kotlin.math.sqrt
  * it's never stretched or cropped (the same rules as the iOS app):
  * - plain edges (Netflix, YouTube, Prime): the icon at about three quarters of the tile's short
  *   side, its own edge pixels carried out to the tile's edges, in whole pixels so no seam shows;
- * - busy or very rounded artwork (SonyLIV, Disney+): the icon whole, on a soft blur of itself that
- *   fills the tile, its edge feathered into that blur so no border shows;
+ * - busy or very rounded artwork (SonyLIV, Disney+): the icon whole, on a flat fill of its own
+ *   border colour, its edge feathered into that fill so no border shows;
  * - a glyph on nothing (see-through): null, and the caller shows it as a plate on the tile colour.
  * On a dark theme a black icon background is lifted to the key grey so it doesn't melt away.
  */
@@ -117,23 +117,20 @@ object LogoFit {
     }.getOrNull()
 
     /**
-     * Busy or very rounded artwork: the whole icon, its proportions kept, over a soft blur of
-     * itself enlarged to fill the tile; the icon's edge is feathered into the blur.
+     * Busy or very rounded artwork: the whole icon, its proportions kept, on a flat fill of its
+     * own border colour; the icon's edge is feathered into that fill.
      */
     private fun ambient(icon: Bitmap, pw: Int, ph: Int, lift: Boolean): Bitmap? {
         val W = pw.toFloat(); val H = ph.toFloat(); val short = min(W, H)
         val side = min(icon.width, icon.height)
-        // The background: the solid middle of the icon (away from rounded corners), shrunk to a
-        // few pixels and drawn large with smoothing, so only its colours remain (a cheap, heavy blur).
-        val m = (side * 0.16f).roundToInt()
-        val mid = crop(icon, m, m, icon.width - 2 * m, icon.height - 2 * m) ?: return null
-        val tiny = Bitmap.createScaledBitmap(Bitmap.createScaledBitmap(mid, 12, 12, true), 4, 4, true)
+        if (side <= 0) return null
+        // The background: one flat colour taken from the icon's own border, so the tile reads as
+        // a solid fill like the other logos.
         val (out, paint) = canvas(pw, ph, lift)
         val c = Canvas(out)
-        val cover = max(W, H) * 1.3f
-        c.drawBitmap(tiny, null, RectF((W - cover) / 2, (H - cover) / 2, (W + cover) / 2, (H + cover) / 2), paint)
+        c.drawRect(0f, 0f, W, H, Paint(paint).apply { color = ringColor(icon) })
         // The icon at 78% of the tile's short side, centred, through a rounded mask a little inside
-        // its edge, softened, so the edge melts into the blur.
+        // its edge, softened, so the edge melts into the fill.
         val f = short * 0.78f
         val fg = Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888)
         val fc = Canvas(fg)
@@ -153,5 +150,34 @@ object LogoFit {
         c.drawBitmap(fg, 0f, 0f, paint)
         fg.recycle()
         return out
+    }
+
+    /** The icon's border colour: the ring just inside any rounding, its middle third by brightness. */
+    private fun ringColor(b: Bitmap): Int {
+        val fallback = android.graphics.Color.rgb(51, 51, 56)
+        return runCatching {
+            val w = 48
+            val s = Bitmap.createScaledBitmap(b, w, w, true)
+            val i = w / 6
+            val ring = ArrayList<Int>()
+            for (t in 0..23) {
+                val a = i + (w - 2 * i - 1) * t / 23
+                for ((x, y) in listOf(a to i, a to w - 1 - i, i to a, w - 1 - i to a)) {
+                    val px = s.getPixel(x, y)
+                    if (android.graphics.Color.alpha(px) > 200) ring += px
+                }
+            }
+            if (s !== b) s.recycle()
+            if (ring.isEmpty()) return fallback
+            fun lum(c: Int) = 0.299 * android.graphics.Color.red(c) + 0.587 * android.graphics.Color.green(c) + 0.114 * android.graphics.Color.blue(c)
+            ring.sortBy { lum(it) }
+            // Average the middle third: a steady colour, not a stray highlight or shadow.
+            val mid = ring.subList(ring.size / 3, max(ring.size / 3 + 1, ring.size * 2 / 3))
+            android.graphics.Color.rgb(
+                mid.sumOf { android.graphics.Color.red(it) } / mid.size,
+                mid.sumOf { android.graphics.Color.green(it) } / mid.size,
+                mid.sumOf { android.graphics.Color.blue(it) } / mid.size,
+            )
+        }.getOrDefault(fallback)
     }
 }
