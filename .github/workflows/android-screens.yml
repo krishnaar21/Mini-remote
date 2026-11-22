@@ -25,7 +25,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: 8.10.2
+      - name: Set up the stable signing key
+        # Same key as the main build, so this APK installs over the one on the phone.
+        env:
+          KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/mini-remote.jks"
+            echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/mini-remote.jks" >> "$GITHUB_ENV"
+          fi
       - name: Build the debug APK
+        env:
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
         run: gradle :app:assembleDebug --no-daemon
       - name: Let the emulator use KVM
         run: |
