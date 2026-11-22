@@ -369,7 +369,7 @@ private fun Tile(e: AppEntry, dragger: Dragger, onTap: () -> Unit) {
         }
         if (e.icon != null) TvIcon(e.icon, Modifier.fillMaxSize().padding(10.dp), name) else name()
         e.badge?.let {
-            Text(it, color = Color.White, fontSize = 11.sp, fontFamily = Mono, maxLines = 1,
+            Text(it, color = Color.White, fontSize = 12.sp, fontFamily = Mono, maxLines = 1,
                 modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
                     .background(Color.Black.copy(0.35f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
         }
@@ -387,7 +387,7 @@ private fun AppSheet(e: AppEntry, accent: Color, logosOn: Boolean, onOpen: () ->
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var confirm by remember { mutableStateOf(false) }
     val installed = e.installed
-    ModalBottomSheet(
+    AppSheet(
         onDismissRequest = onClose, sheetState = state, containerColor = SheetBg, contentColor = T.Ink,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp), scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
     ) {
@@ -478,7 +478,7 @@ private fun QuickTile(s: Shortcut, accent: Color, icon: String?, logoOn: Boolean
             val logo: @Composable () -> Unit = { AppLogo(slug, ink, 34.dp, logoOn, cat?.site, pkg, fallback = short) }
             if (icon != null) TvIcon(icon, Modifier.fillMaxSize().padding(8.dp), logo) else logo()
         }
-        Text(s.name, color = T.Ink, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+        Text(s.name, color = T.Ink, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 6.dp))
     }
 }
@@ -526,7 +526,7 @@ private fun QuickActionsSheet(
 ) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val cat = if (s.kind == ShortcutKind.APP && s.brand == null) Catalog.byKey(s.value) else null
-    ModalBottomSheet(
+    AppSheet(
         onDismissRequest = onClose, sheetState = state, containerColor = SheetBg, contentColor = T.Ink,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp), scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
     ) {
@@ -687,7 +687,7 @@ private fun AddShortcutSheet(vm: RemoteVM, accent: Color, start: ShortcutKind, o
     var value by remember { mutableStateOf("") }
     var pin by remember { mutableStateOf(true) }
     val brand = vm.active?.brand
-    ModalBottomSheet(
+    AppSheet(
         onDismissRequest = onClose, sheetState = state, containerColor = T.Bg, contentColor = T.Ink,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp), scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
     ) {
@@ -743,7 +743,7 @@ private fun IdHint(brand: Brand?, accent: Color) {
                         "App ID   ", "netflix", "")
                     null -> listOf("Choose a TV first: app IDs are different on every kind of TV.", "", "", "")
                 }
-                Text(text, color = Muted, fontSize = 12.5.sp, lineHeight = 18.sp)
+                Text(text, color = Muted, fontSize = 13.sp, lineHeight = 18.sp)
                 if (id.isNotEmpty()) {
                     // The picture: a little screen (browser address bar, or the app's details), with the ID highlighted.
                     Box(
@@ -758,12 +758,12 @@ private fun IdHint(brand: Brand?, accent: Color) {
                                 Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color(0xFF26262A)).padding(horizontal = 10.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text(before, color = Muted, fontSize = 11.5.sp, fontFamily = Mono, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                                Text(id, color = Color.White, fontSize = 11.5.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                                Text(before, color = Muted, fontSize = 12.sp, fontFamily = Mono, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                Text(id, color = Color.White, fontSize = 12.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold, maxLines = 1,
                                     modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(accent.copy(alpha = 0.35f)).border(1.dp, accent, RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 1.dp))
-                                if (after.isNotEmpty()) Text(after, color = Muted, fontSize = 11.5.sp, fontFamily = Mono, maxLines = 1)
+                                if (after.isNotEmpty()) Text(after, color = Muted, fontSize = 12.sp, fontFamily = Mono, maxLines = 1)
                             }
-                            Text("↑ this is the App ID", color = accent, fontSize = 11.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 6.dp).align(Alignment.End))
+                            Text("↑ this is the App ID", color = accent, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 6.dp).align(Alignment.End))
                         }
                     }
                 }

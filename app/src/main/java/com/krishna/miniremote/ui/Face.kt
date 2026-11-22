@@ -97,7 +97,8 @@ object M {
 }
 
 private fun flatColor(f: Face): Color = when (f) {
-    KEY_UP -> M.High
+    // Same as the round keys: the key colour when flat, a step lighter when raised (Depth).
+    KEY_UP -> if (Look.depth) M.High else T.Key
     KEY_DOWN -> M.Pressed
     PAD -> M.Container
     WELL -> M.Highest

@@ -238,10 +238,10 @@ fun CoachTour(accent: Color, onDone: () -> Unit) {
                     .semantics { liveRegion = LiveRegionMode.Polite },
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("${steps.indexOf(step) + 1} of ${steps.size}", color = accent, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
+                    Text("${steps.indexOf(step) + 1} of ${steps.size}", color = accent, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.weight(1f))
                     // The tour runs on a pretend TV: say so.
-                    Text("Demo TV · nothing is sent", color = T.Sub, fontSize = 11.5.sp,
+                    Text("Demo TV · nothing is sent", color = T.Sub, fontSize = 12.sp,
                         modifier = Modifier.clip(CircleShape).background(T.Ink.copy(alpha = 0.08f)).padding(horizontal = 8.dp, vertical = 3.dp))
                 }
                 Text(step.title, color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))

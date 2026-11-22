@@ -142,7 +142,7 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
     fun replace(p: Page) { stack[stack.lastIndex] = p }
     fun back() { if (stack.size > 1) stack.removeAt(stack.lastIndex) else onClose() }
 
-    ModalBottomSheet(
+    AppSheet(
         onDismissRequest = onClose, sheetState = state, containerColor = SheetBg, contentColor = T.Ink,
         shape = SheetShape, scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
     ) {
@@ -194,7 +194,7 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
                 }
                 Page.Settings -> {
                     Header("Settings", onClose, back = if (canBack) ::back else null)
-                    Body(side = 12.dp) { SettingsPage(vm, accent, manage = null, openLicenses = { go(Page.Licenses) }, openPrivacy = { go(Page.Privacy) }, openGestures = { go(Page.Gestures) }) }
+                    Body(side = 20.dp) { SettingsPage(vm, accent, manage = null, openLicenses = { go(Page.Licenses) }, openPrivacy = { go(Page.Privacy) }, openGestures = { go(Page.Gestures) }) }
                 }
             }
         }
@@ -205,9 +205,9 @@ fun RemoteSheet(vm: RemoteVM, accent: Color, start: Page, onClose: () -> Unit) {
 
 internal val SheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
 
-/** .grab: 38 x 4 handle, 12 above and 4 below. */
+/** A short grabber pill at the top of every sheet (Material's is wide). */
 @Composable
-internal fun Grab() = Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(28.dp, 3.dp).background(T.Sub, RoundedCornerShape(2.dp)))
+internal fun Grab() = Box(Modifier.padding(top = 8.dp, bottom = 6.dp).size(30.dp, 4.dp).background(T.Sub.copy(alpha = 0.55f), RoundedCornerShape(2.dp)))
 
 /** .field: label above (13, muted), 52 tall, radius 12, #141415, 1px line, 16 text. */
 @Composable
@@ -316,7 +316,7 @@ internal fun Lead(text: String, center: Boolean = false) =
 
 @Composable
 internal fun Hint(text: String, top: Int = 18) =
-    Text(text, color = Muted, fontSize = 12.5.sp, lineHeight = 20.sp, modifier = Modifier.padding(top = top.dp))
+    Text(text, color = Muted, fontSize = 13.sp, lineHeight = 20.sp, modifier = Modifier.padding(top = top.dp))
 
 @Composable
 internal fun SectionTitle(t: String) =
@@ -394,7 +394,7 @@ internal fun CardRow(
         }
         Column(Modifier.weight(1f)) {
             Text(title, color = T.Ink, fontSize = 15.sp)
-            sub?.let { Text(it, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 4.dp)) }
+            sub?.let { Text(it, color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp)) }
         }
         trailing()
     }
@@ -404,7 +404,7 @@ internal fun CardRow(
 
 @Composable
 internal fun Badge(text: String) =
-    Text(text, color = Color(0xFFBBBBBB), fontSize = 11.5.sp, maxLines = 1,
+    Text(text, color = Color(0xFFBBBBBB), fontSize = 12.sp, maxLines = 1,
         modifier = Modifier.background(Color(0xFF2C2C2E), RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 3.dp))
 
 internal fun statusLine(vm: RemoteVM, d: Device): String {
@@ -416,35 +416,81 @@ internal fun statusLine(vm: RemoteVM, d: Device): String {
 
 /* ---------------------------------------------------------------- devices */
 
+/** Any tappable surface: a touch smaller while pressed (as on iOS). */
+internal fun Modifier.pressScale(label: String? = null, onClick: () -> Unit): Modifier = androidx.compose.ui.composed {
+    val src = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val down by src.collectIsPressedAsState()
+    val sc by androidx.compose.animation.core.animateFloatAsState(if (down) 0.97f else 1f, androidx.compose.animation.core.tween(100), label = "press")
+    this.graphicsLayer { scaleX = sc; scaleY = sc }
+        .clickable(src, indication = null, role = Role.Button, onClickLabel = label, onClick = onClick)
+}
+
+/** Connected green, as on iOS. */
+internal val LinkGreen = Color(0xFF6DD58C)
+
 /**
- * One saved TV: name and chevron on the first line, brand · address under it, and for the
- * active TV a status line with its coloured dot ("● Connected"). All left-aligned.
+ * One saved TV, as a card: the TV on its own tile (green-tinted when connected) with the
+ * connection as a dot on its corner; the name, then status · brand, then the address, quieter.
+ * The connected TV's card is ringed in green.
  */
 @Composable
 internal fun DeviceRow(vm: RemoteVM, d: Device, onClick: () -> Unit) {
     val active = vm.activeId == d.id
-    val (word, dot) = when {
-        !active -> null to null
-        vm.link == Link.READY -> "Connected" to OkGreen
+    val status: Pair<String, Color>? = when {
+        !active -> null
+        vm.link == Link.READY -> "Connected" to LinkGreen
         vm.link == Link.CONNECTING -> "Connecting…" to Color(0xFFFDD663)
-        else -> "Not connected" to T.Sub
+        else -> "Not connected" to Color(0xFF8A8A8E)
     }
-    Column(
-        Modifier.fillMaxWidth().padding(bottom = 12.dp)
-            .pressable(CARD, CARD_DOWN, 16.dp, label = "open", onClick = onClick)
+    val on = status?.second == LinkGreen
+    val shape = RoundedCornerShape(22.dp)
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 12.dp).heightIn(min = 76.dp)
+            .pressScale("open", onClick)
+            .clip(shape).background(M.Container)
+            .then(if (on) Modifier.border(1.5.dp, LinkGreen.copy(alpha = 0.45f), shape) else Modifier)
             .semantics(mergeDescendants = true) {}
-            .padding(horizontal = 18.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(d.name, color = T.Ink, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Chevron()
+        Box(Modifier.size(50.dp), contentAlignment = Alignment.BottomStart) {
+            Box(Modifier.size(46.dp).clip(RoundedCornerShape(13.dp)).background(if (on) LinkGreen.copy(alpha = 0.16f) else M.High), contentAlignment = Alignment.Center) {
+                LineIcon(Ico.TV, T.Ink, 22.dp)
+            }
+            status?.let { (_, c) ->
+                Box(Modifier.align(Alignment.TopEnd).size(15.dp).background(M.Container, CircleShape).padding(2.5.dp).background(c, CircleShape))
+            }
         }
-        Text("${d.brand.label} · ${d.host}", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
-        if (word != null && dot != null) Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            Box(Modifier.size(8.dp).background(dot, CircleShape))
-            Text(word, color = if (dot == OkGreen) OkGreen else Muted, fontSize = 13.sp)
+        Column(Modifier.weight(1f)) {
+            Text(d.name, color = T.Ink, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            Text(
+                androidx.compose.ui.text.buildAnnotatedString {
+                    status?.let { (w, c) ->
+                        withStyle(androidx.compose.ui.text.SpanStyle(color = if (c == LinkGreen) LinkGreen else SubInk)) { append(w) }
+                        withStyle(androidx.compose.ui.text.SpanStyle(color = SubInk)) { append(" · ") }
+                    }
+                    withStyle(androidx.compose.ui.text.SpanStyle(color = SubInk)) { append(d.brand.label) }
+                },
+                fontSize = 13.sp, maxLines = 1, modifier = Modifier.padding(top = 3.dp),
+            )
+            Text(d.host, color = SubInk.copy(alpha = 0.75f), fontSize = 12.sp, fontFamily = Mono, modifier = Modifier.padding(top = 3.dp))
         }
+        Chevron()
+    }
+}
+
+/** Add a TV under your TVs: a quiet row with a plus (not a heavy solid bar). */
+@Composable
+internal fun AddTvButton(onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 4.dp).height(56.dp).pressScale(onClick = onClick)
+            .clip(RoundedCornerShape(22.dp)).background(M.High),
+        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LineIcon(Ico.PLUS, T.Ink, 17.dp, stroke = 2.2f)
+        Text("Add a TV", color = T.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 10.dp))
     }
 }
 
@@ -453,14 +499,15 @@ internal fun DevicesPage(vm: RemoteVM, open: (String) -> Unit, add: () -> Unit) 
     if (vm.devices.isEmpty()) {
         TvIllustration(com.krishna.miniremote.ui.accentColor(vm.settings.accentHex))
         Text("No TVs yet", color = T.Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp))
-        Spacer(Modifier.height(14.dp))
+            modifier = Modifier.fillMaxWidth())
+        Text("Add your TV to start. Your phone and TV need to be on the same Wi-Fi.", color = Muted, fontSize = 13.sp, lineHeight = 18.sp,
+            textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp))
+        // With no TVs yet, adding one is the main thing to do: keep the strong button there.
+        Btn("Add a TV", onClick = add)
+        return
     }
-    vm.devices.forEach { d ->
-        val on = vm.activeId == d.id && vm.link == Link.READY
-        DeviceRow(vm, d) { open(d.id) }
-    }
-    Btn("Add a TV", onClick = add)
+    vm.devices.forEach { d -> DeviceRow(vm, d) { open(d.id) } }
+    AddTvButton(add)
 }
 
 @Composable
@@ -492,7 +539,7 @@ internal fun DevicePage(vm: RemoteVM, d: Device, accent: Color) {
                     if (pairing) "On the TV, open Settings › Remotes & Accessories (or Bluetooth) › Pair accessory, and choose Mini Remote. Keep this screen open."
                     else if (d.bt != null) "Arrows, OK, Back, Home, volume, play and search work over Bluetooth. Apps, inputs and typing need Wi-Fi."
                     else "Pair once and the phone works as a Bluetooth remote too: no Wi-Fi needed for the basic keys.",
-                    color = Muted, fontSize = 12.5.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 4.dp),
+                    color = Muted, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 4.dp),
                 )
             }
         }
@@ -744,7 +791,7 @@ internal fun LinkRow(title: String, sub: String, last: Boolean = false, onClick:
     ) {
         Column(Modifier.weight(1f)) {
             Text(title, color = T.Ink, fontSize = 15.sp)
-            Text(sub, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
+            Text(sub, color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
         }
         Chevron()
     }
@@ -759,7 +806,7 @@ internal fun ProfileEditSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) 
     var name by remember { mutableStateOf(s.profileName) }
     var email by remember { mutableStateOf(s.profileEmail) }
     val st = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    androidx.compose.material3.ModalBottomSheet(
+    AppSheet(
         onDismissRequest = onClose, sheetState = st, containerColor = SheetBg, contentColor = T.Ink,
         shape = SheetShape, scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
     ) {
@@ -769,7 +816,7 @@ internal fun ProfileEditSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) 
                 SheetTitle("Profile", "Stays on this phone and in backups.", Modifier.weight(1f))
             }
             @Composable fun field(label: String, value: String, hint: String, type: KeyboardType, cap: KeyboardCapitalization, set: (String) -> Unit) {
-                Text(label, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp, start = 2.dp))
+                Text(label, color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp, start = 2.dp))
                 BasicTextField(
                     value, set, singleLine = true,
                     textStyle = TextStyle(color = T.Ink, fontSize = 16.sp, fontFamily = Inter), cursorBrush = SolidColor(T.Ink),
@@ -819,7 +866,7 @@ internal fun ToggleRow(title: String, sub: String?, checked: Boolean, last: Bool
     ) {
         Column(Modifier.weight(1f)) {
             Text(title, color = T.Ink, fontSize = 15.sp)
-            sub?.let { Text(it, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp)) }
+            sub?.let { Text(it, color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp)) }
         }
         Toggle(checked)
     }
@@ -962,7 +1009,7 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, openSearch: Boolean = true, start
                             vm.searchesApps -> "Typed into the box selected on the TV."
                             else -> "Typed on the TV as you go."
                         },
-                        color = Muted, fontSize = 12.5.sp,
+                        color = Muted, fontSize = 13.sp,
                         modifier = Modifier.fillMaxWidth().padding(top = 10.dp, start = 4.dp).semantics { liveRegion = LiveRegionMode.Polite },
                     )
                     // 3 · Clear (all of the TV's box) and Search.
@@ -973,7 +1020,7 @@ fun KeyboardSheet(vm: RemoteVM, accent: Color, openSearch: Boolean = true, start
                     // 4 · Search an app straight away, and the arrows to pick a box on the TV.
                     if (vm.searchesApps) {
                         Row(Modifier.fillMaxWidth().padding(top = 22.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("Search in", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(end = 4.dp))
+                            Text("Search in", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(end = 4.dp))
                             listOf("youtube" to "YouTube", "play" to "Play Store").forEach { (w, label) ->
                                 val ok = text.isNotBlank()
                                 Box(
@@ -1094,13 +1141,24 @@ fun PairCodeDialog(vm: RemoteVM, prompt: PairPrompt, accent: Color) {
 /** "Are you sure?" as a small sheet: title, one line, the action, and Cancel. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ConfirmSheet(title: String, text: String, action: String, danger: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun ConfirmSheet(title: String, text: String, action: String, danger: Boolean, ico: Ico? = null, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     val st = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
+    AppSheet(
         onDismissRequest = onDismiss, sheetState = st, containerColor = SheetBg, contentColor = T.Ink,
         shape = SheetShape, scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 24.dp).padding(top = 8.dp, bottom = 24.dp)) {
+            // A picture above the title, in soft rings (the power symbol for turning the TV off).
+            ico?.let {
+                val tint = if (danger) Color(0xFFFF5A4F) else T.Ink
+                Box(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 18.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(112.dp).background(tint.copy(alpha = 0.08f), CircleShape), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(80.dp).background(tint.copy(alpha = 0.16f), CircleShape), contentAlignment = Alignment.Center) {
+                            LineIcon(it, tint, 36.dp, stroke = 2.2f)
+                        }
+                    }
+                }
+            }
             Text(title, color = T.Ink, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().semantics { heading() })
             Text(text, color = Muted, fontSize = 14.sp, lineHeight = 20.sp, textAlign = TextAlign.Center,
@@ -1115,7 +1173,7 @@ fun ConfirmSheet(title: String, text: String, action: String, danger: Boolean, o
 internal fun InfoBlock(title: String, body: String) {
     Column(Modifier.fillMaxWidth().padding(vertical = 14.dp)) {
         Text(title, color = T.Ink, fontSize = 15.sp)
-        Text(body, color = Muted, fontSize = 12.5.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 4.dp))
+        Text(body, color = Muted, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
@@ -1137,8 +1195,8 @@ internal fun LicensesPage() {
         THIRD_PARTY.forEachIndexed { i, (name, who, lic) ->
             Column(Modifier.fillMaxWidth().padding(vertical = 14.dp)) {
                 Text(name, color = T.Ink, fontSize = 15.sp)
-                Text(who, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
-                Text(lic, color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
+                Text(who, color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
+                Text(lic, color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
             }
             if (i < THIRD_PARTY.lastIndex) Divider()
         }
@@ -1149,7 +1207,7 @@ internal fun LicensesPage() {
             Btn(if (shown == res) "Hide $title" else title, kind = 1) { shown = if (shown == res) null else res }
             if (shown == res) {
                 val text = remember(res) { runCatching { ctx.resources.openRawResource(res).bufferedReader().use { it.readText() } }.getOrDefault("") }
-                Text(text, color = Muted, fontSize = 11.sp, lineHeight = 15.sp, fontFamily = Mono, modifier = Modifier.padding(top = 12.dp))
+                Text(text, color = Muted, fontSize = 12.sp, lineHeight = 15.sp, fontFamily = Mono, modifier = Modifier.padding(top = 12.dp))
             }
         }
 }

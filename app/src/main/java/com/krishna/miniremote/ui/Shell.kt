@@ -214,8 +214,11 @@ fun AppShell(vm: RemoteVM) {
     CompositionLocalProvider(LocalTilt provides tilt) {
         BoxWithConstraints(Modifier.fillMaxSize().background(T.Screen)) {
             val k = (maxWidth.value - 32f).coerceAtMost(420f) / 920f
+            // Home's circles follow the screen width.
+            KeySize.forWidth(maxWidth).let { if (KeySize.key != it) KeySize.key = it }
             CompositionLocalProvider(LocalK provides k) {
-                Box(Modifier.fillMaxSize().systemBarsPadding()) {
+                // Blurred and darkened while a sheet is open over it (see Backdrop).
+                Box(Modifier.fillMaxSize().underSheets().systemBarsPadding()) {
                     run {
                         run {
                             HomeScreen(

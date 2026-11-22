@@ -53,7 +53,7 @@ import com.krishna.miniremote.RemoteVM
 fun MoreSheet(vm: RemoteVM, accent: Color, openApps: (Boolean) -> Unit = {}, onClose: () -> Unit) {
     val st = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     LaunchedEffect(vm.activeId, vm.link) { vm.loadInputs() }
-    ModalBottomSheet(
+    AppSheet(
         onDismissRequest = onClose, sheetState = st, containerColor = SheetBg, contentColor = T.Ink,
         shape = SheetShape, scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
     ) {
@@ -205,7 +205,7 @@ private fun AppSquares(vm: RemoteVM, openApps: (Boolean) -> Unit) {
                                 .semantics(mergeDescendants = true) { contentDescription = "All apps" }, contentAlignment = Alignment.Center) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     LineIcon(Ico.GRID, T.Ink, 20.dp)
-                                    Text("All apps", color = Muted, fontSize = 11.sp, lineHeight = 13.sp, modifier = Modifier.padding(top = 3.dp))
+                                    Text("All apps", color = Muted, fontSize = 12.sp, lineHeight = 13.sp, modifier = Modifier.padding(top = 3.dp))
                                 }
                             }
                             cell != null -> { val s = pinned[cell]; AppCircle(vm, s, 68.dp, shape, m) { if (ready) vm.launch(s) else vm.explain(RemoteKey.HOME) } }
@@ -232,7 +232,7 @@ private fun KeyTile(vm: RemoteVM, k: RemoteKey, ico: Ico, label: String, modifie
         // Icon and word as one group, centred in the tile.
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             LineIcon(ico, if (on) T.Ink else T.Ink.copy(alpha = 0.3f), 20.dp)
-            Text(label, color = if (on) Muted else Muted.copy(alpha = 0.4f), fontSize = 11.sp, lineHeight = 13.sp, maxLines = 1, textAlign = TextAlign.Center,
+            Text(label, color = if (on) Muted else Muted.copy(alpha = 0.4f), fontSize = 12.sp, lineHeight = 13.sp, maxLines = 1, textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 3.dp))
         }
     }
@@ -255,7 +255,7 @@ internal fun SleepCard(vm: RemoteVM, accent: Color, card: Boolean = true) {
                 Box(Modifier.size(44.dp).clip(CircleShape).background(accent.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) { LineIcon(Ico.SLEEP, accent, 22.dp) }
                 Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
                     Text("%d:%02d".format(left / 60, left % 60), color = T.Ink, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, fontFamily = Mono)
-                    Text("TV turns off at $clock", color = Muted, fontSize = 12.5.sp)
+                    Text("TV turns off at $clock", color = Muted, fontSize = 13.sp)
                 }
                 Box(Modifier.height(36.dp).clip(CircleShape).background(M.High).clickable(role = Role.Button) { vm.setSleep(null) }.padding(horizontal = 16.dp),
                     contentAlignment = Alignment.Center) { Text("Cancel", color = T.Ink, fontSize = 13.5.sp, fontWeight = FontWeight.Medium) }
@@ -279,7 +279,7 @@ internal fun SleepCard(vm: RemoteVM, accent: Color, card: Boolean = true) {
 @Composable
 fun SleepSheet(vm: RemoteVM, accent: Color, onClose: () -> Unit) {
     val st = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
+    AppSheet(
         onDismissRequest = onClose, sheetState = st, containerColor = SheetBg, contentColor = T.Ink,
         shape = SheetShape, scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
     ) {
