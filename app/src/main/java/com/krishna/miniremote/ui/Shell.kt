@@ -179,6 +179,35 @@ fun AppShell(vm: RemoteVM) {
             else -> connecting = false
         }
     }
+    // CI screenshot runs: open the screen asked for (see Shot).
+    LaunchedEffect(Unit) {
+        val s = Shot.name ?: return@LaunchedEffect
+        kotlinx.coroutines.delay(400)
+        fun set(f: (com.krishna.miniremote.Settings) -> com.krishna.miniremote.Settings) = vm.update(f(vm.settings))
+        when (s) {
+            "more" -> more = true
+            "moreapps" -> { set { it.copy(appsIn = "more") }; kotlinx.coroutines.delay(400); more = true }
+            "depthmore" -> { set { it.copy(depth = true) }; kotlinx.coroutines.delay(400); more = true }
+            "depth" -> set { it.copy(depth = true) }
+            "flat" -> set { it.copy(depth = false) }
+            "welcome" -> set { it.copy(onboarded = false) }
+            "tour" -> set { it.copy(toured = false) }
+            "page2" -> keyPager.scrollToPage(1)
+            "page3" -> keyPager.scrollToPage(2)
+            "light" -> set { it.copy(theme = "light") }
+            "navy" -> set { it.copy(theme = "navy") }
+            "apps" -> { picking = false; apps = true }
+            "devices" -> sheet = Page.Devices
+            "scan" -> sheet = Page.Scan
+            "settings" -> sheet = Page.Settings
+            "settingsheet" -> { Shot.openSetting = "look"; sheet = Page.Settings }
+            "settingsheet2" -> { Shot.openSetting = "apps"; sheet = Page.Settings }
+            "gestures" -> sheet = Page.Gestures
+            "keys" -> keys = true
+            else -> return@LaunchedEffect // "sleep" and "power" are opened by the screens that own them
+        }
+        Shot.name = null
+    }
     val tilt = rememberTilt(false) // the flat Material faces have no sheen to tilt
     BackHandler(enabled = !onRemote) { go(Tab.HOME) }
 

@@ -143,7 +143,7 @@ fun HomeScreen(
         onDispose { vm.followNowOn(false) }
     }
     val offline = vm.active == null || vm.link == Link.ERROR
-    var askPower by remember { mutableStateOf(false) }
+    var askPower by remember { mutableStateOf(Shot.take("power")) }
     if (askPower) vm.active?.let { tv ->
         ConfirmSheet(
             title = "Turn off ${shortName(tv.name, tv.brand.label)}?",

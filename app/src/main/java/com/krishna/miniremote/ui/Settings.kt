@@ -213,6 +213,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
     val s = vm.settings
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var open by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { Shot.openSetting?.let { Shot.openSetting = null; delay(700); open = it } }
     val version = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "dev" }
     val iconName = com.krishna.miniremote.AppIcon.all.firstOrNull { it.first == com.krishna.miniremote.AppIcon.current(ctx) }?.second ?: "Dial"
     val accentName = ACCENTS.firstOrNull { it.second.equals(s.accentHex, true) }?.first ?: "Custom"

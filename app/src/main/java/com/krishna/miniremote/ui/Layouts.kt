@@ -184,7 +184,7 @@ fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ic
 fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, openKeys: () -> Unit, openMore: () -> Unit = {}, openApps: (Boolean) -> Unit = {}, pager0: androidx.compose.foundation.pager.PagerState? = null) {
     val tv = vm.nowOn?.live == true
     val k = 68.dp
-    var sleep by remember { mutableStateOf(false) }
+    var sleep by remember { mutableStateOf(Shot.take("sleep")) }
     if (sleep) SleepSheet(vm, accent) { sleep = false }
     // Two pages of eight: swipe across the circles for playback, sleep timer and the TV's keys.
     val pages = if (vm.settings.appsIn == "more") 2 else 4

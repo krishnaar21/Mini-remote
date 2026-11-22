@@ -415,9 +415,37 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         nowOn = NowOn("Netflix", false, 1_204_000, 2_710_000)
     }
 
+    /** A screenshot run (debug builds over adb only, see MainActivity): nothing is saved or sent. */
+    var shot = false; private set
+
+    /** Screenshot runs: two pretend TVs, apps, inputs and what's playing, as on the iOS run. */
+    fun screenshotDemo(trackpad: Boolean, live: Boolean) {
+        shot = true
+        startDemo()
+        devices = listOf(
+            Device("demo", "Living Room TV", "192.168.1.20", Brand.ANDROID_TV),
+            Device("demo2", "Bedroom Roku", "192.168.1.31", Brand.ROKU),
+        )
+        settings = settings.copy(controlStyle = if (trackpad) "trackpad" else "dial", onboarded = true, toured = true, layout = "strip")
+        nowOn = if (live) NowOn("Live TV", true) else NowOn("Netflix", false, 1_204_000, 2_710_000)
+        inputs = listOf(
+            com.krishna.miniremote.net.TvInput("h1", "HDMI 1 · PlayStation"),
+            com.krishna.miniremote.net.TvInput("h2", "HDMI 2"),
+            com.krishna.miniremote.net.TvInput("tv", "Antenna"),
+        )
+        shortcuts = listOf("netflix" to "Netflix", "youtube" to "YouTube", "prime" to "Prime Video", "hotstar" to "JioHotstar",
+            "disney" to "Disney+", "sonyliv" to "SonyLIV", "zee5" to "ZEE5", "spotify" to "Spotify",
+            "plex" to "Plex", "hulu" to "Hulu", "peacock" to "Peacock").map { (k, n) -> Shortcut("s-$k", ShortcutKind.APP, n, k, pinned = true) }
+        tvApps = listOf(
+            TvApp("com.netflix.ninja", "Netflix"), TvApp("com.google.android.youtube.tv", "YouTube"),
+            TvApp("com.amazon.amazonvideo.livingroom", "Prime Video"), TvApp("com.disney.disneyplus", "Disney+"),
+            TvApp("com.spotify.tv.android", "Spotify"), TvApp("com.plexapp.android", "Plex"),
+        )
+    }
+
     /** Back to the real app: your saved TVs (none if you have none yet), connecting as usual. */
     fun endDemo() {
-        if (!demo) return
+        if (!demo || shot) return
         demo = false
         link = Link.IDLE; tvVolume = null; nowOn = null; muted = false; playing = false
         devices = store.loadDevices(); activeId = store.activeId()
@@ -634,7 +662,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     }
 
     fun update(s: Settings) {
-        settings = s; store.saveSettings(s)
+        settings = s; if (!shot) store.saveSettings(s)
         applyFeel(s)
     }
 
