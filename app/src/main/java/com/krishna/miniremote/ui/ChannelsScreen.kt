@@ -608,39 +608,19 @@ private fun AppLogo(slug: String?, ink: Color, size: androidx.compose.ui.unit.Dp
     }
     val b = bmp
     if (b == null) fallback()
-    // On a quick access circle or square the real icon is the whole tile, edge to edge (a touch
-    // larger, so the icon's own corners fall outside the shape): no tile colour around it.
+    // On a quick access circle or square the real icon fills the tile: its background carries
+    // to the edge, or (busy artwork) it sits whole on a soft blur of itself.
     else if (real && bleed) {
-        // Balanced with the other logos: the icon at about three quarters of the tile, on its own
-        // edge colour, so the two blend instead of the app's catalogue colour showing round it.
-        // The icon stays its size (about three quarters of the tile); round it, its own edge
-        // pixels are stretched outward to the tile's edge, so its background simply carries on
-        // (gradients too) instead of a band of another colour.
-        val opaque = remember(b) { edgeColour(b) != null }
-        val busy = remember(b) { busyEdges(b) }
-        if (opaque && busy) Box(Modifier.fillMaxSize().background(liftDark(edgeColour(b) ?: Color.Black)), contentAlignment = Alignment.Center) {
-            // Artwork runs right to the edge (SonyLIV): stretching it would streak, so the icon
-            // sits a little smaller as a rounded square on its own average edge colour.
-            Image(b, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(0.64f).clip(RoundedCornerShape(24)))
-        } else if (opaque) {
-            val src = remember(b) {
-                val ab = b.asAndroidBitmap()
-                val i = (minOf(ab.width, ab.height) * 0.035f).toInt() // trim soft, anti-aliased edges
-                runCatching { android.graphics.Bitmap.createBitmap(ab, i, i, ab.width - 2 * i, ab.height - 2 * i) }.getOrDefault(ab)
+        // Fitted at the tile's exact pixel size (see LogoFit): never stretched or cropped.
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+            val pw = constraints.maxWidth; val ph = constraints.maxHeight
+            val dark = !Look.p.light
+            val fitted = remember(b, pw, ph, dark) { LogoFit.render(b.asAndroidBitmap(), pw, ph)?.asImageBitmap() }
+            if (fitted != null) Image(fitted, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
+            else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                // See-through corners (an icon on its own plate): the plate as it is, on the tile's colour.
+                Image(b, contentDescription = null, modifier = Modifier.fillMaxSize(0.74f))
             }
-            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-                val target = this.size.minDimension * 0.74f
-                val k = target / maxOf(src.width, src.height)
-                val shader = android.graphics.BitmapShader(src, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
-                shader.setLocalMatrix(android.graphics.Matrix().apply {
-                    setScale(k, k); postTranslate(center.x - src.width * k / 2f, center.y - src.height * k / 2f)
-                })
-                drawRect(androidx.compose.ui.graphics.ShaderBrush(shader))
-            }
-        } else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            // See-through corners (an icon on its own plate): the plate as it is, on the tile's colour.
-            Image(b, contentDescription = null, modifier = Modifier.fillMaxSize(0.74f))
         }
     }
     // The real app icon fills its tile (as square as the tile allows), with app-icon corners.
