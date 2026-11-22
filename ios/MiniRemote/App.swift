@@ -159,6 +159,7 @@ extension ContentView {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             switch s {
             case "more": showMore = true
+            case "moreapps": var st = vm.settings; st.appsIn = "more"; vm.update(st); DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showMore = true }
             case "depthmore": var st = vm.settings; st.depth = true; vm.update(st); DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showMore = true }
             case "sleep": showSleep = true
             case "homeicons": showIcons = true
