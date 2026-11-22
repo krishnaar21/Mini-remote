@@ -1,5 +1,6 @@
 package com.krishna.miniremote.ui
 
+import androidx.compose.ui.composed
 import androidx.compose.foundation.layout.imePadding
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -417,7 +418,7 @@ internal fun statusLine(vm: RemoteVM, d: Device): String {
 /* ---------------------------------------------------------------- devices */
 
 /** Any tappable surface: a touch smaller while pressed (as on iOS). */
-internal fun Modifier.pressScale(label: String? = null, onClick: () -> Unit): Modifier = androidx.compose.ui.composed {
+internal fun Modifier.pressScale(label: String? = null, onClick: () -> Unit): Modifier = composed {
     val src = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val down by src.collectIsPressedAsState()
     val sc by androidx.compose.animation.core.animateFloatAsState(if (down) 0.97f else 1f, androidx.compose.animation.core.tween(100), label = "press")
