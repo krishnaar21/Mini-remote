@@ -7,6 +7,11 @@ PKG=com.krishna.miniremote
 a() { timeout 40 adb "$@"; }
 timeout 120 adb install -r app/build/outputs/apk/debug/app-debug.apk
 a shell settings put global adb_enabled 1
+# The software-rendered emulator is slow enough for the launcher to "stop responding" behind the
+# app; turn the launcher off and hide error dialogs so they don't cover the screenshots.
+for l in com.google.android.apps.nexuslauncher com.android.launcher3; do a shell pm disable-user --user 0 $l >/dev/null 2>&1 || true; done
+a shell settings put global hide_error_dialogs 1
+a shell settings put secure anr_show_background 0
 # A clean status bar: 9:41, full battery and signal, no notifications. Sent again for every
 # screen, since System UI can drop demo mode while the app restarts.
 bar() {
@@ -30,6 +35,7 @@ for s in home depth flat welcome tour page2 page3 more moreapps depthmore sleep 
   for _ in $(seq 1 30); do a shell dumpsys window | grep -q "mCurrentFocus.*$PKG/" && break; sleep 1; done
   sleep 14
   bar
+  a shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
   sleep 1
   echo "shot $i $s"
   timeout 40 adb exec-out screencap -p > "shots/$(printf %02d $i)-$s.png"
