@@ -120,9 +120,11 @@ private struct DevicesList: View {
                     .foregroundStyle(T.muted).multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.top, 8).padding(.bottom, 10)
             }
             ForEach(vm.devices) { d in
-                Button { path.append(.device(d.id)) } label: { DeviceRow(vm: vm, d: d) }.padding(.bottom, 12)
+                Button { path.append(.device(d.id)) } label: { DeviceRow(vm: vm, d: d) }.buttonStyle(Pressable()).padding(.bottom, 12)
             }
-            WideButton(title: "Add a TV") { path.append(vm.localSeen ? .scan : .local) }
+            // With no TVs yet, adding one is the main thing to do: keep the strong button there.
+            if vm.devices.isEmpty { WideButton(title: "Add a TV") { path.append(vm.localSeen ? .scan : .local) } }
+            else { AddTvButton { path.append(vm.localSeen ? .scan : .local) } }
         }
     }
 }
@@ -133,20 +135,52 @@ private struct DeviceRow: View {
     var body: some View {
         let active = vm.activeId == d.id
         let status: (String, Color)? = !active ? nil : (vm.link == .ready ? ("Connected", T.ok) : (vm.link == .connecting ? ("Connecting…", T.warn) : ("Not connected", Color(hex: 0x8A8A8E))))
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(d.name).font(.system(size: 16, weight: .medium)).foregroundStyle(T.ink).lineLimit(1)
-                Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(hex: 0xA8A8AD))
+        let on = status?.0 == "Connected"
+        HStack(spacing: 14) {
+            // The TV on its tile, with the connection as a dot on the corner.
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "tv").font(.system(size: 19, weight: .medium)).foregroundStyle(T.ink)
+                    .frame(width: 46, height: 46)
+                    .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(on ? T.ok.opacity(0.16) : T.high))
+                if let st = status {
+                    Circle().fill(st.1).frame(width: 10, height: 10).padding(2.5).background(Circle().fill(T.container)).offset(x: 4, y: -4)
+                }
             }
-            Text("\(d.brand.label) · \(d.host)").font(.system(size: 13)).foregroundStyle(T.muted)
-            if let st = status {
-                HStack(spacing: 7) { Circle().fill(st.1).frame(width: 8, height: 8); Text(st.0).font(.system(size: 13)).foregroundStyle(st.1 == T.ok ? T.ok : T.muted) }
-                    .padding(.top, 2)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(d.name).font(.system(size: 17, weight: .semibold)).foregroundStyle(T.ink).lineLimit(1)
+                HStack(spacing: 0) {
+                    if let st = status { Text(st.0).foregroundStyle(st.1 == T.ok ? T.ok : T.sub); Text(" · ").foregroundStyle(T.sub) }
+                    Text(d.brand.label).foregroundStyle(T.sub)
+                }
+                .font(.system(size: 13)).lineLimit(1)
+                Text(d.host).font(.system(size: 12, design: .monospaced)).foregroundStyle(T.sub.opacity(0.75))
             }
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(T.sub)
         }
-        .padding(.horizontal, 18).padding(.vertical, 14)
-        .background(RoundedRectangle(cornerRadius: 16).fill(T.container))
+        .padding(.horizontal, 16).padding(.vertical, 14).frame(minHeight: 76)
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(T.container))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(on ? T.ok.opacity(0.45) : .clear, lineWidth: 1.5))
+        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/** Add a TV: a quiet row with a plus, below the TVs (not a heavy solid bar). */
+private struct AddTvButton: View {
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: "plus").font(.system(size: 16, weight: .semibold))
+                Text("Add a TV").font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundStyle(T.ink)
+            .frame(maxWidth: .infinity).frame(height: 56)
+            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(T.high))
+        }
+        .buttonStyle(Pressable())
+        .padding(.top, 4)
     }
 }
 
