@@ -142,7 +142,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     fun installFromNotification() { if (update is Update.Ready) installUpdate() else { installWhenReady = true; checkForUpdate() } }
 
     fun checkForUpdate(manual: Boolean = false) {
-        if (updateJob?.isActive == true) return
+        if (shot || updateJob?.isActive == true) return
         val ctx = getApplication<Application>()
         lastCheck = System.currentTimeMillis()
         updateJob = viewModelScope.launch {
@@ -421,6 +421,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     /** Screenshot runs: two pretend TVs, apps, inputs and what's playing, as on the iOS run. */
     fun screenshotDemo(trackpad: Boolean, live: Boolean) {
         shot = true
+        updateJob?.cancel(); update = Update.Idle
         startDemo()
         devices = listOf(
             Device("demo", "Living Room TV", "192.168.1.20", Brand.ANDROID_TV),
