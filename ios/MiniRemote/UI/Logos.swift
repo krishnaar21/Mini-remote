@@ -186,22 +186,16 @@ extension Logos {
     }
 
     /**
-     * Busy or very rounded artwork: the whole icon, its proportions kept, over a soft blur of
-     * itself enlarged to fill the tile; the icon's edge is feathered into the blur.
+     * Busy or very rounded artwork: the whole icon, its proportions kept, on a flat fill of its
+     * own border colour; the icon's edge is feathered into that fill.
      */
     private static func ambient(_ cg: CGImage, pw: Int, ph: Int, scale: CGFloat, lift: Bool) -> Fit {
         let W = CGFloat(pw), H = CGFloat(ph), short = min(W, H)
         let icon = CIImage(cgImage: cg)
         let side = min(icon.extent.width, icon.extent.height)
-        // The background: the solid middle of the icon (away from rounded corners), enlarged to
-        // cover the tile and blurred heavily, so only its colours remain.
-        let mid = icon.cropped(to: icon.extent.insetBy(dx: side * 0.16, dy: side * 0.16))
-        let kb = max(W, H) * 1.3 / mid.extent.width
-        let bg = mid.transformed(by: CGAffineTransform(translationX: -mid.extent.midX, y: -mid.extent.midY))
-            .clampedToExtent()
-            .transformed(by: CGAffineTransform(scaleX: kb, y: kb))
-            .transformed(by: CGAffineTransform(translationX: W / 2, y: H / 2))
-            .applyingGaussianBlur(sigma: Double(short * 0.09))
+        // The background: one flat colour taken from the icon's own border (the middle of its
+        // ring by brightness), so the tile reads as a solid fill like the other logos.
+        let bg = CIImage(color: ringColor(cg)).cropped(to: CGRect(x: 0, y: 0, width: W, height: H))
         // The icon at 78% of the tile's short side, centred.
         let f = short * 0.78, kf = f / side
         let fg = icon.transformed(by: CGAffineTransform(scaleX: kf, y: kf))
@@ -218,6 +212,35 @@ extension Logos {
         c.draw(rendered, in: frame)
         guard let img = c.makeImage() else { return .plate(nil) }
         return .extend(UIImage(cgImage: img, scale: scale, orientation: .up))
+    }
+
+    /** The icon's border colour: the ring just inside any rounding, its middle pixel by brightness. */
+    private static func ringColor(_ cg: CGImage) -> CIColor {
+        let w = 48
+        var px = [UInt8](repeating: 0, count: w * w * 4)
+        let drawn: Bool = px.withUnsafeMutableBytes { buf in
+            guard let c = CGContext(data: buf.baseAddress, width: w, height: w, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                    space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            c.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: w))
+            return true
+        }
+        guard drawn else { return CIColor(red: 0.2, green: 0.2, blue: 0.22) }
+        let i = w / 6
+        var ring: [(Double, Double, Double)] = []
+        for t in 0...23 {
+            let a = i + (w - 2 * i - 1) * t / 23
+            for (x, y) in [(a, i), (a, w - 1 - i), (i, a), (w - 1 - i, a)] {
+                let k = (y * w + x) * 4
+                guard px[k + 3] > 200 else { continue }
+                ring.append((Double(px[k]) / 255, Double(px[k + 1]) / 255, Double(px[k + 2]) / 255))
+            }
+        }
+        guard !ring.isEmpty else { return CIColor(red: 0.2, green: 0.2, blue: 0.22) }
+        ring.sort { 0.299 * $0.0 + 0.587 * $0.1 + 0.114 * $0.2 < 0.299 * $1.0 + 0.587 * $1.1 + 0.114 * $1.2 }
+        // Average the middle third by brightness: a steady colour, not a stray highlight or shadow.
+        let mid = ring[(ring.count / 3)..<max(ring.count / 3 + 1, ring.count * 2 / 3)]
+        let n = Double(mid.count)
+        return CIColor(red: mid.map(\.0).reduce(0, +) / n, green: mid.map(\.1).reduce(0, +) / n, blue: mid.map(\.2).reduce(0, +) / n)
     }
 
     /** Corners opaque? Border one plain colour (low spread of brightness)? */

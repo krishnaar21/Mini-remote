@@ -55,17 +55,19 @@ extension View {
      * nothing underneath reads through or around it (iOS 26's floating sheets leave a gap).
      */
     func sheetBackdrop(_ on: Bool) -> some View {
-        // The system's own blur material (drawn by the GPU, not re-rendering the view) faded in and
-        // out quickly, so closing a sheet doesn't wait on the remote redrawing.
+        // The system's own blur material, faded in as a sheet opens. It's removed at once when the
+        // sheet closes (a swiped sheet only reports closing once it's already gone, so any fade-out
+        // there reads as lag), and it isn't in the view tree at all while no sheet is open.
         self.overlay {
-            ZStack {
-                Rectangle().fill(.ultraThinMaterial)
-                Color.black.opacity(Look.p.light ? 0.18 : 0.42)
+            if on {
+                ZStack {
+                    Rectangle().fill(.ultraThinMaterial)
+                    Color.black.opacity(Look.p.light ? 0.18 : 0.42)
+                }
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .transition(.asymmetric(insertion: .opacity.animation(.easeOut(duration: 0.16)), removal: .identity))
             }
-            .ignoresSafeArea()
-            .opacity(on ? 1 : 0)
-            .allowsHitTesting(false)
-            .animation(.easeOut(duration: 0.18), value: on)
         }
     }
 
