@@ -59,7 +59,7 @@ struct DevicesSheet: View {
         .presentationBackground(T.sheet)
         .presentationDetents([detent])
         .animation(.spring(response: 0.35, dampingFraction: 0.9), value: detent)
-        .presentationDragIndicator(.visible)
+        .grabber()
     }
 }
 
@@ -215,10 +215,10 @@ private struct ScanPage: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(d.name).font(.system(size: 15)).foregroundStyle(T.ink)
-                                Text(d.host).font(.system(size: 12.5)).foregroundStyle(T.muted)
+                                Text(d.host).font(.system(size: 13)).foregroundStyle(T.muted)
                             }
                             Spacer()
-                            Text(d.brand.label).font(.system(size: 11.5)).foregroundStyle(Color(hex: 0xBBBBBB))
+                            Text(d.brand.label).font(.system(size: 12)).foregroundStyle(Color(hex: 0xBBBBBB))
                                 .padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(Color(hex: 0x2C2C2E)))
                         }
                         .padding(16).background(RoundedRectangle(cornerRadius: 16).fill(T.container))
@@ -256,7 +256,7 @@ private struct ManualPage: View {
                 if let e { err = e; vm.feel.fire(.error) } else if let d { path.append(.pair(d.id)) }
             }
             Text("Find it on your TV under Settings › Network. Only home-network addresses (like 192.168…) are accepted.")
-                .font(.system(size: 12.5)).foregroundStyle(T.muted).padding(.top, 18)
+                .font(.system(size: 13)).foregroundStyle(T.muted).padding(.top, 18)
         }
         .navigationTitle("Enter an address").navigationBarTitleDisplayMode(.inline)
     }
@@ -342,24 +342,7 @@ private struct SettingsPage: View {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
         let feel = [s.haptics ? "Haptics" : nil, s.sound ? "Sound" : nil].compactMap { $0 }.joined(separator: ", ")
         ScrollView {
-            VStack(spacing: 14) {
-                SCard {
-                    Button { open = "profile" } label: {
-                        HStack(spacing: 14) {
-                            Text(initialsOf(s.profileName)).font(.system(size: 19, weight: .semibold)).foregroundStyle(.white)
-                                .frame(width: 52, height: 52).background(Circle().fill(accent))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(s.profileName.isEmpty ? "Add your name" : s.profileName).font(.system(size: 17, weight: .medium)).foregroundStyle(s.profileName.isEmpty ? T.sub : T.ink)
-                                Text(s.profileEmail.isEmpty ? "\(vm.devices.count) TV\(vm.devices.count == 1 ? "" : "s") · \(apps) app\(apps == 1 ? "" : "s")" : s.profileEmail)
-                                    .font(.system(size: 13)).foregroundStyle(T.sub)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(T.sub)
-                        }
-                        .padding(16).contentShape(Rectangle())
-                    }
-                    .buttonStyle(Pressable())
-                }
+            VStack(spacing: 18) {
                 SHead(text: "Remote")
                 SCard {
                     row(s.controlStyle == "trackpad" ? "hand.draw" : "circle.circle", "Control", s.controlStyle == "trackpad" ? "Trackpad" : "Dial") { open = "control" }
@@ -450,7 +433,7 @@ private struct SettingsSheets: View {
             .padding(.leading, 6).padding(.top, 8)
     }
     private func note(_ t: String) -> some View {
-        Text(t).font(.system(size: 12.5)).foregroundStyle(T.sub).padding(.horizontal, 6).fixedSize(horizontal: false, vertical: true)
+        Text(t).font(.system(size: 13)).foregroundStyle(T.sub).padding(.horizontal, 6).fixedSize(horizontal: false, vertical: true)
     }
     private func field(_ placeholder: String, _ text: Binding<String>) -> some View {
         TextField(placeholder, text: text).font(.system(size: 16)).foregroundStyle(T.ink)
@@ -465,7 +448,7 @@ private struct SettingsSheets: View {
         VStack(alignment: .leading, spacing: 12) {
             switch which {
             case "profile":
-                SheetTitle(title: "Profile", sub: "Stays on this iPhone and in backups.").padding(.top, 28)
+                SheetTitle(title: "Profile", sub: "Saved on this iPhone.").padding(.top, 28)
                 SCard {
                     field("Your name", $name).textContentType(.name)
                     SLine(inset: 16)
@@ -476,28 +459,28 @@ private struct SettingsSheets: View {
                     vm.say("Profile saved"); dismiss()
                 }
             case "control":
-                SheetTitle(title: "Control", sub: "What the middle of the remote is.").padding(.top, 28)
+                SheetTitle(title: "Control", sub: "The middle of the remote.").padding(.top, 28)
                 SCard {
-                    choice("circle.circle", "Dial", "Ring with arrows, OK in the middle; turn the ring for volume", s.controlStyle == "dial") { set { $0.controlStyle = "dial" } }
+                    choice("circle.circle", "Dial", "Arrows and OK; turn for volume", s.controlStyle == "dial") { set { $0.controlStyle = "dial" } }
                     SLine()
                     choice("hand.draw", "Trackpad", "Swipe to move, tap to select", s.controlStyle == "trackpad") { set { $0.controlStyle = "trackpad" } }
                 }
             case "apps":
                 SheetTitle(title: "Quick access", sub: "Where your apps sit.").padding(.top, 28)
                 SCard {
-                    choice("house", "Home page", "Two pages of circles: swipe across", s.appsIn != "more") { set { $0.appsIn = "home" } }
+                    choice("house", "Home page", "Swipe across the circles", s.appsIn != "more") { set { $0.appsIn = "home" } }
                     SLine()
                     choice("ellipsis", "More sheet", "At the top of More", s.appsIn == "more") { set { $0.appsIn = "more" } }
                 }
             case "tv":
-                SheetTitle(title: "TV controls", sub: "How the iPhone works with the TV.").padding(.top, 28)
+                SheetTitle(title: "TV controls", sub: "How the phone works with the TV.").padding(.top, 28)
                 SCard {
                     SToggle(symbol: "keyboard", title: "Auto keyboard", sub: "When the TV asks for text", accent: accent, on: bind({ $0.autoKeyboard }, { $0.autoKeyboard = $1 }))
                     SLine()
-                    SToggle(symbol: "timer", title: "Close idle TV menus", sub: "Back after 10 s without use", accent: accent, on: bind({ $0.autoClose }, { $0.autoClose = $1 }))
+                    SToggle(symbol: "timer", title: "Close idle TV menus", sub: "After 10 s idle", accent: accent, on: bind({ $0.autoClose }, { $0.autoClose = $1 }))
                 }
             case "feel":
-                SheetTitle(title: "Touch & sound", sub: "How presses feel and sound.").padding(.top, 28)
+                SheetTitle(title: "Touch & sound", sub: "Feel and sound of presses.").padding(.top, 28)
                 SCard {
                     SToggle(symbol: "iphone.radiowaves.left.and.right", title: "Haptics", accent: accent, on: bind({ $0.haptics }, { $0.haptics = $1 }))
                     if s.haptics {
@@ -516,7 +499,7 @@ private struct SettingsSheets: View {
                 SCard {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack { Text("Scrub step").font(.system(size: 16)).foregroundStyle(T.ink); Spacer(); Text("\(Int(s.scrubStep)) pt").foregroundStyle(accent) }
-                        Text("Distance per step when you swipe. Shorter is faster.").font(.system(size: 12.5)).foregroundStyle(T.sub)
+                        Text("Distance per step when you swipe. Shorter is faster.").font(.system(size: 13)).foregroundStyle(T.sub)
                         Slider(value: Binding(get: { vm.settings.scrubStep }, set: { v in set { $0.scrubStep = v.rounded() } }), in: 24...60, step: 2).tint(accent)
                     }
                     .padding(16)
@@ -524,7 +507,7 @@ private struct SettingsSheets: View {
             case "look":
                 SheetTitle(title: "Appearance", sub: "Theme, colour and depth.").padding(.top, 28)
                 SCard {
-                    SToggle(symbol: "square.3.layers.3d", title: "Depth", sub: "Raised keys, dial and trackpad, with light and shadow", accent: accent, on: bind({ $0.depth }, { $0.depth = $1 }))
+                    SToggle(symbol: "square.3.layers.3d", title: "Depth", sub: "Raised keys with soft shadows", accent: accent, on: bind({ $0.depth }, { $0.depth = $1 }))
                 }
                 SHead(text: "Theme")
                 HStack(spacing: 10) {
@@ -542,7 +525,7 @@ private struct SettingsSheets: View {
                                     ? AnyShapeStyle(LinearGradient(stops: [.init(color: Color(hex: Palettes.light.screen), location: 0.5), .init(color: Color(hex: Palettes.dark.screen), location: 0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
                                     : AnyShapeStyle(Color(hex: p.screen))))
                                 .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(sel ? accent : Color(hex: p.line), lineWidth: sel ? 2 : 1))
-                                Text(p.label).font(.system(size: 12.5, weight: sel ? .semibold : .regular)).foregroundStyle(sel ? T.ink : T.sub)
+                                Text(p.label).font(.system(size: 13, weight: sel ? .semibold : .regular)).foregroundStyle(sel ? T.ink : T.sub)
                             }
                         }
                         .buttonStyle(Pressable())
@@ -565,7 +548,7 @@ private struct SettingsSheets: View {
                     .padding(.vertical, 18).padding(.horizontal, 8)
                 }
             case "support":
-                SheetTitle(title: "Help & feedback", sub: "Ideas, problems or questions: they go straight to the developer.").padding(.top, 28)
+                SheetTitle(title: "Help & feedback", sub: "Straight to the developer.").padding(.top, 28)
                 SCard {
                     SRow(symbol: "lightbulb", title: "Request a feature") { contact("Feature request") }
                     SLine()
@@ -580,9 +563,9 @@ private struct SettingsSheets: View {
                     SRow(symbol: "sparkles", title: "Show the welcome again") { set { $0.onboarded = false; $0.toured = false }; dismiss() }
                 }
             case "backup":
-                SheetTitle(title: "Backup & restore", sub: "Settings, quick access and channels in one file. TVs pair again on a new iPhone.").padding(.top, 28)
+                SheetTitle(title: "Backup & restore", sub: "Everything in one file.").padding(.top, 28)
                 SCard {
-                    SRow(symbol: "square.and.arrow.up", title: "Back up", sub: "Save a file to Files or share it") { exporting = true }
+                    SRow(symbol: "square.and.arrow.up", title: "Back up", sub: "Save or share a file") { exporting = true }
                     SLine()
                     SRow(symbol: "square.and.arrow.down", title: "Restore", sub: "From a backup file") { importing = true }
                 }
@@ -592,7 +575,7 @@ private struct SettingsSheets: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("No account, no ads, no analytics or tracking.").font(.system(size: 16)).foregroundStyle(T.ink)
                         Text("Roku, Samsung, LG, webOS, Android TV, Google TV and the app names and logos shown are trademarks of their owners. Mini Remote is an independent app, not affiliated with or endorsed by them; it uses the TVs' remote-control interfaces on your own network.")
-                            .font(.system(size: 12.5)).foregroundStyle(T.sub).fixedSize(horizontal: false, vertical: true)
+                            .font(.system(size: 13)).foregroundStyle(T.sub).fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(16).frame(maxWidth: .infinity, alignment: .leading)
                     SLine(inset: 16)
@@ -661,7 +644,7 @@ private struct LicensesPage: View {
                 InfoBlock("Apple frameworks", "SwiftUI, UIKit, Network, Security, CryptoKit: part of iOS.")
             }
             .padding(.top, 8)
-            Text("The iOS app uses no third-party code, fonts or images. App logos are not bundled.").font(.system(size: 12.5)).foregroundStyle(T.muted).padding(.top, 10)
+            Text("The iOS app uses no third-party code, fonts or images. App logos are not bundled.").font(.system(size: 13)).foregroundStyle(T.muted).padding(.top, 10)
         }
         .navigationTitle("Open-source licences").navigationBarTitleDisplayMode(.inline)
     }

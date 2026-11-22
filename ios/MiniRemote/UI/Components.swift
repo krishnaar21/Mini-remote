@@ -108,7 +108,7 @@ struct ToggleRow: View {
         Toggle(isOn: $on) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 15)).foregroundStyle(T.ink)
-                if let sub { Text(sub).font(.system(size: 12.5)).foregroundStyle(T.muted) }
+                if let sub { Text(sub).font(.system(size: 13)).foregroundStyle(T.muted) }
             }
         }
         .tint(accent)
@@ -123,7 +123,7 @@ struct InfoBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(.system(size: 15)).foregroundStyle(T.ink)
-            Text(body_).font(.system(size: 12.5)).foregroundStyle(T.muted).fixedSize(horizontal: false, vertical: true)
+            Text(body_).font(.system(size: 13)).foregroundStyle(T.muted).fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -155,10 +155,22 @@ struct ConfirmSheet: View {
     let text: String
     let action: String
     var danger = true
+    /** An SF Symbol drawn large above the title, in soft rings (e.g. "power" for turning the TV off). */
+    var symbol: String? = nil
     let onConfirm: () -> Void
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         VStack(spacing: 0) {
+            if let symbol {
+                let tint = danger ? Color(hex: 0xFF5A4F) : T.ink
+                ZStack {
+                    Circle().fill(tint.opacity(0.08)).frame(width: 112, height: 112)
+                    Circle().fill(tint.opacity(0.16)).frame(width: 80, height: 80)
+                    Image(systemName: symbol).font(.system(size: 32, weight: .semibold)).foregroundStyle(tint)
+                }
+                .padding(.top, 12).padding(.bottom, 18)
+                .accessibilityHidden(true)
+            }
             Text(title).font(.system(size: 19, weight: .semibold)).foregroundStyle(T.ink).multilineTextAlignment(.center)
             Text(text).font(.system(size: 14)).foregroundStyle(T.muted).multilineTextAlignment(.center).padding(.top, 8).padding(.bottom, 10)
             WideButton(title: action, kind: danger ? .danger : .primary) { onConfirm(); dismiss() }

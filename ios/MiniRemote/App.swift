@@ -76,7 +76,7 @@ struct ContentView: View {
         .sheet(isPresented: $showSleep) { SleepSheet(vm: vm, accent: accent) }
         .sheet(item: Binding(get: { apps.map { AppsMode(picking: $0) } }, set: { apps = $0?.picking })) { m in
             AppsView(vm: vm, accent: accent, picking: m.picking, openDevices: { apps = nil; showDevices = true }, onFull: { apps = nil; vm.say("Quick access is full") })
-                .presentationDetents([.large]).presentationDragIndicator(.visible)
+                .presentationDetents([.large]).grabber()
         }
         // The TV focused a text box (login, search): open the typing sheet, without pressing Search again.
         .onChange(of: vm.keyboardAsk) { _, _ in if !showKeys { keysFromTv = true; showKeys = true } }

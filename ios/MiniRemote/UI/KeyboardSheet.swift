@@ -62,7 +62,7 @@ struct KeyboardSheet: View {
                 .padding(.top, 4)
                 if vm.searchesApps {
                     HStack(spacing: 8) {
-                        Text("Search in").font(.system(size: 12.5)).foregroundStyle(T.muted).padding(.trailing, 4)
+                        Text("Search in").font(.system(size: 13)).foregroundStyle(T.muted).padding(.trailing, 4)
                         ForEach([("youtube", "YouTube"), ("play", "Play Store")], id: \.0) { w, label in
                             let ok = !text.trimmingCharacters(in: .whitespaces).isEmpty
                             Button { vm.searchIn(w, text); dismiss() } label: {

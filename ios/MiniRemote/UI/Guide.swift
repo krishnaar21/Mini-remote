@@ -30,7 +30,7 @@ struct GesturesPage: View {
                 Card { rows(TWO) }
                 SectionTitle(text: "Ring")
                 Card { rows(RING) }
-                Text("Gestures work the same on the dial and the trackpad.").font(.system(size: 12.5)).foregroundStyle(T.muted).padding(.top, 10)
+                Text("Gestures work the same on the dial and the trackpad.").font(.system(size: 13)).foregroundStyle(T.muted).padding(.top, 10)
             }
             .padding(.horizontal, 24).padding(.bottom, 32)
         }

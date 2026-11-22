@@ -169,10 +169,10 @@ struct CoachTour: View {
     private func card(_ title: String, _ text: String, number: Int, of n: Int, last: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("\(number) of \(n)").font(.system(size: 12.5, weight: .medium)).foregroundStyle(accent)
+                Text("\(number) of \(n)").font(.system(size: 13, weight: .medium)).foregroundStyle(accent)
                 Spacer()
                 // The tour runs on a pretend TV: say so.
-                Text("Demo TV · nothing is sent").font(.system(size: 11.5)).foregroundStyle(T.sub)
+                Text("Demo TV · nothing is sent").font(.system(size: 12)).foregroundStyle(T.sub)
                     .padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(T.ink.opacity(0.08)))
             }
             Text(title).font(.system(size: 18, weight: .semibold)).foregroundStyle(T.ink).padding(.top, 4)

@@ -55,14 +55,28 @@ extension View {
      * nothing underneath reads through or around it (iOS 26's floating sheets leave a gap).
      */
     func sheetBackdrop(_ on: Bool) -> some View {
-        self
-            .blur(radius: on ? 14 : 0)
-            .overlay {
-                Color.black.opacity(on ? (Look.p.light ? 0.22 : 0.45) : 0)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
+        // The system's own blur material (drawn by the GPU, not re-rendering the view) faded in and
+        // out quickly, so closing a sheet doesn't wait on the remote redrawing.
+        self.overlay {
+            ZStack {
+                Rectangle().fill(.ultraThinMaterial)
+                Color.black.opacity(Look.p.light ? 0.18 : 0.42)
             }
-            .animation(.easeOut(duration: 0.25), value: on)
+            .ignoresSafeArea()
+            .opacity(on ? 1 : 0)
+            .allowsHitTesting(false)
+            .animation(.easeOut(duration: 0.18), value: on)
+        }
+    }
+
+    /** A short grabber pill at the top of a sheet (the system one is wide). */
+    func grabber() -> some View {
+        self
+            .presentationDragIndicator(.hidden)
+            .overlay(alignment: .top) {
+                Capsule().fill(T.sub.opacity(0.55)).frame(width: 30, height: 4).padding(.top, 7)
+                    .allowsHitTesting(false).accessibilityHidden(true)
+            }
     }
 }
 

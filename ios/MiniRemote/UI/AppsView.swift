@@ -123,7 +123,7 @@ struct AppsView: View {
                     let missing = popular.filter { $0.installed == false }
                     if !missing.isEmpty {
                         SectionTitle(text: "Not on your TV")
-                        Text("Tap one to get it from the TV's store.").font(.system(size: 12.5)).foregroundStyle(T.muted).padding(.bottom, 6)
+                        Text("Tap one to get it from the TV's store.").font(.system(size: 13)).foregroundStyle(T.muted).padding(.bottom, 6)
                         grid(missing)
                     }
                 } else {
@@ -136,7 +136,7 @@ struct AppsView: View {
                 let channels = shortcutEntries(.channel)
                 if channels.isEmpty {
                     Text("Add the channels you watch, like 101 · Star Sports. Tapping one tunes the TV to it.")
-                        .font(.system(size: 12.5)).foregroundStyle(T.muted)
+                        .font(.system(size: 13)).foregroundStyle(T.muted)
                 } else { grid(channels) { e in if picking { pick(e) } else if !needTv() { e.open() } } }
                 HStack(spacing: 12) {
                     WideButton(title: "Add a channel", kind: .secondary) { adding = .channel }
@@ -209,9 +209,9 @@ private struct Tile: View {
                 RoundedRectangle(cornerRadius: 18).fill(e.bg)
                 if let icon = e.icon { TvIcon(url: icon) { name }.padding(10) } else { name }
             }
-            if e.pinned { Image(systemName: "star.fill").font(.system(size: 11)).foregroundStyle(e.ink.opacity(0.85)).padding(9) }
+            if e.pinned { Image(systemName: "star.fill").font(.system(size: 12)).foregroundStyle(e.ink.opacity(0.85)).padding(9) }
             if let b = e.badge {
-                Text(b).font(.system(size: 11, design: .monospaced)).foregroundStyle(.white)
+                Text(b).font(.system(size: 12, design: .monospaced)).foregroundStyle(.white)
                     .padding(.horizontal, 6).padding(.vertical, 2).background(RoundedRectangle(cornerRadius: 6).fill(.black.opacity(0.35)))
                     .padding(8).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
@@ -244,7 +244,7 @@ private struct QuickTile: View {
                 else { SiteLogo(site: cat.flatMap { Logos.sites[$0.key] }) { short }.padding(cat == nil ? 0 : 10) }
             }
             .frame(width: 70, height: 70)
-            Text(s.name).font(.system(size: 11.5)).foregroundStyle(T.ink).lineLimit(1).frame(width: 74)
+            Text(s.name).font(.system(size: 12)).foregroundStyle(T.ink).lineLimit(1).frame(width: 74)
         }
         .accessibilityElement(children: .ignore).accessibilityLabel(s.name).accessibilityAddTraits(.isButton)
     }
@@ -308,7 +308,7 @@ private struct AppSheet: View {
                 if entry.storeId != nil {
                     WideButton(title: entry.installed == false ? "Install…" : "Uninstall…", kind: entry.installed == false ? .primary : .danger) { confirm = true }
                 } else if entry.delete == nil {
-                    Text("To install or remove it, use the app store on the TV.").font(.system(size: 12.5)).foregroundStyle(T.muted).padding(.top, 12)
+                    Text("To install or remove it, use the app store on the TV.").font(.system(size: 13)).foregroundStyle(T.muted).padding(.top, 12)
                 }
                 if let del = entry.delete { WideButton(title: "Delete from this list", kind: .danger) { del(); dismiss() } }
             }
@@ -357,7 +357,7 @@ private struct AddSheet: View {
                         switch brand { case .ROKU: return "12"; case .SAMSUNG: return "3201907018807"; case .LG: return "netflix"; case .ANDROID_TV: return "com.netflix.ninja"; case nil: return "" }
                     }())
                     Text(brand == nil ? "Choose a TV first: app ids are different on every kind of TV." : "Installed apps already show under On your TV (Roku, Samsung, LG).")
-                        .font(.system(size: 12.5)).foregroundStyle(T.muted)
+                        .font(.system(size: 13)).foregroundStyle(T.muted)
                 }
                 Toggle("Add to quick access", isOn: $pin).tint(accent).foregroundStyle(T.ink)
                 WideButton(title: "Save", enabled: !name.trimmingCharacters(in: .whitespaces).isEmpty && !value.isEmpty && (kind == .channel || brand != nil)) {

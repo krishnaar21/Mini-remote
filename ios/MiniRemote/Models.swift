@@ -84,7 +84,7 @@ struct Settings: Codable, Equatable {
     var onboarded = false
     var toured = false
     /** Keys, dial and trackpad drawn raised (light and shadow) instead of flat glass. */
-    var depth = false
+    var depth = true
 }
 
 extension Settings {

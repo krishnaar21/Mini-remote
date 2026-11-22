@@ -139,23 +139,28 @@ extension Logos {
         guard sw > 2, sh > 2, let c = canvas(px, lift: lift) else { return .plate(nil) }
         // A trimmed icon has lost its outer margin: draw it a little smaller so the mark keeps its size.
         let k = CGFloat(px) * (trimmed ? 0.58 : 0.74) / CGFloat(max(sw, sh))
-        let iw = CGFloat(sw) * k, ih = CGFloat(sh) * k
-        let x0 = (CGFloat(px) - iw) / 2, y0 = (CGFloat(px) - ih) / 2
+        // Whole pixels everywhere, so the stretched edges meet the icon without a hairline seam.
+        let iw = (CGFloat(sw) * k).rounded(), ih = (CGFloat(sh) * k).rounded()
+        let x0 = ((CGFloat(px) - iw) / 2).rounded(), y0 = ((CGFloat(px) - ih) / 2).rounded()
         let x1 = x0 + iw, y1 = y0 + ih, P = CGFloat(px)
         func piece(_ x: Int, _ y: Int, _ w: Int, _ h: Int, into r: CGRect) {
             guard r.width > 0, r.height > 0, let part = src.cropping(to: CGRect(x: x, y: y, width: w, height: h)) else { return }
             c.draw(part, in: r)
         }
-        c.interpolationQuality = .high
+        // Edge colours come from two pixels inside (the outermost ones can carry a tint), and each
+        // band reaches 2 px under the icon, which is drawn last on top.
+        let e = 2, o: CGFloat = 2
+        c.interpolationQuality = .none
         // Image rows run top-down; Core Graphics' y runs bottom-up.
-        piece(0, 0, sw, 1, into: CGRect(x: x0, y: y1, width: iw, height: P - y1))            // top edge, upwards
-        piece(0, sh - 1, sw, 1, into: CGRect(x: x0, y: 0, width: iw, height: y0))           // bottom edge, downwards
-        piece(0, 0, 1, sh, into: CGRect(x: 0, y: y0, width: x0, height: ih))                // left edge
-        piece(sw - 1, 0, 1, sh, into: CGRect(x: x1, y: y0, width: P - x1, height: ih))      // right edge
-        piece(0, 0, 1, 1, into: CGRect(x: 0, y: y1, width: x0, height: P - y1))             // corners
-        piece(sw - 1, 0, 1, 1, into: CGRect(x: x1, y: y1, width: P - x1, height: P - y1))
-        piece(0, sh - 1, 1, 1, into: CGRect(x: 0, y: 0, width: x0, height: y0))
-        piece(sw - 1, sh - 1, 1, 1, into: CGRect(x: x1, y: 0, width: P - x1, height: y0))
+        piece(0, e, sw, 1, into: CGRect(x: x0, y: y1 - o, width: iw, height: P - y1 + o))              // top edge, upwards
+        piece(0, sh - 1 - e, sw, 1, into: CGRect(x: x0, y: 0, width: iw, height: y0 + o))             // bottom edge, downwards
+        piece(e, 0, 1, sh, into: CGRect(x: 0, y: y0, width: x0 + o, height: ih))                      // left edge
+        piece(sw - 1 - e, 0, 1, sh, into: CGRect(x: x1 - o, y: y0, width: P - x1 + o, height: ih))    // right edge
+        piece(e, e, 1, 1, into: CGRect(x: 0, y: y1 - o, width: x0 + o, height: P - y1 + o))           // corners
+        piece(sw - 1 - e, e, 1, 1, into: CGRect(x: x1 - o, y: y1 - o, width: P - x1 + o, height: P - y1 + o))
+        piece(e, sh - 1 - e, 1, 1, into: CGRect(x: 0, y: 0, width: x0 + o, height: y0 + o))
+        piece(sw - 1 - e, sh - 1 - e, 1, 1, into: CGRect(x: x1 - o, y: 0, width: P - x1 + o, height: y0 + o))
+        c.interpolationQuality = .high
         c.draw(src, in: CGRect(x: x0, y: y0, width: iw, height: ih))
         guard let out = c.makeImage() else { return .plate(nil) }
         return .extend(UIImage(cgImage: out, scale: scale, orientation: .up))

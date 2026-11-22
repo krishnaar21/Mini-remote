@@ -78,7 +78,7 @@ struct HomeView: View {
                 .padding(.bottom, 44)
             } else {
                 VStack(spacing: 0) {
-                    topBar.padding(.horizontal, 16).padding(.top, 30)
+                    topBar.frame(width: KEYROW_W).padding(.top, 30)
                     middle.padding(.top, 14)
                     KeyPages(vm: vm, accent: accent, numpad: $numpad, page: $keyPage, openKeys: openKeys, openMore: openMore, openApps: openApps, openSleep: openSleep)
                         .padding(.top, 10).padding(.bottom, 56)
@@ -93,7 +93,7 @@ struct HomeView: View {
         .onDisappear { vm.followNowOn(false) }
         .sheet(isPresented: $askPower) {
             ConfirmSheet(title: "Turn off \(vm.active.map { shortName($0.name, $0.brand.label) } ?? "the TV")?",
-                         text: "If the TV is already off, this turns it on.", action: "Turn off") { vm.press(.power) }
+                         text: "If the TV is already off, this turns it on.", action: "Turn off", symbol: "power") { vm.press(.power) }
         }
     }
 
@@ -119,13 +119,14 @@ struct HomeView: View {
                             }
                         }
                         Text(vm.active.map { shortName($0.name, $0.brand.label) } ?? "Choose a TV")
-                            .font(.system(size: 14, weight: .medium)).foregroundStyle(T.ink).lineLimit(1)
+                            .font(.system(size: 15, weight: .medium)).foregroundStyle(T.ink).lineLimit(1)
                         Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).foregroundStyle(T.dim)
                     }
                     .padding(.leading, 7).padding(.trailing, 16)
                     .frame(minWidth: 150, maxWidth: 236, minHeight: 52, maxHeight: 52, alignment: .leading)
                     .fixedSize(horizontal: true, vertical: false)
-                    .background(Capsule().fill(T.high))
+                    // Same fill and depth as the round keys, so the top row matches the rest.
+                    .background(Capsule().fill(T.key))
                     .depth(Capsule())
                 }
                 .buttonStyle(Pressable())
@@ -228,7 +229,12 @@ struct GlassKey: View {
             VStack(spacing: 1) {
                 // Icons grow with the circle (sizes are given for a 68 pt key).
                 let k = min(1.2, max(1, size / 68))
-                if let symbol { Image(systemName: symbol).font(.system(size: icon * k, weight: .medium)) }
+                // − and + share one box so they sit at the same height; the minus is a step bolder
+                // and a touch wider, as a bare bar reads lighter than a cross.
+                if let symbol {
+                    Image(systemName: symbol).font(.system(size: icon * k * (symbol == "minus" ? 1.08 : 1), weight: symbol == "minus" ? .semibold : .medium))
+                        .frame(height: caption != nil ? icon * k * 1.15 : nil)
+                }
                 if let word { Text(word).font(.system(size: 16 * k, weight: .medium)) }
                 if let caption { Text(caption).font(.system(size: 9 * k, weight: .semibold)).tracking(0.8).foregroundStyle(T.dim) }
             }

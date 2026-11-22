@@ -13,7 +13,7 @@ struct FitSheet: ViewModifier {
         .scrollBounceBehavior(.basedOnSize)
         .background(T.sheet)
         .presentationDetents([.height(max(180, h + 12))])
-        .presentationDragIndicator(.visible)
+        .grabber()
         .presentationBackground(T.sheet)
     }
 }
@@ -51,13 +51,13 @@ struct SRow: View {
                     .frame(width: 34, height: 34).background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(tile ?? T.high))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.system(size: 17)).foregroundStyle(T.ink)
-                    if let sub { Text(sub).font(.system(size: 12.5)).foregroundStyle(T.sub).fixedSize(horizontal: false, vertical: true) }
+                    if let sub { Text(sub).font(.system(size: 13)).foregroundStyle(T.sub).fixedSize(horizontal: false, vertical: true) }
                 }
                 Spacer(minLength: 8)
                 if let value { Text(value).font(.system(size: 14)).foregroundStyle(T.sub).lineLimit(1) }
                 if let trailing { Image(systemName: trailing).font(.system(size: 13, weight: .semibold)).foregroundStyle(trailingTint) }
             }
-            .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 64)
+            .padding(.horizontal, 16).padding(.vertical, 15).frame(minHeight: 72)
             .contentShape(Rectangle())
         }
         .buttonStyle(Pressable())
@@ -78,12 +78,12 @@ struct SToggle: View {
                     .frame(width: 34, height: 34).background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(T.high))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.system(size: 17)).foregroundStyle(T.ink)
-                    if let sub { Text(sub).font(.system(size: 12.5)).foregroundStyle(T.sub).fixedSize(horizontal: false, vertical: true) }
+                    if let sub { Text(sub).font(.system(size: 13)).foregroundStyle(T.sub).fixedSize(horizontal: false, vertical: true) }
                 }
             }
         }
         .tint(accent)
-        .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 64)
+        .padding(.horizontal, 16).padding(.vertical, 15).frame(minHeight: 72)
     }
 }
 
@@ -204,7 +204,7 @@ struct MoreSheet: View {
         return Button { if on { vm.press(k) } else { vm.explain(k) } } label: {
             VStack(spacing: 3) {
                 Image(systemName: sym).font(.system(size: 19)).foregroundStyle(T.ink.opacity(on ? 1 : 0.3))
-                Text(label).font(.system(size: 11)).foregroundStyle(T.muted.opacity(on ? 1 : 0.4)).lineLimit(1)
+                Text(label).font(.system(size: 12)).foregroundStyle(T.muted.opacity(on ? 1 : 0.4)).lineLimit(1)
             }
             .frame(maxWidth: .infinity).frame(height: 68)
             .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(T.high))
@@ -233,7 +233,7 @@ struct AppSquares: View {
                                     Button { openApps(false) } label: {
                                         VStack(spacing: 3) {
                                             Image(systemName: "square.grid.2x2").font(.system(size: 19))
-                                            Text("All apps").font(.system(size: 11)).foregroundStyle(T.muted)
+                                            Text("All apps").font(.system(size: 12)).foregroundStyle(T.muted)
                                         }
                                         .foregroundStyle(T.ink).frame(maxWidth: .infinity).frame(height: 68)
                                         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(T.high))
@@ -279,7 +279,7 @@ struct SleepSheet: View {
             }
             .frame(height: 120).padding(.top, 28).padding(.bottom, 18)
             .accessibilityHidden(true)
-            SheetTitle(title: "Sleep timer", sub: "Pick when the TV turns itself off.", center: true, small: true).padding(.bottom, 8)
+            SheetTitle(title: "Sleep timer", sub: "When the TV turns off.", center: true, small: true).padding(.bottom, 8)
             if let at = vm.sleepAt {
                 TimelineView(.periodic(from: .now, by: 1)) { t in
                     let left = max(0, Int(at.timeIntervalSince(t.date)))
@@ -287,7 +287,7 @@ struct SleepSheet: View {
                         Image(systemName: "moon.zzz.fill").foregroundStyle(accent).frame(width: 44, height: 44).background(Circle().fill(accent.opacity(0.2)))
                         VStack(alignment: .leading, spacing: 2) {
                             Text(String(format: "%d:%02d", left / 60, left % 60)).font(.system(size: 26, weight: .semibold, design: .monospaced)).foregroundStyle(T.ink)
-                            Text("TV turns off at \(at.formatted(date: .omitted, time: .shortened))").font(.system(size: 12.5)).foregroundStyle(T.muted)
+                            Text("TV turns off at \(at.formatted(date: .omitted, time: .shortened))").font(.system(size: 13)).foregroundStyle(T.muted)
                         }
                         Spacer()
                         Button("Cancel") { vm.setSleep(nil) }.buttonStyle(.bordered).tint(T.ink)
