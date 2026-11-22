@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CoreImage
 
 /**
  * App logos for Quick access and the app tiles: the app's own website icon (apple-touch-icon,
@@ -101,94 +102,122 @@ extension Logos {
         return nil
     }
 
-    /** How an icon sits on a tile: its edges stretched out (plain edges), or as a smaller plate (busy or see-through edges). */
+    /** How an icon sits on a tile: drawn to fill it (its background carried to the edges), or as a plate on the tile's colour. */
     enum Fit { case extend(UIImage), plate(Color?) }
 
+    private static let ci = CIContext()
 
     /**
-     * Prepares an icon for a [side]-point tile: the icon at three quarters of the tile, with its
-     * own edge pixels stretched to the tile's edge, so its background
-     * carries on. Icons with see-through corners or artwork reaching the edge are left as plates.
+     * Prepares an icon for a tile of [width] × [height] points (a circle, or a wider rounded
+     * square), never stretching or cropping the logo itself:
+     * - plain edges (Netflix, YouTube, Prime): the icon at about three quarters of the tile's
+     *   short side, its own edge pixels carried out to the tile's edges;
+     * - busy or very rounded artwork (SonyLIV, Disney+): the icon whole, on a soft blur of itself
+     *   that fills the tile, its edge feathered into that blur so no border shows;
+     * - a glyph on nothing (see-through): a plate on the tile's colour.
      */
-    static func fit(_ img: UIImage, side: CGFloat, scale: CGFloat) -> Fit {
+    static func fit(_ img: UIImage, width: CGFloat, height: CGFloat, scale: CGFloat) -> Fit {
         guard var cg = img.cgImage, var stats = edgeStats(cg) else { return .plate(nil) }
         let orig = cg, origStats = stats
         var trimmed = false
-        // App Store artwork often comes already rounded (see-through corners, solid sides). Trim
-        // to just inside the rounding so the icon's own background can carry on to the circle's
-        // edge, as the Android tiles do, instead of a square sitting on a plate.
+        // App Store artwork often comes already rounded (see-through corners, solid sides): trim
+        // to just inside the rounding so its own background can carry on.
         if !stats.opaque && stats.sides {
             let inset = CGFloat(min(cg.width, cg.height)) * 0.14
             if let inner = cg.cropping(to: CGRect(x: inset, y: inset, width: CGFloat(cg.width) - 2 * inset, height: CGFloat(cg.height) - 2 * inset)),
                let s2 = edgeStats(inner), s2.opaque { cg = inner; stats = s2; trimmed = true }
         }
-        let px = Int((side * scale).rounded())
-        guard px > 0 else { return .plate(nil) }
+        let pw = Int((width * scale).rounded()), ph = Int((height * scale).rounded())
+        guard pw > 0, ph > 0 else { return .plate(nil) }
         // A black icon background would melt into the dark remote: lift it to the key grey.
         let lift = !Look.p.light && stats.lum < 0.14
-        // Still see-through (a glyph on nothing): the icon on the tile's colour.
         if !stats.opaque && !origStats.sides { return .plate(nil) }
-        // Very rounded artwork (Disney+) or artwork that runs to the edge (SonyLIV): fill the
-        // circle with the whole icon, a touch over size, so its rounded corners fall outside.
-        if !stats.opaque || stats.busy { return cover(orig, px: px, scale: scale, lift: lift) }
-        // Trim the soft, anti-aliased outer pixels, then draw the icon centred with its edge rows
-        // and columns stretched out to the tile's edge (and the corner pixels filling the corners).
+        if !stats.opaque || stats.busy { return ambient(orig, pw: pw, ph: ph, scale: scale, lift: lift) }
+        // Trim the soft, anti-aliased outer pixels.
         let t = Int((CGFloat(min(cg.width, cg.height)) * 0.06).rounded())
         guard let src = cg.cropping(to: CGRect(x: t, y: t, width: cg.width - 2 * t, height: cg.height - 2 * t)) else { return .plate(nil) }
         let sw = src.width, sh = src.height
-        guard sw > 2, sh > 2, let c = canvas(px, lift: lift) else { return .plate(nil) }
+        guard sw > 6, sh > 6, let c = canvas(pw, ph, lift: lift) else { return .plate(nil) }
         // A trimmed icon has lost its outer margin: draw it a little smaller so the mark keeps its size.
-        let k = CGFloat(px) * (trimmed ? 0.58 : 0.74) / CGFloat(max(sw, sh))
-        // Whole pixels everywhere, so the stretched edges meet the icon without a hairline seam.
+        let k = CGFloat(min(pw, ph)) * (trimmed ? 0.58 : 0.74) / CGFloat(max(sw, sh))
+        // Whole pixels everywhere, so the carried-out edges meet the icon without a hairline seam.
         let iw = (CGFloat(sw) * k).rounded(), ih = (CGFloat(sh) * k).rounded()
-        let x0 = ((CGFloat(px) - iw) / 2).rounded(), y0 = ((CGFloat(px) - ih) / 2).rounded()
-        let x1 = x0 + iw, y1 = y0 + ih, P = CGFloat(px)
+        let W = CGFloat(pw), H = CGFloat(ph)
+        let x0 = ((W - iw) / 2).rounded(), y0 = ((H - ih) / 2).rounded()
+        let x1 = x0 + iw, y1 = y0 + ih
         func piece(_ x: Int, _ y: Int, _ w: Int, _ h: Int, into r: CGRect) {
             guard r.width > 0, r.height > 0, let part = src.cropping(to: CGRect(x: x, y: y, width: w, height: h)) else { return }
             c.draw(part, in: r)
         }
-        // Edge colours come from two pixels inside (the outermost ones can carry a tint), and each
-        // band reaches 2 px under the icon, which is drawn last on top.
-        let e = 2, o: CGFloat = 2
+        // Edge colours come from a few pixels inside (the outermost can carry a tint), and each band
+        // tucks 2 px under the icon, which is drawn last on top.
+        let e = 3, o: CGFloat = 2
         c.interpolationQuality = .none
         // Image rows run top-down; Core Graphics' y runs bottom-up.
-        piece(0, e, sw, 1, into: CGRect(x: x0, y: y1 - o, width: iw, height: P - y1 + o))              // top edge, upwards
-        piece(0, sh - 1 - e, sw, 1, into: CGRect(x: x0, y: 0, width: iw, height: y0 + o))             // bottom edge, downwards
-        piece(e, 0, 1, sh, into: CGRect(x: 0, y: y0, width: x0 + o, height: ih))                      // left edge
-        piece(sw - 1 - e, 0, 1, sh, into: CGRect(x: x1 - o, y: y0, width: P - x1 + o, height: ih))    // right edge
-        piece(e, e, 1, 1, into: CGRect(x: 0, y: y1 - o, width: x0 + o, height: P - y1 + o))           // corners
-        piece(sw - 1 - e, e, 1, 1, into: CGRect(x: x1 - o, y: y1 - o, width: P - x1 + o, height: P - y1 + o))
+        piece(0, e, sw, 1, into: CGRect(x: x0, y: y1 - o, width: iw, height: H - y1 + o))
+        piece(0, sh - 1 - e, sw, 1, into: CGRect(x: x0, y: 0, width: iw, height: y0 + o))
+        piece(e, 0, 1, sh, into: CGRect(x: 0, y: y0, width: x0 + o, height: ih))
+        piece(sw - 1 - e, 0, 1, sh, into: CGRect(x: x1 - o, y: y0, width: W - x1 + o, height: ih))
+        piece(e, e, 1, 1, into: CGRect(x: 0, y: y1 - o, width: x0 + o, height: H - y1 + o))
+        piece(sw - 1 - e, e, 1, 1, into: CGRect(x: x1 - o, y: y1 - o, width: W - x1 + o, height: H - y1 + o))
         piece(e, sh - 1 - e, 1, 1, into: CGRect(x: 0, y: 0, width: x0 + o, height: y0 + o))
-        piece(sw - 1 - e, sh - 1 - e, 1, 1, into: CGRect(x: x1 - o, y: 0, width: P - x1 + o, height: y0 + o))
+        piece(sw - 1 - e, sh - 1 - e, 1, 1, into: CGRect(x: x1 - o, y: 0, width: W - x1 + o, height: y0 + o))
         c.interpolationQuality = .high
-        c.draw(src, in: CGRect(x: x0, y: y0, width: iw, height: ih))
+        // The icon itself, its outer pixel trimmed again so no soft edge line is left.
+        if let core = src.cropping(to: CGRect(x: 1, y: 1, width: sw - 2, height: sh - 2)) {
+            c.draw(core, in: CGRect(x: x0 + k, y: y0 + k, width: iw - 2 * k, height: ih - 2 * k))
+        }
         guard let out = c.makeImage() else { return .plate(nil) }
         return .extend(UIImage(cgImage: out, scale: scale, orientation: .up))
     }
 
-    /** A square drawing surface; with `lift`, grey underneath and drawing in Lighten mode, so black becomes the key grey. */
-    private static func canvas(_ px: Int, lift: Bool) -> CGContext? {
-        guard let c = CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0,
+    /** A drawing surface; with `lift`, grey underneath and drawing in Lighten mode, so black becomes the key grey. */
+    private static func canvas(_ pw: Int, _ ph: Int, lift: Bool) -> CGContext? {
+        guard let c = CGContext(data: nil, width: pw, height: ph, bitsPerComponent: 8, bytesPerRow: 0,
                                 space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
         c.interpolationQuality = .high
         if lift {
             let g = Look.p.high
             c.setFillColor(red: CGFloat((g >> 16) & 0xFF) / 255, green: CGFloat((g >> 8) & 0xFF) / 255, blue: CGFloat(g & 0xFF) / 255, alpha: 1)
-            c.fill(CGRect(x: 0, y: 0, width: px, height: px))
+            c.fill(CGRect(x: 0, y: 0, width: pw, height: ph))
             c.setBlendMode(.lighten)
         }
         return c
     }
 
-    /** The whole icon filling the tile, 6% over size so rounded corners and soft edges fall outside the circle. */
-    private static func cover(_ cg: CGImage, px: Int, scale: CGFloat, lift: Bool) -> Fit {
-        guard let c = canvas(px, lift: lift) else { return .plate(nil) }
-        let P = CGFloat(px), d = P * 1.06
-        let k = d / CGFloat(min(cg.width, cg.height))
-        let w = CGFloat(cg.width) * k, h = CGFloat(cg.height) * k
-        c.draw(cg, in: CGRect(x: (P - w) / 2, y: (P - h) / 2, width: w, height: h))
-        guard let out = c.makeImage() else { return .plate(nil) }
-        return .extend(UIImage(cgImage: out, scale: scale, orientation: .up))
+    /**
+     * Busy or very rounded artwork: the whole icon, its proportions kept, over a soft blur of
+     * itself enlarged to fill the tile; the icon's edge is feathered into the blur.
+     */
+    private static func ambient(_ cg: CGImage, pw: Int, ph: Int, scale: CGFloat, lift: Bool) -> Fit {
+        let W = CGFloat(pw), H = CGFloat(ph), short = min(W, H)
+        let icon = CIImage(cgImage: cg)
+        let side = min(icon.extent.width, icon.extent.height)
+        // The background: the solid middle of the icon (away from rounded corners), enlarged to
+        // cover the tile and blurred heavily, so only its colours remain.
+        let mid = icon.cropped(to: icon.extent.insetBy(dx: side * 0.16, dy: side * 0.16))
+        let kb = max(W, H) * 1.3 / mid.extent.width
+        let bg = mid.transformed(by: CGAffineTransform(translationX: -mid.extent.midX, y: -mid.extent.midY))
+            .clampedToExtent()
+            .transformed(by: CGAffineTransform(scaleX: kb, y: kb))
+            .transformed(by: CGAffineTransform(translationX: W / 2, y: H / 2))
+            .applyingGaussianBlur(sigma: Double(short * 0.09))
+        // The icon at 78% of the tile's short side, centred.
+        let f = short * 0.78, kf = f / side
+        let fg = icon.transformed(by: CGAffineTransform(scaleX: kf, y: kf))
+            .transformed(by: CGAffineTransform(translationX: (W - icon.extent.width * kf) / 2, y: (H - icon.extent.height * kf) / 2))
+        // A rounded mask a little inside the icon, softened, so its edge melts into the blur.
+        let r = CGRect(x: (W - f) / 2, y: (H - f) / 2, width: f, height: f).insetBy(dx: f * 0.03, dy: f * 0.03)
+        guard let gen = CIFilter(name: "CIRoundedRectangleGenerator", parameters: [
+            "inputExtent": CIVector(cgRect: r), "inputRadius": f * 0.2, "inputColor": CIColor.white]),
+              let shape = gen.outputImage else { return .plate(nil) }
+        let mask = shape.applyingGaussianBlur(sigma: Double(f * 0.035))
+        let out = fg.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: bg, kCIInputMaskImageKey: mask])
+        let frame = CGRect(x: 0, y: 0, width: W, height: H)
+        guard let rendered = ci.createCGImage(out.cropped(to: frame), from: frame), let c = canvas(pw, ph, lift: lift) else { return .plate(nil) }
+        c.draw(rendered, in: frame)
+        guard let img = c.makeImage() else { return .plate(nil) }
+        return .extend(UIImage(cgImage: img, scale: scale, orientation: .up))
     }
 
     /** Corners opaque? Border one plain colour (low spread of brightness)? */
@@ -239,6 +268,8 @@ struct AppTile: View {
     @Environment(\.displayScale) private var scale
     @State private var fit: Logos.Fit?
     @State private var image: UIImage?
+    /** The tile's real width (square tiles stretch to their column). */
+    @State private var width: CGFloat = 0
 
     var body: some View {
         let cat = s.kind == .app && s.brand == nil ? Catalog.byKey(s.value) : (s.kind == .app ? Catalog.apps.first { $0.name.caseInsensitiveCompare(s.name) == .orderedSame } : nil)
@@ -249,7 +280,8 @@ struct AppTile: View {
         ZStack {
             shape.fill(bg)
             switch fit {
-            case .extend(let img): Image(uiImage: img).resizable().scaledToFill()
+            // Made for this exact tile size, so it's shown as it is (never stretched or cropped).
+            case .extend(let img): Image(uiImage: img).resizable()
             case .plate(let edge):
                 ZStack {
                     if let edge { edge }
@@ -266,10 +298,11 @@ struct AppTile: View {
         .frame(maxWidth: square ? .infinity : nil)
         .clipShape(shape)
         .contentShape(shape)
-        .task(id: s.id) {
-            guard let key = cat?.key, let img = await Logos.best(key) else { return }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .task(id: "\(s.id)-\(Int(width))") {
+            guard width > 0, let key = cat?.key, let img = await Logos.best(key) else { return }
             image = img
-            fit = Logos.fit(img, side: size, scale: scale)
+            fit = Logos.fit(img, width: width, height: size, scale: scale)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(s.name)
