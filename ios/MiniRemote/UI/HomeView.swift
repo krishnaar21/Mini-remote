@@ -107,22 +107,17 @@ struct HomeView: View {
     private var topBar: some View {
         Group {
             HStack(spacing: 12) {
-                // The TV: a TV icon with the connection colour as a badge, and its name. As tall as
+                // The TV: its icon and name, with a small connection dot after the name. As tall as
                 // the power key; as wide as the name needs, within limits.
                 Button(action: openDevices) {
-                    HStack(spacing: 10) {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: "tv").font(.system(size: 16, weight: .medium)).foregroundStyle(T.ink)
-                                .frame(width: 38, height: 38).background(Circle().fill(T.ink.opacity(0.08)))
-                            if let c = statusColour {
-                                Circle().fill(c).frame(width: 7, height: 7).padding(1.5).background(Circle().fill(T.high)).offset(x: -1, y: 2)
-                            }
-                        }
+                    HStack(spacing: 8) {
+                        Image(systemName: "tv").font(.system(size: 16, weight: .medium)).foregroundStyle(T.ink)
                         Text(vm.active.map { shortName($0.name, $0.brand.label) } ?? "Choose a TV")
                             .font(.system(size: 15, weight: .medium)).foregroundStyle(T.ink).lineLimit(1)
-                        Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).foregroundStyle(T.dim)
+                        if let c = statusColour { Circle().fill(c).frame(width: 6, height: 6).padding(.leading, -2) }
+                        Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).foregroundStyle(T.dim).padding(.leading, 2)
                     }
-                    .padding(.leading, 7).padding(.trailing, 16)
+                    .padding(.leading, 18).padding(.trailing, 16)
                     .frame(minWidth: 150, maxWidth: 236, minHeight: 52, maxHeight: 52, alignment: .leading)
                     .fixedSize(horizontal: true, vertical: false)
                     // Same fill and depth as the round keys, so the top row matches the rest.

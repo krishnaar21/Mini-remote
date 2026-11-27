@@ -13,7 +13,9 @@ struct DevicesSheet: View {
     var start: [Route] = []
     @State private var path: [Route] = []
     /** How tall each page's content is, so the sheet fits the page showing (and grows with it). */
-    @State private var heights: [String: CGFloat] = [:]
+    /** Kept across openings, so the sheet opens straight at its fitted height (no resize while it appears). */
+    @State private var heights: [String: CGFloat] = DevicesSheet.known
+    private static var known: [String: CGFloat] = [:]
 
     /** The bar with the title and buttons, the grabber above it, and room at the foot. */
     private let chrome: CGFloat = 96
@@ -53,7 +55,10 @@ struct DevicesSheet: View {
                     .environment(\.pageKey, "\(r)")
                 }
         }
-        .environment(\.pageHeight) { key, h in if heights[key] != h { heights[key] = h } }
+        .environment(\.pageHeight) { key, h in
+            guard abs((heights[key] ?? -1) - h) > 0.5 else { return }
+            heights[key] = h; DevicesSheet.known[key] = h
+        }
         .tint(T.ink)
         .background(T.sheet)
         .presentationBackground(T.sheet)

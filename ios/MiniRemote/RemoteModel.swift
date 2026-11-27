@@ -849,11 +849,14 @@ extension RemoteModel {
     /** What's on the TV, for the line at the foot of the remote: "YouTube · 1:23 / 4:56". */
     var nowLine: String? {
         guard link == .ready, let n = nowOn, !n.name.isEmpty, n.name != "Home" else { return nil }
+        // The TV's own tuner or input viewer says nothing useful by name (and an HDMI box or the
+        // home screen can report as it), so live TV gets no label; its keys still switch to channels.
+        if n.live && (n.name == "Live TV" || n.name.contains(".")) { return nil }
         var name = n.name
         if name.contains("."), !name.contains(" ") {
             if name.lowercased().contains("launcher") { return nil }
             name = Catalog.apps.first(where: { $0.ids.values.contains(name) })?.name ?? tvApps.first(where: { $0.id == name })?.name
-                ?? (n.live ? "Live TV" : prettyPackage(name))
+                ?? prettyPackage(name)
         }
         func t(_ ms: Int) -> String { let s = ms / 1000; return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60) }
         if let p = n.positionMs, let d = n.durationMs, d > 0 { return "\(name) · \(t(p)) / \(t(d))" }

@@ -5,10 +5,18 @@ import SwiftUI
  * the content is measured and the sheet's height follows it.
  */
 struct FitSheet: ViewModifier {
-    @State private var h: CGFloat = 320
+    /** Which sheet this is (where it's declared), to remember its height between openings. */
+    let key: String
+    @State private var h: CGFloat
+    /** Measured heights, kept so a sheet opens straight at its size instead of resizing as it appears. */
+    private static var known: [String: CGFloat] = [:]
+    init(key: String) { self.key = key; _h = State(initialValue: FitSheet.known[key] ?? 320) }
     func body(content: Content) -> some View {
         ScrollView {
-            content.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h = $0 }
+            content.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { v in
+                guard abs(v - h) > 0.5 else { return }
+                h = v; FitSheet.known[key] = v
+            }
         }
         .scrollBounceBehavior(.basedOnSize)
         .background(T.sheet)
@@ -19,7 +27,7 @@ struct FitSheet: ViewModifier {
 }
 
 extension View {
-    func fitSheet() -> some View { modifier(FitSheet()) }
+    func fitSheet(file: String = #fileID, line: Int = #line) -> some View { modifier(FitSheet(key: "\(file):\(line)")) }
 }
 
 /** A rounded group of rows on a sheet (as on Android). */

@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import CoreImage
 
 /**
  * App logos for Quick access and the app tiles: the app's own website icon (apple-touch-icon,
@@ -105,7 +104,6 @@ extension Logos {
     /** How an icon sits on a tile: drawn to fill it (its background carried to the edges), or as a plate on the tile's colour. */
     enum Fit { case extend(UIImage), plate(Color?) }
 
-    private static let ci = CIContext()
 
     /**
      * Prepares an icon for a tile of [width] × [height] points (a circle, or a wider rounded
@@ -158,10 +156,12 @@ extension Logos {
         piece(0, sh - 1 - e, sw, 1, into: CGRect(x: x0, y: 0, width: iw, height: y0 + o))
         piece(e, 0, 1, sh, into: CGRect(x: 0, y: y0, width: x0 + o, height: ih))
         piece(sw - 1 - e, 0, 1, sh, into: CGRect(x: x1 - o, y: y0, width: W - x1 + o, height: ih))
-        piece(e, e, 1, 1, into: CGRect(x: 0, y: y1 - o, width: x0 + o, height: H - y1 + o))
-        piece(sw - 1 - e, e, 1, 1, into: CGRect(x: x1 - o, y: y1 - o, width: W - x1 + o, height: H - y1 + o))
-        piece(e, sh - 1 - e, 1, 1, into: CGRect(x: 0, y: 0, width: x0 + o, height: y0 + o))
-        piece(sw - 1 - e, sh - 1 - e, 1, 1, into: CGRect(x: x1 - o, y: 0, width: W - x1 + o, height: y0 + o))
+        // Corners take the colour from the middle of the top and bottom rows: the icon's own corner
+        // pixel can sit in its rounding and come out lighter (the patches Netflix showed).
+        piece(sw / 2, e, 1, 1, into: CGRect(x: 0, y: y1 - o, width: x0 + o, height: H - y1 + o))
+        piece(sw / 2, e, 1, 1, into: CGRect(x: x1 - o, y: y1 - o, width: W - x1 + o, height: H - y1 + o))
+        piece(sw / 2, sh - 1 - e, 1, 1, into: CGRect(x: 0, y: 0, width: x0 + o, height: y0 + o))
+        piece(sw / 2, sh - 1 - e, 1, 1, into: CGRect(x: x1 - o, y: 0, width: W - x1 + o, height: y0 + o))
         c.interpolationQuality = .high
         // The icon itself, its outer pixel trimmed again so no soft edge line is left.
         if let core = src.cropping(to: CGRect(x: 1, y: 1, width: sw - 2, height: sh - 2)) {
@@ -186,61 +186,53 @@ extension Logos {
     }
 
     /**
-     * Busy or very rounded artwork: the whole icon, its proportions kept, on a flat fill of its
-     * own border colour; the icon's edge is feathered into that fill.
+     * Busy or very rounded artwork (SonyLIV, Disney+): the art itself fills the tile edge to edge.
+     * Its rounded corners are cropped off, it's drawn as tall as the tile (a circle clips the rest),
+     * and on a wider tile its left and right edges carry on outward as a smooth fade of their own
+     * colours, the art's sides feathered into them. No plate, no tile inside a tile.
      */
     private static func ambient(_ cg: CGImage, pw: Int, ph: Int, scale: CGFloat, lift: Bool) -> Fit {
-        let W = CGFloat(pw), H = CGFloat(ph), short = min(W, H)
-        let icon = CIImage(cgImage: cg)
-        let side = min(icon.extent.width, icon.extent.height)
-        // The background: one flat colour taken from the icon's own border (the middle of its
-        // ring by brightness), so the tile reads as a solid fill like the other logos.
-        let bg = CIImage(color: ringColor(cg)).cropped(to: CGRect(x: 0, y: 0, width: W, height: H))
-        // The icon at 78% of the tile's short side, centred.
-        let f = short * 0.78, kf = f / side
-        let fg = icon.transformed(by: CGAffineTransform(scaleX: kf, y: kf))
-            .transformed(by: CGAffineTransform(translationX: (W - icon.extent.width * kf) / 2, y: (H - icon.extent.height * kf) / 2))
-        // A rounded mask a little inside the icon, softened, so its edge melts into the blur.
-        let r = CGRect(x: (W - f) / 2, y: (H - f) / 2, width: f, height: f).insetBy(dx: f * 0.03, dy: f * 0.03)
-        guard let gen = CIFilter(name: "CIRoundedRectangleGenerator", parameters: [
-            "inputExtent": CIVector(cgRect: r), "inputRadius": f * 0.2, "inputColor": CIColor.white]),
-              let shape = gen.outputImage else { return .plate(nil) }
-        let mask = shape.applyingGaussianBlur(sigma: Double(f * 0.035))
-        let out = fg.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: bg, kCIInputMaskImageKey: mask])
-        let frame = CGRect(x: 0, y: 0, width: W, height: H)
-        guard let rendered = ci.createCGImage(out.cropped(to: frame), from: frame), let c = canvas(pw, ph, lift: lift) else { return .plate(nil) }
-        c.draw(rendered, in: frame)
+        let W = CGFloat(pw), H = CGFloat(ph)
+        // Just inside the rounding of an iOS-style icon (radius about 22%): corners come out opaque.
+        let t = Int((CGFloat(min(cg.width, cg.height)) * 0.08).rounded())
+        guard let src = cg.cropping(to: CGRect(x: t, y: t, width: cg.width - 2 * t, height: cg.height - 2 * t)),
+              let c = canvas(pw, ph, lift: lift) else { return .plate(nil) }
+        let sw = CGFloat(src.width), sh = CGFloat(src.height)
+        // As tall as the tile: a circle (or a wider art) clips the sides; a wider tile carries them on.
+        let k = H / sh
+        let iw = (sw * k).rounded(), ih = (sh * k).rounded()
+        let x0 = ((W - iw) / 2).rounded(), y0 = ((H - ih) / 2).rounded()
+        let art = CGRect(x: x0, y: y0, width: iw, height: ih)
+        if x0 > 0 {
+            // Each side: its edge column squeezed to a few pixels (so it's a smooth fade, not
+            // streaks), then stretched across the margin; 4 px tucked under the art.
+            func side(_ x: Int, into r: CGRect) {
+                guard let col = src.cropping(to: CGRect(x: x, y: 0, width: 1, height: src.height)),
+                      let small = CGContext(data: nil, width: 1, height: 10, bitsPerComponent: 8, bytesPerRow: 0,
+                                            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+                small.interpolationQuality = .high
+                small.draw(col, in: CGRect(x: 0, y: 0, width: 1, height: 10))
+                guard let soft = small.makeImage() else { return }
+                c.interpolationQuality = .high
+                c.draw(soft, in: r)
+            }
+            side(2, into: CGRect(x: 0, y: y0, width: x0 + 4, height: ih))
+            side(src.width - 3, into: CGRect(x: x0 + iw - 4, y: y0, width: W - x0 - iw + 4, height: ih))
+            // The art, its left and right edges faded over the first and last 10% so they melt in.
+            let mw = max(2, Int(iw)), feather = max(1, Int(iw * 0.1))
+            var m = [UInt8](repeating: 255, count: mw)
+            for i in 0..<feather { let v = UInt8(255 * Double(i) / Double(feather)); m[i] = v; m[mw - 1 - i] = v }
+            if let prov = CGDataProvider(data: Data(m) as CFData),
+               let mask = CGImage(width: mw, height: 1, bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: mw,
+                                  space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGBitmapInfo(rawValue: 0),
+                                  provider: prov, decode: nil, shouldInterpolate: true, intent: .defaultIntent) {
+                c.saveGState(); c.clip(to: art, mask: mask); c.draw(src, in: art); c.restoreGState()
+            } else { c.draw(src, in: art) }
+        } else {
+            c.draw(src, in: art)
+        }
         guard let img = c.makeImage() else { return .plate(nil) }
         return .extend(UIImage(cgImage: img, scale: scale, orientation: .up))
-    }
-
-    /** The icon's border colour: the ring just inside any rounding, its middle pixel by brightness. */
-    private static func ringColor(_ cg: CGImage) -> CIColor {
-        let w = 48
-        var px = [UInt8](repeating: 0, count: w * w * 4)
-        let drawn: Bool = px.withUnsafeMutableBytes { buf in
-            guard let c = CGContext(data: buf.baseAddress, width: w, height: w, bitsPerComponent: 8, bytesPerRow: w * 4,
-                                    space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
-            c.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: w))
-            return true
-        }
-        guard drawn else { return CIColor(red: 0.2, green: 0.2, blue: 0.22) }
-        let i = w / 6
-        var ring: [(Double, Double, Double)] = []
-        for t in 0...23 {
-            let a = i + (w - 2 * i - 1) * t / 23
-            for (x, y) in [(a, i), (a, w - 1 - i), (i, a), (w - 1 - i, a)] {
-                let k = (y * w + x) * 4
-                guard px[k + 3] > 200 else { continue }
-                ring.append((Double(px[k]) / 255, Double(px[k + 1]) / 255, Double(px[k + 2]) / 255))
-            }
-        }
-        guard !ring.isEmpty else { return CIColor(red: 0.2, green: 0.2, blue: 0.22) }
-        ring.sort { 0.299 * $0.0 + 0.587 * $0.1 + 0.114 * $0.2 < 0.299 * $1.0 + 0.587 * $1.1 + 0.114 * $1.2 }
-        // Average the middle third by brightness: a steady colour, not a stray highlight or shadow.
-        let mid = ring[(ring.count / 3)..<max(ring.count / 3 + 1, ring.count * 2 / 3)]
-        let n = Double(mid.count)
-        return CIColor(red: mid.map(\.0).reduce(0, +) / n, green: mid.map(\.1).reduce(0, +) / n, blue: mid.map(\.2).reduce(0, +) / n)
     }
 
     /** Corners opaque? Border one plain colour (low spread of brightness)? */
