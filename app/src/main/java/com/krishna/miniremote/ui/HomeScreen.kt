@@ -1,5 +1,6 @@
 package com.krishna.miniremote.ui
 
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -143,12 +144,12 @@ fun HomeScreen(
         onDispose { vm.followNowOn(false) }
     }
     val offline = vm.active == null || vm.link == Link.ERROR
-    var askPower by remember { mutableStateOf(false) }
+    var askPower by remember { mutableStateOf(Shot.take("power")) }
     if (askPower) vm.active?.let { tv ->
         ConfirmSheet(
             title = "Turn off ${shortName(tv.name, tv.brand.label)}?",
             text = "If the TV is already off, this turns it on.",
-            action = "Turn off", danger = true,
+            action = "Turn off", danger = true, ico = Ico.POWER,
             onConfirm = { vm.press(RemoteKey.POWER) }, onDismiss = { askPower = false },
         )
     }
@@ -223,7 +224,8 @@ fun HomeScreen(
 
     // Top: the TV pill on the left, power on the right.
     val topBar: @Composable () -> Unit = {
-        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 32.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        // Lined up with the keys and the bottom line: the same side margins.
+        Row(Modifier.width(KEYROW_W).padding(top = 32.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             TvPicker(vm, Modifier.weight(1f), openDevices)
             KeyButton(accent, "Power", Modifier.size(52.dp).coach("power"), pressedScale = 1f, onPress = {
                 // Off (not reachable): wake it. On: ask before turning it off.
@@ -308,31 +310,26 @@ private fun TvPicker(vm: RemoteVM, modifier: Modifier, openDevices: () -> Unit) 
     }
     Box(modifier.padding(end = 12.dp), contentAlignment = Alignment.CenterStart) {
         Row(
-            Modifier.coach("tv").height(52.dp).widthIn(min = 150.dp, max = 236.dp).clip(CircleShape).background(M.High)
+            // Same fill and depth as the round keys, so the top row matches the rest.
+            Modifier.coach("tv").height(52.dp).widthIn(min = 150.dp, max = 236.dp)
+                .then(if (Look.depth) Modifier.drawBehind { depthShape(M.High, size.height / 2f) } else Modifier.background(T.Key, CircleShape))
+                .clip(CircleShape)
                 .clickable(onClickLabel = "choose a TV", role = Role.Button, onClick = openDevices)
                 .semantics(mergeDescendants = true) {
                     contentDescription = d?.let { "TV: ${it.name}" } ?: "Choose a TV"
                     if (d != null) stateDescription = linkWord(vm.link)
                 }
-                .padding(start = 7.dp, end = 16.dp),
+                .padding(start = 18.dp, end = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // A TV in a circle, with the connection colour as a small badge on its corner.
-            Box(Modifier.size(38.dp)) {
-                Box(Modifier.fillMaxSize().clip(CircleShape).background(T.Ink.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) { LineIcon(Ico.TV, T.Ink, 20.dp) }
-                dot?.let { Box(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp).size(10.dp).clip(CircleShape).background(M.High).padding(1.5.dp).clip(CircleShape).background(it)) }
-            }
-            // The TV's name, and what's on it underneath when the TV says (app, time played).
-            val playing: String? = null // now playing moved to the bottom-left line
-            Column(Modifier.weight(1f, fill = false)) {
-                Text(d?.let { shortName(it.name, it.brand.label) } ?: "Choose a TV", color = T.Ink, fontSize = if (playing != null) 13.sp else 14.sp,
-                    lineHeight = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (playing != null) Text(playing, color = T.Dim, fontSize = 12.sp, lineHeight = 14.sp, maxLines = 1, softWrap = false,
-                    modifier = Modifier.padding(top = 3.dp).widthIn(max = 200.dp).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 1500)
-                        .semantics { contentDescription = "On the TV: $playing" })
-            }
-            LineIcon(Ico.DOWN, T.Dim, 15.dp, stroke = 2.2f)
+            // The TV: its icon and name, with a small connection dot after the name.
+            LineIcon(Ico.TV, T.Ink, 20.dp)
+            Text(d?.let { shortName(it.name, it.brand.label) } ?: "Choose a TV", color = T.Ink, fontSize = 15.sp,
+                lineHeight = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false))
+            dot?.let { Box(Modifier.offset(x = (-2).dp).size(6.dp).clip(CircleShape).background(it)) }
+            LineIcon(Ico.DOWN, T.Dim, 15.dp, stroke = 2.2f, modifier = Modifier.padding(start = 2.dp))
         }
     }
 }
@@ -350,10 +347,13 @@ internal fun nowLine(vm: RemoteVM): String? {
     if (vm.link != Link.READY) return null
     val n = vm.nowOn ?: return null
     if ("launcher" in n.name.lowercase()) return null
+    // The TV's own tuner or input viewer says nothing useful by name (and an HDMI box or the home
+    // screen can report as it), so live TV gets no label; its keys still switch to channels.
+    if (n.live && (n.name == "Live TV" || '.' in n.name)) return null
     val name = n.name.let { raw ->
         if ('.' in raw && ' ' !in raw) com.krishna.miniremote.Catalog.apps.firstOrNull { it.ids.values.contains(raw) }?.name
             ?: vm.tvApps.firstOrNull { it.id == raw }?.name
-            ?: (if (n.live) "Live TV" else prettyPackage(raw))
+            ?: prettyPackage(raw)
         else raw
     }.takeIf { it.isNotBlank() && it != "Home" } ?: return null
     val pos = n.positionMs; val dur = n.durationMs
@@ -385,7 +385,7 @@ private fun NowPlaying(vm: RemoteVM) {
                 val pos = n?.positionMs; val dur = n?.durationMs
                 fun t(ms: Long) = (ms / 1000).let { s -> if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60) }
                 Text(if (pos != null && dur != null && dur > 0) "$name · ${t(pos)} / ${t(dur)}" else name,
-                    color = T.Dim, fontSize = 12.5.sp, maxLines = 1, softWrap = false,
+                    color = T.Dim, fontSize = 13.sp, maxLines = 1, softWrap = false,
                     modifier = Modifier.widthIn(max = 220.dp).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 1500)
                         .semantics { contentDescription = "On the TV: $name" })
                 if (pos != null && dur != null && dur > 0) {

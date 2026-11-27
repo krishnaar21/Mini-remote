@@ -168,9 +168,14 @@ fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ic
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             val c = T.Ink
-            if (ico != null) LineIcon(ico, c, if (caption != null) 18.dp else 23.dp)
-            if (word != null) Text(word, color = c, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-            if (caption != null) Text(caption, color = T.Dim, fontSize = 9.sp, letterSpacing = 0.8.sp, fontWeight = FontWeight.Medium,
+            // Icons grow with the circle (sizes are for a 68 dp key).
+            val g = (size.value / 68f).coerceIn(1f, 1.2f)
+            // − and + share one box so they sit level; the minus is a step bolder and a touch
+            // wider, as a bare bar reads lighter than a cross.
+            val minus = ico == Ico.MINUS
+            if (ico != null) LineIcon(ico, c, (if (caption != null) 18.dp else 23.dp) * g * (if (minus) 1.08f else 1f), stroke = if (minus) 2.15f else 1.8f)
+            if (word != null) Text(word, color = c, fontSize = (15 * g).sp, fontWeight = FontWeight.Medium)
+            if (caption != null) Text(caption, color = T.Dim, fontSize = (9 * g).sp, letterSpacing = 0.8.sp, fontWeight = FontWeight.Medium,
                 lineHeight = 9.sp, modifier = Modifier.offset(y = (-1).dp))
         }
     }
@@ -183,8 +188,8 @@ fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ic
 @Composable
 fun KeyRows(vm: RemoteVM, accent: Color, numpad: Boolean, onNumpad: () -> Unit, openKeys: () -> Unit, openMore: () -> Unit = {}, openApps: (Boolean) -> Unit = {}, pager0: androidx.compose.foundation.pager.PagerState? = null) {
     val tv = vm.nowOn?.live == true
-    val k = 68.dp
-    var sleep by remember { mutableStateOf(false) }
+    val k = KeySize.key
+    var sleep by remember { mutableStateOf(Shot.take("sleep")) }
     if (sleep) SleepSheet(vm, accent) { sleep = false }
     // Two pages of eight: swipe across the circles for playback, sleep timer and the TV's keys.
     val pages = if (vm.settings.appsIn == "more") 2 else 4
@@ -388,8 +393,18 @@ fun CardDots(n: Int, page: Int, onPick: (Int) -> Unit) {
     }
 }
 
-/** Width of the Black layout's two key rows (4 × 68 + 3 × 14): the trackpad matches it. */
-val KEYROW_W = 314.dp
+/**
+ * Home's circles grow with the phone: four across with comfortable sides, from 64 dp on small
+ * phones up to 86 dp on the largest (as on iOS). Set from the screen width (see AppShell).
+ */
+object KeySize {
+    var key by androidx.compose.runtime.mutableStateOf(68.dp)
+    val gap = 14.dp
+    fun forWidth(w: Dp): Dp = ((minOf(w.value, 480f) - 2 * 26f - 3 * gap.value) / 4f).coerceIn(64f, 86f).let { kotlin.math.round(it) }.dp
+}
+
+/** Width of the two key rows (4 circles and 3 gaps): the top bar, trackpad and bottom line match it. */
+val KEYROW_W: Dp get() = KeySize.key * 4 + KeySize.gap * 3
 
 /** Width of the Cards layout's cards: the same as the row of four keys under them (4 × 62 + 3 × 20). */
 val CARD_W = 308.dp
@@ -447,7 +462,7 @@ internal fun LayoutPicker(value: String, accent: Color, onPick: (String) -> Unit
                 ) { Text(l.label, color = if (sel) Color.White else T.Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium) }
             }
         }
-        Text(cur.about, color = T.Dim, fontSize = 12.5.sp, modifier = Modifier.padding(top = 10.dp))
+        Text(cur.about, color = T.Dim, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
     }
     Divider()
 }

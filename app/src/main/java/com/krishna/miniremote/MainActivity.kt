@@ -38,6 +38,17 @@ class MainActivity : ComponentActivity() {
             Outside.ACTION_LAUNCH -> { intent.getStringExtra(Outside.EXTRA_SHORTCUT)?.let { vm.launchWhenReady(it) }; intent.action = null }
             Outside.ACTION_WAKE -> { vm.wake(); intent.action = null }
         }
+        // CI screenshot runs: `adb shell am start -e shot <screen>` opens one screen on pretend TVs.
+        // Only on a debuggable build with USB debugging on; nothing is saved or sent (see RemoteVM.shot).
+        intent?.getStringExtra(com.krishna.miniremote.ui.Shot.EXTRA)?.let { s ->
+            intent.removeExtra(com.krishna.miniremote.ui.Shot.EXTRA)
+            val debuggable = (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+            val adb = android.provider.Settings.Global.getInt(contentResolver, android.provider.Settings.Global.ADB_ENABLED, 0) == 1
+            if (debuggable && adb && s.length <= 24) {
+                vm.screenshotDemo(trackpad = s == "trackpad", live = s == "live")
+                com.krishna.miniremote.ui.Shot.name = s
+            }
+        }
         if (intent?.getBooleanExtra(Updater.EXTRA_INSTALL, false) == true) {
             intent.removeExtra(Updater.EXTRA_INSTALL)
             vm.installFromNotification()

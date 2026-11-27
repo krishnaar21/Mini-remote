@@ -111,10 +111,10 @@ import kotlin.math.roundToInt
 /** Left-aligned sheet title with its line of explanation close under it. */
 @Composable
 internal fun SheetTitle(title: String, sub: String? = null, modifier: Modifier = Modifier, center: Boolean = false, small: Boolean = false) {
-    Column(modifier.fillMaxWidth().padding(horizontal = 2.dp).semantics(mergeDescendants = true) { heading() },
+    Column(modifier.fillMaxWidth().padding(horizontal = 2.dp).padding(bottom = 6.dp).semantics(mergeDescendants = true) { heading() },
         horizontalAlignment = if (center) Alignment.CenterHorizontally else Alignment.Start) {
-        Text(title, color = T.Ink, fontSize = if (small) 17.sp else 20.sp, fontWeight = FontWeight.SemiBold, textAlign = if (center) TextAlign.Center else TextAlign.Start)
-        sub?.let { Text(it, color = SubInk, fontSize = if (small) 12.5.sp else 13.sp, lineHeight = 16.sp, textAlign = if (center) TextAlign.Center else TextAlign.Start, modifier = Modifier.padding(top = 1.dp)) }
+        Text(title, color = T.Ink, fontSize = if (small) 18.sp else 22.sp, fontWeight = FontWeight.SemiBold, textAlign = if (center) TextAlign.Center else TextAlign.Start)
+        sub?.let { Text(it, color = SubInk, fontSize = if (small) 13.sp else 14.sp, lineHeight = if (small) 18.sp else 19.sp, textAlign = if (center) TextAlign.Center else TextAlign.Start, modifier = Modifier.padding(top = 6.dp)) }
     }
 }
 
@@ -123,12 +123,12 @@ internal fun SheetTitle(title: String, sub: String? = null, modifier: Modifier =
 @Composable
 internal fun SetSheet(title: String, sub: String?, onClose: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     val st = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    androidx.compose.material3.ModalBottomSheet(
+    AppSheet(
         onDismissRequest = onClose, sheetState = st, containerColor = SheetBg, contentColor = T.Ink,
         shape = SheetShape, scrimColor = Color.Black.copy(0.55f), dragHandle = { Grab() },
     ) {
-        Column(Modifier.navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
-            SheetTitle(title, sub, Modifier.padding(top = 4.dp, bottom = 14.dp))
+        Column(Modifier.navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
+            SheetTitle(title, sub, Modifier.padding(top = 12.dp, bottom = 2.dp))
             content()
         }
     }
@@ -137,36 +137,46 @@ internal fun SetSheet(title: String, sub: String?, onClose: () -> Unit, content:
 /** Secondary text: quieter than the titles. */
 internal val SubInk get() = Look.p.sub
 
-/** A settings icon on its own rounded square, in the row's colour. */
+/**
+ * A settings icon on its own rounded square. One calm colour for every tile (the row's colour
+ * is ignored) so the page stays quiet; [fill] marks a chosen option (accent tile, white icon).
+ */
 @Composable
-internal fun IconTile(ico: Ico, tint: Color) {
-    // One calm colour for every tile (the row's colour is ignored): the page stays quiet.
-    Box(Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(M.High), contentAlignment = Alignment.Center) { LineIcon(ico, T.Ink, 18.dp) }
+internal fun IconTile(ico: Ico, @Suppress("UNUSED_PARAMETER") tint: Color, fill: Color? = null) {
+    Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(fill ?: M.High), contentAlignment = Alignment.Center) {
+        LineIcon(ico, if (fill != null) Color.White else T.Ink, 19.dp)
+    }
 }
+
+/** A grey heading over a group of cards ("Remote", "Look"…). */
+@Composable
+internal fun SetHead(text: String, first: Boolean = false) =
+    Text(text, color = SubInk, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, top = if (first) 8.dp else 32.dp).semantics { heading() })
 
 /** A rounded group of rows. */
 @Composable
 internal fun SetCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(20.dp)).background(M.Container), content = content)
+    Column(modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(26.dp)).background(M.Container), content = content)
 }
 
 /** The thin line between rows, starting after the icon. */
 @Composable
-internal fun SetLine() = Box(Modifier.fillMaxWidth().padding(start = 62.dp).height(1.dp).background(T.Ink.copy(alpha = 0.07f)))
+internal fun SetLine(inset: androidx.compose.ui.unit.Dp = 64.dp) = Box(Modifier.fillMaxWidth().padding(start = inset).height(1.dp).background(T.Ink.copy(alpha = 0.07f)))
 
 /** One row: icon, title (and a smaller line), what's set, and a chevron when it opens something. */
 @Composable
 internal fun SetRow(ico: Ico, tint: Color, title: String, value: String? = null, sub: String? = null, chevron: Boolean = true, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable(role = Role.Button, onClick = onClick).padding(start = 16.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+        Modifier.fillMaxWidth().heightIn(min = 72.dp).clickable(role = Role.Button, onClick = onClick).padding(start = 16.dp, end = 14.dp, top = 15.dp, bottom = 15.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconTile(ico, tint)
         Column(Modifier.weight(1f).padding(start = 14.dp)) {
-            Text(title, color = T.Ink, fontSize = 16.sp, lineHeight = 19.sp)
-            sub?.let { Text(it, color = SubInk, fontSize = 12.5.sp, lineHeight = 15.sp) }
+            Text(title, color = T.Ink, fontSize = 17.sp, lineHeight = 21.sp)
+            sub?.let { Text(it, color = SubInk, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 2.dp)) }
         }
-        value?.let { Text(it, color = Muted, fontSize = 14.sp, maxLines = 1, modifier = Modifier.padding(start = 8.dp, end = 6.dp)) }
+        value?.let { Text(it, color = SubInk, fontSize = 14.sp, maxLines = 1, modifier = Modifier.padding(start = 8.dp, end = 8.dp)) }
         if (chevron) Chevron()
     }
 }
@@ -175,13 +185,13 @@ internal fun SetRow(ico: Ico, tint: Color, title: String, value: String? = null,
 @Composable
 internal fun SetToggle(ico: Ico, tint: Color, title: String, sub: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 60.dp).toggleable(checked, role = Role.Switch, onValueChange = onChange).padding(start = 16.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+        Modifier.fillMaxWidth().heightIn(min = 72.dp).toggleable(checked, role = Role.Switch, onValueChange = onChange).padding(start = 16.dp, end = 14.dp, top = 15.dp, bottom = 15.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconTile(ico, tint)
         Column(Modifier.weight(1f).padding(start = 14.dp, end = 12.dp)) {
-            Text(title, color = T.Ink, fontSize = 16.sp, lineHeight = 19.sp)
-            sub?.let { Text(it, color = SubInk, fontSize = 12.5.sp, lineHeight = 15.sp) }
+            Text(title, color = T.Ink, fontSize = 17.sp, lineHeight = 21.sp)
+            sub?.let { Text(it, color = SubInk, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 2.dp)) }
         }
         Toggle(checked)
     }
@@ -191,13 +201,13 @@ internal fun SetToggle(ico: Ico, tint: Color, title: String, sub: String?, check
 @Composable
 private fun Choice(label: String, sub: String?, sel: Boolean, accent: Color, ico: Ico? = null, onPick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 60.dp).selectable(sel, role = Role.RadioButton, onClick = onPick).padding(horizontal = 16.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().heightIn(min = 72.dp).selectable(sel, role = Role.RadioButton, onClick = onPick).padding(horizontal = 16.dp, vertical = 15.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ico?.let { IconTile(it, accent); Spacer(Modifier.width(14.dp)) }
+        ico?.let { IconTile(it, accent, fill = if (sel) accent else null); Spacer(Modifier.width(14.dp)) }
         Column(Modifier.weight(1f)) {
-            Text(label, color = T.Ink, fontSize = 16.sp, lineHeight = 19.sp)
-            sub?.let { Text(it, color = SubInk, fontSize = 12.5.sp, lineHeight = 15.sp) }
+            Text(label, color = T.Ink, fontSize = 17.sp, lineHeight = 21.sp)
+            sub?.let { Text(it, color = SubInk, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 2.dp)) }
         }
         if (sel) LineIcon(Ico.CHECK, accent, 20.dp)
     }
@@ -213,56 +223,49 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
     val s = vm.settings
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var open by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { Shot.openSetting?.let { Shot.openSetting = null; delay(700); open = it } }
     val version = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "dev" }
     val iconName = com.krishna.miniremote.AppIcon.all.firstOrNull { it.first == com.krishna.miniremote.AppIcon.current(ctx) }?.second ?: "Dial"
     val accentName = ACCENTS.firstOrNull { it.second.equals(s.accentHex, true) }?.first ?: "Custom"
 
-    // Profile.
-    val apps = vm.shortcuts.count { it.pinned }
-    Row(
-        Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(20.dp)).background(M.Container)
-            .clickable(role = Role.Button, onClickLabel = "edit profile") { open = "profile" }.padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Avatar(initials(s.profileName), accent, 52.dp)
-        Column(Modifier.weight(1f)) {
-            Text(s.profileName.ifBlank { "Add your name" }, color = if (s.profileName.isBlank()) Muted else T.Ink, fontSize = 17.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-            Text(s.profileEmail.ifBlank { "${vm.devices.size} TV${if (vm.devices.size == 1) "" else "s"} · $apps app${if (apps == 1) "" else "s"}" },
-                color = Muted, fontSize = 13.sp, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
-        }
-        Chevron()
-    }
-
-    // The remote.
+    // In groups under grey headings, as on iOS. (The profile lives on in backups, not here.)
+    SetHead("Remote", first = true)
     SetCard {
         SetRow(if (s.controlStyle == "trackpad") Ico.TRACKPAD else Ico.DIAL, SetTint.blue, "Control", if (s.controlStyle == "trackpad") "Trackpad" else "Dial") { open = "control" }
         SetLine()
         SetRow(Ico.GRID, SetTint.purple, "Quick access", if (s.appsIn == "more") "More sheet" else "Home page") { open = "apps" }
         if (openGestures != null) { SetLine(); SetRow(Ico.TRACKPAD, SetTint.teal, "Gestures", onClick = openGestures) }
     }
+    SetHead("TV")
     SetCard {
         val on = listOf(s.volumeKeys, s.autoKeyboard, s.notifRemote, s.autoClose).count { it }
         SetRow(Ico.TV, SetTint.blue, "TV controls", "$on of 4 on") { open = "tv" }
         SetLine()
         SetRow(Ico.SPEAKER, SetTint.red, "Touch & sound", listOf(if (s.haptics) "Haptics" else null, if (s.sound) "Sound" else null).filterNotNull().joinToString(", ").ifEmpty { "Off" }) { open = "feel" }
     }
+    SetHead("Look")
     SetCard {
-        SetRow(Ico.DISPLAY, SetTint.pink, "Appearance", "${Palettes.of(s.theme).label} · $accentName") { open = "look" }
+        SetRow(Ico.PALETTE, SetTint.pink, "Appearance", "${Palettes.of(s.theme).label} · $accentName") { open = "look" }
         SetLine()
-        SetToggle(Ico.STAR, SetTint.yellow, "App logos", "Download logos", s.logos) { vm.update(s.copy(logos = it)) }
+        SetToggle(Ico.STAR, SetTint.yellow, "App logos", "Downloaded for your apps", s.logos) { vm.update(s.copy(logos = it)) }
         SetLine()
-        SetToggle(Ico.SLEEP, SetTint.purple, "Stay awake", "Screen stays on while open", s.keepAwake) { vm.update(s.copy(keepAwake = it)) }
+        SetToggle(Ico.SUN, SetTint.purple, "Keep screen on", "While the remote is open", s.keepAwake) { vm.update(s.copy(keepAwake = it)) }
     }
+    SetHead("Data & help")
     SetCard {
         if (manage != null) { SetRow(Ico.TV, SetTint.blue, "TVs", "${vm.devices.size}", onClick = manage); SetLine() }
         SetRow(Ico.BACKUP, SetTint.green, "Backup & restore") { open = "backup" }
         SetLine()
         SetRow(Ico.REFRESH, SetTint.orange, "Updates", when (vm.update) { is RemoteVM.Update.Ready, is RemoteVM.Update.Manual -> "Ready"; else -> if (s.autoUpdate) "Auto" else "Off" }) { open = "updates" }
-        if (openPrivacy != null) { SetLine(); SetRow(Ico.USER, SetTint.grey, "Privacy & data", onClick = openPrivacy) }
+        if (openPrivacy != null) { SetLine(); SetRow(Ico.SHIELD, SetTint.grey, "Privacy & data", onClick = openPrivacy) }
         SetLine()
         SetRow(Ico.ALERT, SetTint.grey, "Help & feedback") { open = "support" }
         SetLine()
         SetRow(Ico.INFO, SetTint.grey, "About", version) { open = "about" }
+    }
+    Row(Modifier.fillMaxWidth().padding(top = 32.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        LineIcon(Ico.SHIELD, SubInk, 17.dp)
+        Text("No account · no ads or tracking", color = SubInk, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 6.dp))
     }
     Spacer(Modifier.height(8.dp))
 
@@ -274,31 +277,31 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
                 SetLine()
                 SetToggle(Ico.KEYBOARD, SetTint.blue, "Auto keyboard", "When the TV asks for text", s.autoKeyboard) { vm.update(s.copy(autoKeyboard = it)) }
                 SetLine()
-                SetToggle(Ico.ALERT, SetTint.green, "Notification remote", "Volume and play in the background", s.notifRemote) { vm.update(s.copy(notifRemote = it)) }
+                SetToggle(Ico.ALERT, SetTint.green, "Notification remote", "Keys in the notification", s.notifRemote) { vm.update(s.copy(notifRemote = it)) }
                 SetLine()
-                SetToggle(Ico.BACK, SetTint.teal, "Close idle TV menus", "Back after 10 s without use", s.autoClose) { vm.update(s.copy(autoClose = it)) }
+                SetToggle(Ico.BACK, SetTint.teal, "Close idle TV menus", "After 10 s idle", s.autoClose) { vm.update(s.copy(autoClose = it)) }
             }
         }
-        "control" -> SetSheet("Control", "What the middle of the remote is.", { open = null }) {
+        "control" -> SetSheet("Control", "The middle of the remote.", { open = null }) {
             SetCard(Modifier.padding(top = 0.dp)) {
-                Choice("Dial", "Ring with arrows, OK in the middle; turn the ring for volume", s.controlStyle == "dial", accent, Ico.DIAL) { vm.update(s.copy(controlStyle = "dial")) }
+                Choice("Dial", "Arrows and OK; turn for volume", s.controlStyle == "dial", accent, Ico.DIAL) { vm.update(s.copy(controlStyle = "dial")) }
                 SetLine()
                 Choice("Trackpad", "Swipe to move, tap to select", s.controlStyle == "trackpad", accent, Ico.TRACKPAD) { vm.update(s.copy(controlStyle = "trackpad")) }
             }
         }
         "apps" -> SetSheet("Quick access", "Where your apps sit.", { open = null }) {
             SetCard {
-                Choice("Home page", "A third page of circles: swipe across", s.appsIn != "more", accent, Ico.HOME) { vm.update(s.copy(appsIn = "home")) }
+                Choice("Home page", "Swipe across the circles", s.appsIn != "more", accent, Ico.HOME) { vm.update(s.copy(appsIn = "home")) }
                 SetLine()
                 Choice("More sheet", "At the top of More", s.appsIn == "more", accent, Ico.MORE) { vm.update(s.copy(appsIn = "more")) }
             }
         }
-        "feel" -> SetSheet("Touch & sound", "How presses feel and sound.", { open = null }) {
+        "feel" -> SetSheet("Touch & sound", "Feel and sound of presses.", { open = null }) {
             SetCard {
-                SetToggle(Ico.TRACKPAD, SetTint.blue, "Haptics", "On every press", s.haptics) { vm.update(s.copy(haptics = it)) }
+                SetToggle(Ico.TRACKPAD, SetTint.blue, "Haptics", null, s.haptics) { vm.update(s.copy(haptics = it)) }
                 if (s.haptics) Box(Modifier.padding(horizontal = 16.dp)) { SegRow("Strength", HAPTIC_STRENGTHS, s.hapticStrength, last = true) { vm.update(s.copy(hapticStrength = it)) } }
                 SetLine()
-                SetToggle(Ico.SPEAKER, SetTint.red, "Sound", "Click on press", s.sound) { vm.update(s.copy(sound = it)) }
+                SetToggle(Ico.SPEAKER, SetTint.red, "Sound", null, s.sound) { vm.update(s.copy(sound = it)) }
                 if (s.sound) Box(Modifier.padding(horizontal = 16.dp)) { SegRow("Level", SOUND_LEVELS, s.soundLevel, last = true) { vm.update(s.copy(soundLevel = it)); vm.feel.fire(com.krishna.miniremote.Feel.PRESS) } }
             }
             SetCard {
@@ -306,7 +309,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
                     Row(verticalAlignment = Alignment.Top) {
                         Column(Modifier.weight(1f)) {
                             Text("Scrub step", color = T.Ink, fontSize = 16.sp)
-                            Text("Distance per step when you swipe. Shorter is faster.", color = Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
+                            Text("Distance per step when you swipe. Shorter is faster.", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
                         }
                         Text("${s.scrubStepDp.roundToInt()} dp", color = accent, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     }
@@ -318,22 +321,22 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
                 }
             }
         }
-        "look" -> SetSheet("Appearance", "Theme, colour and the app's icon.", { open = null }) {
+        "look" -> SetSheet("Appearance", "Theme, colour and depth.", { open = null }) {
             SetCard {
-                SetToggle(Ico.DIAL, SetTint.grey, "Depth", "Raised keys, dial and trackpad, with light and shadow", s.depth) { vm.update(s.copy(depth = it)) }
+                SetToggle(Ico.LAYERS, SetTint.grey, "Depth", "Raised keys with soft shadows", s.depth) { vm.update(s.copy(depth = it)) }
             }
-            SetCard {
-                Text("Theme", color = T.Ink, fontSize = 16.sp, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
-                Row(Modifier.fillMaxWidth().selectableGroup().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SetHead("Theme")
+            run {
+                Row(Modifier.fillMaxWidth().selectableGroup().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Palettes.all.forEach { p ->
                         val sel = s.theme == p.key
                         // A little remote in the theme's colours: screen, a key row and a dial.
                         Column(Modifier.weight(1f).selectable(sel, role = Role.RadioButton) { vm.update(s.copy(theme = p.key)) }, horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(
-                                Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(14.dp))
+                                Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(16.dp))
                                     .then(if (p.key == "auto") Modifier.background(androidx.compose.ui.graphics.Brush.linearGradient(
                                         0f to Palettes.LIGHT.screen, 0.5f to Palettes.LIGHT.screen, 0.5f to Palettes.DARK.screen, 1f to Palettes.DARK.screen)) else Modifier.background(p.screen))
-                                    .border(if (sel) 2.dp else 1.dp, if (sel) accent else p.line, RoundedCornerShape(14.dp)),
+                                    .border(if (sel) 2.dp else 1.dp, if (sel) accent else p.line, RoundedCornerShape(16.dp)),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -344,13 +347,13 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
                                     Box(Modifier.size(22.dp, 3.dp).clip(CircleShape).background(accent))
                                 }
                             }
-                            Text(p.label, color = if (sel) T.Ink else Muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 8.dp))
+                            Text(p.label, color = if (sel) T.Ink else SubInk, fontSize = 13.sp, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.padding(top = 8.dp))
                         }
                     }
                 }
             }
+            SetHead("App icon")
             SetCard {
-                Text("App icon", color = T.Ink, fontSize = 16.sp, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
                 var icon by remember { mutableStateOf(com.krishna.miniremote.AppIcon.current(ctx)) }
                 Row(Modifier.fillMaxWidth().selectableGroup().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     com.krishna.miniremote.AppIcon.all.forEach { (key, label) ->
@@ -369,15 +372,15 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
                     }
                 }
             }
+            SetHead("Accent colour")
             SetCard {
-                Text("Accent colour", color = T.Ink, fontSize = 16.sp, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
-                Row(Modifier.fillMaxWidth().selectableGroup().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(Modifier.fillMaxWidth().selectableGroup().padding(horizontal = 12.dp, vertical = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     ACCENTS.forEach { (name, hex) ->
                         val sel = s.accentHex.equals(hex, true)
                         Box(Modifier.size(42.dp).selectable(sel, role = Role.RadioButton) { vm.update(s.copy(accentHex = hex)) }.semantics { contentDescription = name },
                             contentAlignment = Alignment.Center) {
-                            Box(Modifier.size(32.dp).background(accentColor(hex), CircleShape).border(2.dp, Color.Black.copy(0.25f), CircleShape))
-                            if (sel) Box(Modifier.requiredSize(42.dp).border(2.dp, Color.White, CircleShape))
+                            Box(Modifier.size(30.dp).background(accentColor(hex), CircleShape))
+                            if (sel) Box(Modifier.requiredSize(40.dp).border(2.dp, T.Ink, CircleShape))
                         }
                     }
                 }
@@ -410,31 +413,31 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
                 }
             }
         }
-        "support" -> SetSheet("Help & feedback", "Ideas, problems or questions: they go straight to the developer.", { open = null }) {
+        "support" -> SetSheet("Help & feedback", "Straight to the developer.", { open = null }) {
             SetCard {
-                SetRow(Ico.STAR, SetTint.grey, "Request a feature", sub = "Something you'd like the app to do") { vm.contact("Feature request") }
+                SetRow(Ico.STAR, SetTint.grey, "Request a feature") { vm.contact("Feature request") }
                 SetLine()
-                SetRow(Ico.ALERT, SetTint.grey, "Report a bug", sub = "Something that doesn't work right") { vm.contact("Bug report") }
+                SetRow(Ico.ALERT, SetTint.grey, "Report a bug") { vm.contact("Bug report") }
                 SetLine()
-                SetRow(Ico.USER, SetTint.grey, "Ask a question", sub = "Setting up a TV, pairing, anything else") { vm.contact("Question") }
+                SetRow(Ico.USER, SetTint.grey, "Ask a question") { vm.contact("Question") }
             }
             SetCard {
-                SetRow(Ico.TRACKPAD, SetTint.grey, "Take the tour", sub = "A walk round the remote, step by step") {
+                SetRow(Ico.TRACKPAD, SetTint.grey, "Take the tour") {
                     open = null; vm.update(s.copy(toured = false))
                 }
                 SetLine()
-                SetRow(Ico.INFO, SetTint.grey, "Show the welcome again", sub = "The first-run pages") {
+                SetRow(Ico.INFO, SetTint.grey, "Show the welcome again") {
                     open = null; vm.update(s.copy(onboarded = false, toured = false))
                 }
             }
             Text("Your app version, phone and TV type are added so it's easier to help. Nothing else is sent.",
-                color = SubInk, fontSize = 12.5.sp, modifier = Modifier.padding(top = 10.dp, start = 4.dp, end = 4.dp))
+                color = SubInk, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp, start = 4.dp, end = 4.dp))
         }
         "about" -> SetSheet("Mini Remote", "Version $version", { open = null }) {
             Text("No account, no ads, no analytics or tracking.", color = T.Ink, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 2.dp))
             Text("Roku, Samsung, LG, webOS, Android TV, Google TV and the app names and logos shown are trademarks of their owners. " +
                 "Mini Remote is an independent app, not affiliated with or endorsed by them; it uses the TVs' published or documented remote-control interfaces on your own network.",
-                color = Muted, fontSize = 12.5.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 10.dp, start = 2.dp, end = 2.dp))
+                color = Muted, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 10.dp, start = 2.dp, end = 2.dp))
             if (openLicenses != null) SetCard { SetRow(Ico.LIST, SetTint.grey, "Licences") { open = null; openLicenses() } }
         }
     }
@@ -458,13 +461,13 @@ private fun BackupSheet(vm: RemoteVM, onClose: () -> Unit) {
             else vm.importProfile(text)?.let { icon -> if (icon != com.krishna.miniremote.AppIcon.current(ctx)) com.krishna.miniremote.AppIcon.set(ctx, icon) }
         }
     }
-    SetSheet("Backup & restore", "Settings, quick access and app icon, in one file. TVs pair again on a new phone.", onClose) {
+    SetSheet("Backup & restore", "Everything in one file.", onClose) {
         SetCard {
-            SetRow(Ico.BACKUP, SetTint.green, "Back up", sub = "Save a file to your phone or Drive") {
+            SetRow(Ico.BACKUP, SetTint.green, "Back up", sub = "Save or share a file") {
                 save.launch("Mini Remote${if (s.profileName.isNotBlank()) " - " + s.profileName else ""}.json")
             }
             SetLine()
-            SetRow(Ico.RESTORE, SetTint.blue, "Restore", sub = "Load a backup file") { load.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
+            SetRow(Ico.RESTORE, SetTint.blue, "Restore", sub = "From a backup file") { load.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
         }
     }
 }

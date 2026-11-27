@@ -48,6 +48,15 @@ jobs:
           path: |
             MiniRemote.apk
             version.json
+      - name: Publish a pull request's APK to the pr-apk branch (for trying it before merging)
+        # Same-repo pull requests only (a fork's token can't push). Overwritten by each build.
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          mkdir -p pr && cp MiniRemote.apk version.json pr/ && cd pr
+          git init -q -b pr-apk
+          git -c user.name="github-actions[bot]" -c user.email=41898282+github-actions[bot]@users.noreply.github.com add -A
+          git -c user.name="github-actions[bot]" -c user.email=41898282+github-actions[bot]@users.noreply.github.com commit -qm "APK for PR #${{ github.event.pull_request.number }} at ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" pr-apk
       - name: Publish as the latest release (stable download link)
         # Only builds of main replace the public download; PR builds stay as run artifacts.
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
