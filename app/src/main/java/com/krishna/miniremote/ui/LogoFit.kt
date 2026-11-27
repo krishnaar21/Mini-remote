@@ -1,7 +1,6 @@
 package com.krishna.miniremote.ui
 
 import android.graphics.Bitmap
-import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.PorterDuff
@@ -19,8 +18,8 @@ import kotlin.math.sqrt
  * it's never stretched or cropped (the same rules as the iOS app):
  * - plain edges (Netflix, YouTube, Prime): the icon at about three quarters of the tile's short
  *   side, its own edge pixels carried out to the tile's edges, in whole pixels so no seam shows;
- * - busy or very rounded artwork (SonyLIV, Disney+): the icon whole, on a flat fill of its own
- *   border colour, its edge feathered into that fill so no border shows;
+ * - busy or very rounded artwork (SonyLIV, Disney+): the art fills the tile edge to edge, its
+ *   rounded corners cropped off, its sides carried outward on wider tiles with a feathered join;
  * - a glyph on nothing (see-through): null, and the caller shows it as a plate on the tile colour.
  * On a dark theme a black icon background is lifted to the key grey so it doesn't melt away.
  */
@@ -107,77 +106,57 @@ object LogoFit {
         piece(0, sh - 1 - e, sw, 1, x0, y1 - o, x1, ph)            // bottom
         piece(e, 0, 1, sh, 0, y0, x0 + o, y1)                      // left
         piece(sw - 1 - e, 0, 1, sh, x1 - o, y0, pw, y1)            // right
-        piece(e, e, 1, 1, 0, 0, x0 + o, y0 + o)                    // corners
-        piece(sw - 1 - e, e, 1, 1, x1 - o, 0, pw, y0 + o)
-        piece(e, sh - 1 - e, 1, 1, 0, y1 - o, x0 + o, ph)
-        piece(sw - 1 - e, sh - 1 - e, 1, 1, x1 - o, y1 - o, pw, ph)
+        // Corners take the colour from the middle of the top and bottom rows: the icon's own corner
+        // pixel can sit in its rounding and come out lighter (the patches Netflix showed).
+        piece(sw / 2, e, 1, 1, 0, 0, x0 + o, y0 + o)
+        piece(sw / 2, e, 1, 1, x1 - o, 0, pw, y0 + o)
+        piece(sw / 2, sh - 1 - e, 1, 1, 0, y1 - o, x0 + o, ph)
+        piece(sw / 2, sh - 1 - e, 1, 1, x1 - o, y1 - o, pw, ph)
         // The icon itself, its outer pixel trimmed again so no soft edge line is left.
         c.drawBitmap(core, Rect(1, 1, sw - 1, sh - 1), RectF(x0 + k, y0 + k, x1 - k, y1 - k), paint)
         out
     }.getOrNull()
 
     /**
-     * Busy or very rounded artwork: the whole icon, its proportions kept, on a flat fill of its
-     * own border colour; the icon's edge is feathered into that fill.
+     * Busy or very rounded artwork (SonyLIV, Disney+): the art itself fills the tile edge to edge.
+     * Its rounded corners are cropped off, it's drawn as tall as the tile (a circle clips the rest),
+     * and on a wider tile its left and right edges carry on outward as a smooth fade of their own
+     * colours, the art's sides feathered into them. No plate, no tile inside a tile.
      */
     private fun ambient(icon: Bitmap, pw: Int, ph: Int, lift: Boolean): Bitmap? {
-        val W = pw.toFloat(); val H = ph.toFloat(); val short = min(W, H)
-        val side = min(icon.width, icon.height)
-        if (side <= 0) return null
-        // The background: one flat colour taken from the icon's own border, so the tile reads as
-        // a solid fill like the other logos.
+        // Just inside the rounding of an iOS-style icon (radius about 22%): corners come out opaque.
+        val t = (min(icon.width, icon.height) * 0.08f).roundToInt()
+        val src = crop(icon, t, t, icon.width - 2 * t, icon.height - 2 * t) ?: return null
         val (out, paint) = canvas(pw, ph, lift)
         val c = Canvas(out)
-        c.drawRect(0f, 0f, W, H, Paint(paint).apply { color = ringColor(icon) })
-        // The icon at 78% of the tile's short side, centred, through a rounded mask a little inside
-        // its edge, softened, so the edge melts into the fill.
-        val f = short * 0.78f
-        val fg = Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888)
-        val fc = Canvas(fg)
-        val r = RectF((W - f) / 2, (H - f) / 2, (W + f) / 2, (H + f) / 2)
-        val kf = f / side
-        fc.drawBitmap(icon, null, RectF(W / 2 - icon.width * kf / 2, H / 2 - icon.height * kf / 2, W / 2 + icon.width * kf / 2, H / 2 + icon.height * kf / 2),
-            Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
-        // The mask is its own full-size layer, so everything outside it is cleared too.
-        val maskBmp = Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888)
-        val inner = RectF(r).apply { inset(f * 0.03f, f * 0.03f) }
-        Canvas(maskBmp).drawRoundRect(inner, f * 0.2f, f * 0.2f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.WHITE
-            maskFilter = BlurMaskFilter(max(1f, f * 0.035f * 1.6f), BlurMaskFilter.Blur.NORMAL)
-        })
-        fc.drawBitmap(maskBmp, 0f, 0f, Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) })
-        maskBmp.recycle()
-        c.drawBitmap(fg, 0f, 0f, paint)
-        fg.recycle()
-        return out
-    }
-
-    /** The icon's border colour: the ring just inside any rounding, its middle third by brightness. */
-    private fun ringColor(b: Bitmap): Int {
-        val fallback = android.graphics.Color.rgb(51, 51, 56)
-        return runCatching {
-            val w = 48
-            val s = Bitmap.createScaledBitmap(b, w, w, true)
-            val i = w / 6
-            val ring = ArrayList<Int>()
-            for (t in 0..23) {
-                val a = i + (w - 2 * i - 1) * t / 23
-                for ((x, y) in listOf(a to i, a to w - 1 - i, i to a, w - 1 - i to a)) {
-                    val px = s.getPixel(x, y)
-                    if (android.graphics.Color.alpha(px) > 200) ring += px
-                }
+        // As tall as the tile: a circle (or a wider art) clips the sides; a wider tile carries them on.
+        val k = ph.toFloat() / src.height
+        val iw = (src.width * k).roundToInt(); val ih = ph
+        val x0 = ((pw - iw) / 2f).roundToInt()
+        val art = Rect(x0, 0, x0 + iw, ih)
+        if (x0 > 0) {
+            // Each side: its edge column squeezed to a few pixels (so it's a smooth fade, not
+            // streaks), then stretched across the margin; 4 px tucked under the art.
+            fun side(x: Int, l: Int, r: Int) {
+                val col = crop(src, x, 0, 1, src.height) ?: return
+                val soft = Bitmap.createScaledBitmap(col, 1, 10, true)
+                c.drawBitmap(soft, null, RectF(l.toFloat(), 0f, r.toFloat(), ph.toFloat()), paint)
             }
-            if (s !== b) s.recycle()
-            if (ring.isEmpty()) return fallback
-            fun lum(c: Int) = 0.299 * android.graphics.Color.red(c) + 0.587 * android.graphics.Color.green(c) + 0.114 * android.graphics.Color.blue(c)
-            ring.sortBy { lum(it) }
-            // Average the middle third: a steady colour, not a stray highlight or shadow.
-            val mid = ring.subList(ring.size / 3, max(ring.size / 3 + 1, ring.size * 2 / 3))
-            android.graphics.Color.rgb(
-                mid.sumOf { android.graphics.Color.red(it) } / mid.size,
-                mid.sumOf { android.graphics.Color.green(it) } / mid.size,
-                mid.sumOf { android.graphics.Color.blue(it) } / mid.size,
-            )
-        }.getOrDefault(fallback)
+            side(2, 0, x0 + 4)
+            side(src.width - 3, x0 + iw - 4, pw)
+            // The art, its left and right edges faded over the first and last 10% so they melt in.
+            val layer = Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888)
+            val lc = Canvas(layer)
+            lc.drawBitmap(src, null, art, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+            val f = max(1f, iw * 0.1f)
+            val fade = android.graphics.LinearGradient(art.left.toFloat(), 0f, art.right.toFloat(), 0f,
+                intArrayOf(0, -0x1000000, -0x1000000, 0), floatArrayOf(0f, f / iw, 1f - f / iw, 1f), android.graphics.Shader.TileMode.CLAMP)
+            lc.drawRect(art, Paint().apply { shader = fade; xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) })
+            c.drawBitmap(layer, 0f, 0f, paint)
+            layer.recycle()
+        } else {
+            c.drawBitmap(src, null, art, paint)
+        }
+        return out
     }
 }
