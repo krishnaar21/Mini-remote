@@ -1,0 +1,135 @@
+import SwiftUI
+
+extension Color {
+    init(hex: UInt32, alpha: Double = 1) {
+        self.init(.sRGB, red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255, opacity: alpha)
+    }
+    init(hexString: String) { self.init(hex: UInt32(hexString, radix: 16) ?? 0xFF453A) }
+}
+
+/** One look for the whole app (Settings › Appearance › Theme). Every colour below reads from it. */
+struct Palette: Equatable {
+    let key: String, label: String, light: Bool
+    let screen: UInt32, bg: UInt32, sheet: UInt32, container: UInt32, high: UInt32, highest: UInt32, pressed: UInt32
+    let keyFill: UInt32, ink: UInt32, dim: UInt32, muted: UInt32, sub: UInt32, line: UInt32, dotOff: UInt32
+}
+
+enum Palettes {
+    static let dark = Palette(key: "dark", label: "Dark", light: false, screen: 0x000000, bg: 0x1C1C1E, sheet: 0x262629, container: 0x2E2E31,
+        high: 0x3D3D41, highest: 0x4C4C51, pressed: 0x5A5A60, keyFill: 0x1C1C1E, ink: 0xF7F7F8, dim: 0xBDC1C6, muted: 0xB4B4B9, sub: 0x8E8E93, line: 0x3A3A3E, dotOff: 0x7C7C82)
+    static let light = Palette(key: "light", label: "Light", light: true, screen: 0xF2F2F7, bg: 0xFFFFFF, sheet: 0xF2F2F7, container: 0xFFFFFF,
+        high: 0xE6E6EB, highest: 0xD5D5DB, pressed: 0xC7C7CD, keyFill: 0xFFFFFF, ink: 0x1C1C1E, dim: 0x48484D, muted: 0x5E5E63, sub: 0x8A8A8F, line: 0xD9D9DE, dotOff: 0xB8B8BE)
+    static let navy = Palette(key: "navy", label: "Navy", light: false, screen: 0x070D1E, bg: 0x111A33, sheet: 0x121C37, container: 0x16213F,
+        high: 0x203058, highest: 0x2B3D6B, pressed: 0x364A7D, keyFill: 0x131D39, ink: 0xEEF2FF, dim: 0xBAC4E2, muted: 0xA6B1D3, sub: 0x7F8BB2, line: 0x26355F, dotOff: 0x55618A)
+    /** Follows the iPhone: Light or Dark as the system is (see resolve). */
+    static let auto = Palette(key: "auto", label: "Auto", light: false, screen: dark.screen, bg: dark.bg, sheet: dark.sheet, container: dark.container,
+        high: dark.high, highest: dark.highest, pressed: dark.pressed, keyFill: dark.keyFill, ink: dark.ink, dim: dark.dim, muted: dark.muted, sub: dark.sub, line: dark.line, dotOff: dark.dotOff)
+    static let all = [auto, dark, light, navy]
+    static func of(_ k: String) -> Palette { all.first { $0.key == k } ?? dark }
+    /** The palette to draw with: Auto becomes Light or Dark as the iPhone is. */
+    static func resolve(_ k: String, dark isDark: Bool) -> Palette { k == "auto" || k == "retro" ? (isDark ? dark : light) : of(k) }
+}
+
+/** The palette in use. The app's root view is rebuilt when it changes (see ContentView). */
+enum Look {
+    static var p = Palettes.dark
+    /** Depth (Settings › Appearance): keys, dial and trackpad raised with light and shadow. */
+    static var depth = false
+}
+
+extension View {
+    /** Raised look when Depth is on: a soft shadow under the shape and light from above on it. */
+    /// `soft`: for things that sit on a sheet (the arrow bar in More and Search), where a full
+    /// drop shadow reads as a dark smudge: a light lift instead.
+    @ViewBuilder func depth<S: Shape>(_ shape: S, soft: Bool = false) -> some View {
+        if Look.depth {
+            self
+                .overlay(shape.fill(LinearGradient(colors: [.white.opacity(Look.p.light ? 0.35 : (soft ? 0.06 : 0.10)), .clear, .black.opacity(Look.p.light ? 0.04 : (soft ? 0.08 : 0.18))], startPoint: .top, endPoint: .bottom)).allowsHitTesting(false))
+                .overlay(shape.stroke(LinearGradient(colors: [.white.opacity(Look.p.light ? 0.7 : (soft ? 0.12 : 0.18)), .clear], startPoint: .top, endPoint: .center), lineWidth: 1).allowsHitTesting(false))
+                .shadow(color: .black.opacity(Look.p.light ? (soft ? 0.08 : 0.18) : (soft ? 0.22 : 0.6)), radius: soft ? 4 : 10, x: 0, y: soft ? 2 : 6)
+        } else { self }
+    }
+
+    /**
+     * What's behind an open sheet: blurred and darkened, so the sheet stands on its own and
+     * nothing underneath reads through or around it (iOS 26's floating sheets leave a gap).
+     */
+    func sheetBackdrop(_ on: Bool) -> some View {
+        // The system's own blur material, faded in as a sheet opens. It's removed at once when the
+        // sheet closes (a swiped sheet only reports closing once it's already gone, so any fade-out
+        // there reads as lag), and it isn't in the view tree at all while no sheet is open.
+        self.overlay {
+            if on {
+                ZStack {
+                    Rectangle().fill(.ultraThinMaterial)
+                    Color.black.opacity(Look.p.light ? 0.18 : 0.42)
+                }
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .transition(.asymmetric(insertion: .opacity.animation(.easeOut(duration: 0.16)), removal: .identity))
+            }
+        }
+    }
+
+    /** A short grabber pill at the top of a sheet (the system one is wide). */
+    func grabber() -> some View {
+        self
+            .presentationDragIndicator(.hidden)
+            .overlay(alignment: .top) {
+                Capsule().fill(T.sub.opacity(0.55)).frame(width: 30, height: 4).padding(.top, 7)
+                    .allowsHitTesting(false).accessibilityHidden(true)
+            }
+    }
+}
+
+/**
+ * Sizes for Home's circles. They grow with the phone: four across with comfortable sides,
+ * from 64 pt on the smallest iPhones up to 86 pt on the largest. Set once from the screen size.
+ */
+enum Layout {
+    static var key: CGFloat = 68
+    static let gap: CGFloat = 14
+
+    /** The circle size for a screen whose short side is `side` points. */
+    static func keyFor(side: CGFloat) -> CGFloat {
+        let fit = (min(side, 480) - 2 * 26 - 3 * gap) / 4
+        return (min(86, max(64, fit))).rounded()
+    }
+}
+
+enum T {
+    static var screen: Color { Color(hex: Look.p.screen) }
+    static var bg: Color { Color(hex: Look.p.bg) }
+    static var sheet: Color { Color(hex: Look.p.sheet) }
+    static var container: Color { Color(hex: Look.p.container) }
+    static var high: Color { Color(hex: Look.p.high) }
+    static var highest: Color { Color(hex: Look.p.highest) }
+    static var pressed: Color { Color(hex: Look.p.pressed) }
+    static var key: Color { Color(hex: Look.p.keyFill) }
+    static var ink: Color { Color(hex: Look.p.ink) }
+    static var dim: Color { Color(hex: Look.p.dim) }
+    static var muted: Color { Color(hex: Look.p.muted) }
+    static var sub: Color { Color(hex: Look.p.sub) }
+    static var line: Color { Color(hex: Look.p.line) }
+    static var dotOff: Color { Color(hex: Look.p.dotOff) }
+    static let ok = Color(hex: 0x6DD58C)
+    static let warn = Color(hex: 0xFDD663)
+    static let danger = Color(hex: 0xF2B8B5)
+    static let bt = Color(hex: 0x64D2FF)
+}
+
+/** SF Symbol for the key that was pressed (shown in the dial's well). */
+func keySymbol(_ k: RemoteKey, muted: Bool, playing: Bool) -> String? {
+    switch k {
+    case .up: return "chevron.up"; case .down: return "chevron.down"; case .left: return "chevron.left"; case .right: return "chevron.right"
+    case .back: return "arrow.uturn.backward"; case .home: return "tv"; case .playPause: return playing ? "play.fill" : "pause.fill"
+    case .power: return "power"; case .volUp, .chUp: return "plus"; case .volDown, .chDown: return "minus"
+    case .mute: return muted ? "speaker.slash.fill" : "speaker.wave.2.fill"; case .voice: return "mic.fill"
+    case .rewind: return "gobackward.10"; case .fastForward: return "goforward.10"
+    default: return nil
+    }
+}
+
+func linkWord(_ l: Link) -> String {
+    switch l { case .ready: return "Connected"; case .connecting: return "Connecting…"; case .error: return "Can't reach"; case .idle: return "" }
+}

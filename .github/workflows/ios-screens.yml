@@ -1,0 +1,61 @@
+name: iOS screenshots
+on:
+  push:
+    branches: [claude/ios-native]
+    paths: ["ios/**", ".github/workflows/ios-screens.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  shots:
+    runs-on: xcode-27
+    steps:
+      - uses: actions/checkout@v5
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+          # A ready-to-open Xcode project (no git, Homebrew or XcodeGen needed on the Mac).
+          mkdir -p shots && zip -qr shots/MiniRemote-Xcode.zip MiniRemote MiniRemote.xcodeproj project.yml
+      - name: Pick and boot an iPhone simulator
+        run: |
+          UDID=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith("iPhone 17 Pro"))][0].udid // empty')
+          [ -z "$UDID" ] && UDID=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')
+          echo "UDID=$UDID" >> $GITHUB_ENV
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4
+      - name: Build for the simulator (Debug)
+        run: |
+          set -o pipefail
+          cd ios
+          xcodebuild -project MiniRemote.xcodeproj -scheme MiniRemote -configuration Debug \
+            -destination "id=$UDID" CODE_SIGNING_ALLOWED=NO -derivedDataPath build build | xcbeautify
+      - name: Take screenshots
+        run: |
+          cd ios
+          APP=build/Build/Products/Debug-iphonesimulator/MiniRemote.app
+          BID=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")
+          xcrun simctl install "$UDID" "$APP"
+          mkdir -p shots
+          i=1
+          for s in home depth welcome tour page2 page3 more moreapps depthmore sleep keys apps devices scan settings settingsheet settingsheet2 light navy; do
+            xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
+            SIMCTL_CHILD_SHOT=$s xcrun simctl launch "$UDID" "$BID"
+            sleep 6
+            xcrun simctl io "$UDID" screenshot "shots/$(printf %02d $i)-$s.png"
+            i=$((i+1))
+          done
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ios-screenshots
+          path: ios/shots
+      - name: Publish screenshots to the ios-screenshots branch
+        run: |
+          cd ios/shots
+          git init -q -b ios-screenshots
+          git -c user.name="github-actions[bot]" -c user.email=41898282+github-actions[bot]@users.noreply.github.com add -A
+          git -c user.name="github-actions[bot]" -c user.email=41898282+github-actions[bot]@users.noreply.github.com commit -qm "iOS screenshots for ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ios-screenshots

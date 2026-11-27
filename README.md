@@ -18,6 +18,12 @@ Universal TV remote with a soft-touch charcoal design. Kotlin + Jetpack Compose.
 Every push to `main` builds an APK and publishes it here:
 `https://github.com/krishnaar21/mini-remote/releases/tag/latest-build` (download `MiniRemote.apk`).
 
+## iOS (native Swift / SwiftUI)
+The `ios/` folder has the same app for iPhone, written natively in SwiftUI with Apple frameworks only (no third-party code). It supports Roku, Samsung, LG and Android / Google TV, like the Android app.
+- **Build:** `brew install xcodegen && cd ios && xcodegen generate`, then open `MiniRemote.xcodeproj` in Xcode. CI (`Build iOS`) compiles it on GitHub's macOS runners and uploads an **unsigned** `MiniRemote-unsigned.ipa`.
+- **Install:** an iPhone only runs signed apps. Either open the project in Xcode on a Mac and run it on your phone (a free Apple ID works for 7-day installs), sign the unsigned IPA with a tool such as Sideloadly or AltStore, or use a paid Apple Developer account for TestFlight.
+- **iOS differences:** no in-app updater (iOS doesn't allow it); the phone's volume buttons can't be taken over (Apple doesn't allow it); voice search uses the keyboard's dictation mic; app logos aren't downloaded (TV-provided icons still show).
+
 ## Privacy
 See [PRIVACY.md](PRIVACY.md). No accounts, ads or tracking. Data stays on the phone, and pairing keys are encrypted with the Android Keystore.
 
