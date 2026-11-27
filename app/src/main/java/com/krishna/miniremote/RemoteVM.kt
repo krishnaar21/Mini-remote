@@ -904,20 +904,20 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     var keyboardAsk by mutableIntStateOf(0); private set
 
     /**
-     * The power key. Not connected: turns the TV on. Connected: asks the TV whether it's on (where
-     * it can tell). Off (standby, still on the network): turns it on. On, or it can't tell: [askOff]
-     * opens the "Turn off?" sheet.
+     * The power key: opens the "Turn on?" sheet (ask(true)) or the "Turn off?" one (ask(false)).
+     * Not connected: Turn on. Connected: asks the TV whether it's on (where it can tell); off
+     * (standby, still on the network) is Turn on; on, or it can't tell, is Turn off.
      */
-    fun powerTap(askOff: () -> Unit) {
-        if (demo) { askOff(); return }
+    fun powerTap(ask: (off: Boolean) -> Unit) {
+        if (demo) { ask(false); return }
         val a = adapter
         if (active == null) { say("Choose a TV first"); return }
-        if (a == null || link != Link.READY) { wake(); return }
+        if (a == null || link != Link.READY) { ask(true); return }
         viewModelScope.launch {
             val fresh = withTimeoutOrNull(1500) { runCatching { a.isOn() }.getOrNull() }
             if (adapter !== a) return@launch
             if (fresh != null) tvOn = fresh
-            if (tvOn == false) wake() else askOff()
+            ask(tvOn == false)
         }
     }
 

@@ -145,6 +145,16 @@ fun HomeScreen(
     }
     val offline = vm.active == null || vm.link == Link.ERROR
     var askPower by remember { mutableStateOf(Shot.take("power")) }
+    // The TV is off (not connected, or in standby and says so): offer to turn it on.
+    var askOn by remember { mutableStateOf(false) }
+    if (askOn) vm.active?.let { tv ->
+        ConfirmSheet(
+            title = "Turn on ${shortName(tv.name, tv.brand.label)}?",
+            text = "It can take a few seconds to wake up.",
+            action = "Turn on", danger = false, ico = Ico.POWER,
+            onConfirm = { vm.wake() }, onDismiss = { askOn = false },
+        )
+    }
     if (askPower) vm.active?.let { tv ->
         ConfirmSheet(
             title = "Turn off ${shortName(tv.name, tv.brand.label)}?",
@@ -229,12 +239,12 @@ fun HomeScreen(
         // Lined up with the keys and the bottom line: the same side margins.
         Row(Modifier.width(KEYROW_W).padding(top = 32.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             TvPicker(vm, Modifier.weight(1f), openDevices)
-            // Off (not reachable, or in standby and says so): turn it on. On, or can't tell: ask before turning it off.
+            // Off (not reachable, or in standby and says so): ask to turn it on. On, or can't tell: ask to turn it off.
             val off = vm.active != null && (vm.link != Link.READY || vm.tvOn == false)
             KeyButton(accent, "Power", Modifier.size(52.dp).coach("power"), pressedScale = 1f,
                 state = if (off) "TV off" else if (vm.tvOn == true) "TV on" else null,
                 actionLabel = if (off) "Turn on" else "Turn off", onPress = {
-                if (vm.active == null) openDevices() else vm.powerTap { askPower = true }
+                if (vm.active == null) openDevices() else vm.powerTap { off -> if (off) askOn = true else askPower = true }
             }) { c, _ ->
                 LineIcon(Ico.POWER, c, 22.dp)
             }
