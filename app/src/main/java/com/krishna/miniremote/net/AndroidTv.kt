@@ -189,7 +189,10 @@ class AndroidTvAdapter(
     private var scope: CoroutineScope? = null
     override var onVolume: ((TvVolume) -> Unit)? = null
     override var onDropped: (() -> Unit)? = null
+    override var onPower: ((Boolean) -> Unit)? = null
     @Volatile private var closing = false
+    /** RemoteStart.started: whether the TV is on. It keeps this link open in standby and says when that changes. */
+    @Volatile private var power: Boolean? = null
     /** The TV's keyboard link: counters it last sent, and the app in front. */
     @Volatile private var imeCounter = 0L
     @Volatile private var fieldCounter = 0L
@@ -355,6 +358,11 @@ class AndroidTvAdapter(
                             val max = v.long(6)?.toInt() ?: 0
                             if (max > 0) onVolume?.invoke(TvVolume((v.long(7) ?: 0L).toInt(), max, (v.long(8) ?: 0L) != 0L))
                         }
+                        // RemoteStart: the TV turned on (started = true) or went to standby (false, or left out).
+                        m[40] != null -> {
+                            val on = (m.sub(40)?.long(1) ?: 0L) != 0L
+                            power = on; onPower?.invoke(on)
+                        }
                         // RemoteError: the TV didn't like one message (e.g. a key it lacks). Not fatal.
                         m[3] != null -> {}
                     }
@@ -375,6 +383,14 @@ class AndroidTvAdapter(
     }
 
     override suspend fun send(key: RemoteKey) = key(keys[key] ?: missing(key, "this TV"))
+
+    override suspend fun isOn(): Boolean? = power
+
+    /** In standby the link stays up, and the power key turns it on. Only sent when it's known to be off. */
+    override suspend fun powerOn(): Boolean {
+        if (power != false) return false
+        return runCatching { key(26); true }.getOrDefault(false) // KEYCODE_POWER
+    }
     override fun supports(key: RemoteKey) = key in keys
 
     private fun isLauncher(p: String) = "launcher" in p.lowercase() || p == "com.google.android.apps.tv.launcherx" || p == "com.google.android.tvlauncher"

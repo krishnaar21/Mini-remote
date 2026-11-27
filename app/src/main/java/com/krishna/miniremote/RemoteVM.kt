@@ -56,6 +56,12 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     var playing by mutableStateOf(false); private set
     /** The TV's own volume, when it tells us (Android TV, LG, most Samsung). Null = unknown. */
     var tvVolume by mutableStateOf<com.krishna.miniremote.net.TvVolume?>(null); private set
+    /**
+     * Whether the connected TV is on: true / false when it says so (LG, Android TV, Roku, newer
+     * Samsung), null when it can't tell. Many TVs stay connected in standby, so the power key
+     * reads this to turn the TV on instead of asking to turn it off.
+     */
+    var tvOn by mutableStateOf<Boolean?>(null); private set
     private var volJob: Job? = null
     /** Non-null while an Android / Google TV is showing a pairing code and we're waiting for it. */
     var pairPrompt by mutableStateOf<PairPrompt?>(null); private set
@@ -411,6 +417,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         devices = listOf(Device("demo", "Demo TV", "192.168.1.20", Brand.ANDROID_TV))
         activeId = "demo"
         link = Link.READY
+        tvOn = true
         tvVolume = com.krishna.miniremote.net.TvVolume(24, 100, false)
         nowOn = NowOn("Netflix", false, 1_204_000, 2_710_000)
     }
@@ -517,7 +524,9 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                     askCode = { err -> askCode(d.name, err) },
                 )
                 tvVolume = null
+                tvOn = null
                 a.onVolume = { v -> viewModelScope.launch { tvVolume = v; muted = v.muted } }
+                a.onPower = { on -> viewModelScope.launch { if (activeId == d.id) tvOn = on } }
                 a.onDropped = { dropped(d, a) }
                 // A text box got focus on the TV. If the phone is what's driving it (something sent
                 // from here in the last 20 s), type from the phone; if the physical remote is,
@@ -529,6 +538,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 adapter = a
                 refreshVolume(0)
                 link = Link.READY
+                viewModelScope.launch { runCatching { a.isOn() }.getOrNull()?.let { on -> if (adapter === a) tvOn = on } }
                 fetchName(d) // a saved TV still called "Google TV" / "LG TV" gets its own name
                 redials = 0
                 // Remember the TV's network address so it can be woken later.
@@ -563,6 +573,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     fun disconnect() {
         connectJob?.cancel()
         adapter?.close(); adapter = null
+        tvOn = null
         codeAnswer?.complete(null)
         link = Link.IDLE
     }
@@ -892,17 +903,56 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     /** Bumps when the TV asks for a keyboard (a text box got focus): the Search sheet opens. */
     var keyboardAsk by mutableIntStateOf(0); private set
 
-    /** Turns the TV on: Wake-on-LAN with its saved network address (and Roku's PowerOn), then connects. */
+    /**
+     * The power key. Not connected: turns the TV on. Connected: asks the TV whether it's on (where
+     * it can tell). Off (standby, still on the network): turns it on. On, or it can't tell: [askOff]
+     * opens the "Turn off?" sheet.
+     */
+    fun powerTap(askOff: () -> Unit) {
+        if (demo) { askOff(); return }
+        val a = adapter
+        if (active == null) { say("Choose a TV first"); return }
+        if (a == null || link != Link.READY) { wake(); return }
+        viewModelScope.launch {
+            val fresh = withTimeoutOrNull(1500) { runCatching { a.isOn() }.getOrNull() }
+            if (adapter !== a) return@launch
+            if (fresh != null) tvOn = fresh
+            if (tvOn == false) wake() else askOff()
+        }
+    }
+
+    /** Where to allow waking over the network, said when a TV in standby didn't wake. */
+    private fun wakeHint(d: Device) = when (d.brand) {
+        Brand.LG -> "${d.name} didn't turn on. On the TV, turn on TV On With Mobile (Settings › General › Devices)."
+        Brand.SAMSUNG -> "${d.name} didn't turn on. On the TV, turn on Power On with Mobile (Settings › General › Network › Expert Settings)."
+        Brand.ROKU -> "${d.name} didn't turn on. On the TV, turn on Fast TV start (Settings › System › Power)."
+        else -> "${d.name} didn't turn on. Use the TV's own remote this time."
+    }
+
+    /** Turns the TV on: its own power-on where it has one, else Wake-on-LAN with its saved network address, then connects. */
     fun wake() {
         val d = active ?: run { say("Choose a TV first"); return }
         feel.fire(Feel.HEAVY)
         viewModelScope.launch {
             val a = adapter
-            if (a != null && link == Link.READY && a.powerOn()) { say("Turning on ${d.name}"); return@launch }
+            // Connected while in standby: the TV can say when it's on.
+            val standby = a != null && link == Link.READY
+            if (standby && a!!.powerOn()) { say("Turning on ${d.name}"); tvOn = true; return@launch }
             val mac = d.mac
             if (mac == null) { say("${d.name} can't be turned on from here yet. Connect once while it's on."); return@launch }
             if (!com.krishna.miniremote.net.Wol.wake(mac, d.host)) { say("Couldn't reach the network"); return@launch }
-            say("Waking ${d.name}…")
+            say(if (standby) "Turning on ${d.name}…" else "Waking ${d.name}…")
+            if (standby) {
+                // Still connected: wait for the TV to say it's on.
+                repeat(6) {
+                    delay(2000)
+                    if (adapter !== a) return@launch
+                    val on = runCatching { a!!.isOn() }.getOrNull() ?: tvOn
+                    if (on == true) { tvOn = true; return@launch }
+                }
+                if (tvOn == false) say(wakeHint(d))
+                return@launch
+            }
             // TVs take a few seconds to join the network.
             repeat(6) {
                 delay(2500)

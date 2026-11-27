@@ -74,8 +74,22 @@ interface RemoteAdapter {
         get() = null
         set(_) {}
 
-    /** Turns the TV on when it's in standby but still on the network (Roku). */
+    /**
+     * Turns the TV on while it's in standby but still connected (Roku, Android TV, Samsung, LG with
+     * only its screen off). False when it has to be woken with Wake-on-LAN instead.
+     */
     suspend fun powerOn(): Boolean = false
+
+    /**
+     * Whether the TV is on (picture showing): true or false when it says so, null when it can't tell.
+     * Many TVs stay on the network in standby, so being connected doesn't mean they're on.
+     */
+    suspend fun isOn(): Boolean? = null
+
+    /** Called when the TV says by itself that it turned on (true) or off (false) (LG, Android TV). */
+    var onPower: ((Boolean) -> Unit)?
+        get() = null
+        set(_) {}
 
     /** Asks the TV for its volume; null when this TV can't tell. */
     suspend fun readVolume(): TvVolume? = null
@@ -202,6 +216,16 @@ class RokuAdapter(private val host: String) : RemoteAdapter {
 
     override suspend fun powerOn(): Boolean = runCatching { post("keypress/PowerOn"); true }.getOrDefault(false)
 
+    /** device-info's power-mode: PowerOn when the picture is on; DisplayOff / Ready / Suspend in standby. Sticks say Headless. */
+    override suspend fun isOn(): Boolean? {
+        val mode = Regex("<power-mode>([^<]*)</power-mode>").find(get("query/device-info"))?.groupValues?.get(1)?.trim()
+        return when (mode) {
+            "PowerOn" -> true
+            "DisplayOff", "Ready", "Suspend", "PowerOff" -> false
+            else -> null
+        }
+    }
+
     /** Channels (type appl) and, on Roku TVs, inputs like HDMI 1 (type tvin). Icons come from the Roku. */
     override suspend fun listApps(): List<TvApp> =
         Regex("<app id=\"([^\"]+)\"([^>]*)>([^<]*)</app>").findAll(get("query/apps")).map { m ->
@@ -269,6 +293,26 @@ class SamsungAdapter(
                 if (!r.isSuccessful) null else JSONObject(r.body?.string().orEmpty()).optJSONObject("device")?.optString("wifiMac")?.takeIf { it.isNotEmpty() }
             }
         }.getOrNull()
+    }
+
+    /** The REST info's PowerState ("on" / "standby"), sent by 2018-and-later TVs; null on older ones. */
+    override suspend fun isOn(): Boolean? = withContext(Dispatchers.IO) {
+        runCatching {
+            Net.plain.newCall(Request.Builder().url("http://$host:8001/api/v2/").build()).execute().use { r ->
+                if (!r.isSuccessful) null
+                else when (JSONObject(r.body?.string().orEmpty()).optJSONObject("device")?.optString("PowerState")?.lowercase()) {
+                    "on" -> true
+                    "standby" -> false
+                    else -> null
+                }
+            }
+        }.getOrNull()
+    }
+
+    /** In standby with the connection still open, the power key turns it on. */
+    override suspend fun powerOn(): Boolean {
+        if (ws == null || isOn() != false) return false
+        return runCatching { send(RemoteKey.POWER); true }.getOrDefault(false)
     }
 
     /** Samsung has no input list over this channel: offer the HDMI keys. */
@@ -414,13 +458,51 @@ class LgAdapter(
                 "READ_INSTALLED_APPS",
                 // Inputs list, and the TV's network address for waking it.
                 "READ_INPUT_DEVICE_LIST", "READ_NETWORK_STATE", "CONTROL_INPUT_TV",
+                // Whether the TV is on or in standby (the power key shows Turn on / Turn off),
+                // and lighting the screen again when only the screen was off.
+                "READ_POWER_STATE", "CONTROL_TV_SCREEN",
             )
         )
     )
 
     override var onVolume: ((TvVolume) -> Unit)? = null
     override var onDropped: (() -> Unit)? = null
+    override var onPower: ((Boolean) -> Unit)? = null
     @Volatile private var closing = false
+    /** The last power state the TV reported (null: it hasn't, or won't say). */
+    @Volatile private var power: Boolean? = null
+    /** On, but with only the screen turned off: turnOnScreen lights it again. */
+    @Volatile private var screenOff = false
+
+    /**
+     * getPowerState's answer. With Quick Start+ an LG TV that's "off" stays on the network in
+     * Active Standby, so the connection alone doesn't say it's on. "Screen Off" counts as off here:
+     * the picture is dark, and Turn on lights it.
+     */
+    private fun parsePower(p: JSONObject?): Boolean? {
+        val state = p?.optString("state").orEmpty()
+        if (state.isEmpty()) return null
+        val processing = p?.optString("processing").orEmpty()
+        screenOff = state == "Screen Off"
+        if (listOf("Power Off", "Suspend", "Standby").any { processing.contains(it, ignoreCase = true) }) return false
+        return when (state) {
+            "Active", "Screen Saver" -> true
+            "Screen Off", "Active Standby", "Suspend", "Power Off" -> false
+            else -> null
+        }
+    }
+
+    override suspend fun isOn(): Boolean? =
+        runCatching { parsePower(request("ssap://com.webos.service.tvpower/power/getPowerState").optJSONObject("payload")) }
+            .getOrNull()?.also { power = it } ?: power
+
+    /** Only the screen off: light it. In Active Standby the TV needs Wake-on-LAN ("TV On With Mobile"). */
+    override suspend fun powerOn(): Boolean {
+        if (!screenOff) return false
+        return runCatching {
+            request("ssap://com.webos.service.tvpower/power/turnOnScreen", JSONObject().put("standbyMode", "active")); true
+        }.getOrDefault(false)
+    }
 
     private fun parseVolume(p: JSONObject?): TvVolume? {
         if (p == null) return null
@@ -455,6 +537,11 @@ class LgAdapter(
             val j = runCatching { JSONObject(text) }.getOrNull() ?: return
             val type = j.optString("type")
             if (j.optString("id") == "vol") { parseVolume(j.optJSONObject("payload"))?.let { v -> onVolume?.invoke(v) }; return }
+            // Power state, sent again whenever it changes. Refused (no permission, older webOS): stays unknown.
+            if (j.optString("id") == "pwr") {
+                if (type != "error") parsePower(j.optJSONObject("payload"))?.let { on -> power = on; onPower?.invoke(on) }
+                return
+            }
             if (type == "registered") {
                 j.optJSONObject("payload")?.optString("client-key")?.takeIf { it.isNotEmpty() }?.let { token = it; onToken(it) }
                 registered.complete(Unit)
@@ -484,6 +571,7 @@ class LgAdapter(
         try { withTimeout(30_000) { registered.await() } } catch (e: Exception) { s.cancel(); ws = null; throw e }
         // Keep the volume in step: the TV sends it again whenever it changes.
         s.send(JSONObject().put("type", "subscribe").put("id", "vol").put("uri", "ssap://audio/getVolume").toString())
+        s.send(JSONObject().put("type", "subscribe").put("id", "pwr").put("uri", "ssap://com.webos.service.tvpower/power/getPowerState").toString())
     }
 
     override suspend fun connect() {

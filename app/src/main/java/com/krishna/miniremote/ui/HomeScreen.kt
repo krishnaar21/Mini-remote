@@ -148,7 +148,9 @@ fun HomeScreen(
     if (askPower) vm.active?.let { tv ->
         ConfirmSheet(
             title = "Turn off ${shortName(tv.name, tv.brand.label)}?",
-            text = "If the TV is already off, this turns it on.",
+            // Known to be on: say what happens. Can't tell (it may be in standby): hedge.
+            text = if (vm.tvOn == true) "It goes to standby. Tap power again to turn it on."
+                else "If the TV is already off, this turns it on.",
             action = "Turn off", danger = true, ico = Ico.POWER,
             onConfirm = { vm.press(RemoteKey.POWER) }, onDismiss = { askPower = false },
         )
@@ -227,9 +229,12 @@ fun HomeScreen(
         // Lined up with the keys and the bottom line: the same side margins.
         Row(Modifier.width(KEYROW_W).padding(top = 32.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             TvPicker(vm, Modifier.weight(1f), openDevices)
-            KeyButton(accent, "Power", Modifier.size(52.dp).coach("power"), pressedScale = 1f, onPress = {
-                // Off (not reachable): wake it. On: ask before turning it off.
-                if (vm.active == null) openDevices() else if (vm.link != Link.READY) vm.wake() else askPower = true
+            // Off (not reachable, or in standby and says so): turn it on. On, or can't tell: ask before turning it off.
+            val off = vm.active != null && (vm.link != Link.READY || vm.tvOn == false)
+            KeyButton(accent, "Power", Modifier.size(52.dp).coach("power"), pressedScale = 1f,
+                state = if (off) "TV off" else if (vm.tvOn == true) "TV on" else null,
+                actionLabel = if (off) "Turn on" else "Turn off", onPress = {
+                if (vm.active == null) openDevices() else vm.powerTap { askPower = true }
             }) { c, _ ->
                 LineIcon(Ico.POWER, c, 22.dp)
             }
