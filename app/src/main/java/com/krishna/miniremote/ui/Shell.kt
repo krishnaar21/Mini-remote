@@ -454,12 +454,12 @@ fun ToastChip(text: String?, modifier: Modifier = Modifier, action: RemoteVM.Toa
         val (t, act) = last[0]
         Row(
             Modifier.widthIn(max = 360.dp).softFace(CARD, dpUnits = true)
-                .padding(start = 18.dp, end = if (act == null) 18.dp else 8.dp, top = if (act == null) 11.dp else 8.dp, bottom = if (act == null) 11.dp else 8.dp)
+                .padding(start = 20.dp, end = if (act == null) 20.dp else 10.dp, top = if (act == null) 15.dp else 10.dp, bottom = if (act == null) 15.dp else 10.dp)
                 .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(t, color = T.Ink, fontSize = 13.5.sp, fontWeight = FontWeight.Medium, maxLines = 3,
+            Text(t, color = T.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 textAlign = if (act == null) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start,
                 modifier = Modifier.weight(1f, fill = false))
             if (act != null) {
