@@ -305,8 +305,9 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     /** Quick check that the TV answers on its remote port (no pairing, nothing sent). */
     private suspend fun reachable(d: Device): Boolean = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         if (!HostValidator.isPrivateIPv4(d.host)) return@withContext false
-        val port = when (d.brand) { Brand.ROKU -> 8060; Brand.SAMSUNG -> 8002; Brand.LG -> if (d.pin != null) 3001 else 3000; Brand.ANDROID_TV -> 6466 }
-        runCatching { java.net.Socket().use { it.connect(java.net.InetSocketAddress(d.host, port), 800); true } }.getOrDefault(false)
+        // LG: paired over TLS uses 3001 only; otherwise either port (older webOS has only 3000).
+        val ports = when (d.brand) { Brand.ROKU -> listOf(8060); Brand.SAMSUNG -> listOf(8002); Brand.LG -> if (d.pin != null) listOf(3001) else listOf(3001, 3000); Brand.ANDROID_TV -> listOf(6466) }
+        ports.any { port -> runCatching { java.net.Socket().use { it.connect(java.net.InetSocketAddress(d.host, port), 800); true } }.getOrDefault(false) }
     }
 
     /**
@@ -548,7 +549,9 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 // A timeout inside connect is a failure to show, not this job being cancelled.
                 if (e !is TimeoutCancellationException) throw e
                 link = Link.ERROR
-                val msg = "${d.name} didn't answer in time"
+                // LG and Samsung wait for Yes / Allow on the TV, so a timeout there is usually that.
+                val msg = if (d.brand == Brand.LG || d.brand == Brand.SAMSUNG) "${d.name} didn't answer in time. If the TV asked, choose ${if (d.brand == Brand.LG) "Yes" else "Allow"} and try again."
+                    else "${d.name} didn't answer in time"
                 lastError = msg
                 say(msg)
                 feel.fire(Feel.ERROR)
@@ -561,7 +564,10 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 val msg = when {
                     e is UserFacing -> e.message ?: "Not supported"
                     e.isCertChanged() -> "${d.name}'s certificate changed. Remove and add it again if you reset it."
-                    else -> "Couldn't reach ${d.name}"
+                    e.causes().any { it is java.net.ConnectException || it is java.net.NoRouteToHostException || it is java.net.SocketTimeoutException } ->
+                        "Couldn't reach ${d.name} at ${d.host}. Check it's on and on the same Wi-Fi as this phone."
+                    e.causes().any { it is javax.net.ssl.SSLException } -> "${d.name} answered, but the secure connection failed."
+                    else -> "Couldn't connect to ${d.name}"
                 }
                 lastError = msg
                 say(msg)
@@ -601,20 +607,48 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
 
     /** Saves a TV (replacing one with the same id) and connects to it. */
     fun addAndSelect(d: Device) {
-        devices = devices.filter { it.id != d.id } + d
+        // One entry per address: a TV first saved under the wrong brand is replaced, not doubled.
+        devices = devices.filter { it.id != d.id && it.host != d.host } + d
         store.saveDevices(devices)
         found = found.filter { it.host != d.host }
         select(d)
     }
 
-    /** Returns an error to show, or the new device. */
-    fun addManual(host: String, brand: Brand): Pair<String?, Device?> {
-        val h = host.trim()
-        if (!HostValidator.isPrivateIPv4(h)) return "Enter a home-network address like 192.168.1.20." to null
-        val d = Device("${brand.name.lowercase()}-$h", brand.label, h, brand)
-        addAndSelect(d)
-        fetchName(d)
-        return null to d
+    /** True while a typed-in address is being checked. */
+    var checkingManual by mutableStateOf(false); private set
+
+    /**
+     * Checks a typed-in address before saving it: is something there, and which TV is it?
+     * [brand] null = work it out. [done] gets an error to show, or the saved device (then pairing
+     * starts). A TV already saved at that address with the same brand keeps its pairing.
+     */
+    fun addManual(host: String, brand: Brand?, done: (String?, Device?) -> Unit) {
+        val h = HostValidator.normalize(host)
+            ?: return done("Enter the TV's address as four numbers, like 192.168.1.20.", null)
+        if (!HostValidator.isPrivateIPv4(h)) {
+            return done("That isn't a home Wi-Fi address. TV addresses start with 192.168, 10 or 172.16 to 172.31.", null)
+        }
+        if (checkingManual) return
+        checkingManual = true
+        viewModelScope.launch {
+            val r = try { Discovery.check(h, brand) } catch (e: CancellationException) { throw e } catch (e: Exception) { Discovery.Check.Silent }
+            finally { checkingManual = false }
+            when (r) {
+                is Discovery.Check.Tv -> {
+                    val saved = devices.firstOrNull { it.id == r.device.id }
+                    val d = saved ?: r.device
+                    addAndSelect(d)
+                    fetchName(d)
+                    done(null, d)
+                }
+                Discovery.Check.Silent -> done("Nothing answered at $h. Check the TV is on, the address matches Settings › Network on the TV, and this phone is on the same Wi-Fi.", null)
+                is Discovery.Check.Unknown -> done(
+                    if (brand == null) "Something answered at $h, but it doesn't look like a TV. Choose the TV's brand above and try again."
+                    else "Something answered at $h, but not like a ${brand.label} TV. Check the address and brand.",
+                    null,
+                )
+            }
+        }
     }
 
     /** Replaces a placeholder name ("LG TV", "Google TV"…) with the name set on the TV, when it says. */
@@ -1299,3 +1333,6 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
 /** Where Help & feedback goes: an email address (when set), else new issues on GitHub. */
 const val SUPPORT_EMAIL = "iamyourdev123@gmail.com"
 const val SUPPORT_ISSUES = "https://github.com/krishnaar21/mini-remote/issues/new"
+
+/** [this] and what caused it, a few levels down. */
+private fun Throwable.causes(): Sequence<Throwable> = generateSequence(this) { it.cause }.take(8)

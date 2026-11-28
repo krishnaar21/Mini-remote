@@ -18,6 +18,18 @@ object HostValidator {
         if (o.any { it > 255 }) return false
         return o[0] == 10 || (o[0] == 172 && o[1] in 16..31) || (o[0] == 192 && o[1] == 168)
     }
+
+    /**
+     * Tidies a typed address into plain dotted form ("192.168.001.020 " -> "192.168.1.20"), or
+     * null when it isn't four numbers 0-255. Leading zeros would otherwise reach the socket layer
+     * as typed, where some parsers read them as octal.
+     */
+    fun normalize(input: String): String? {
+        val m = Regex("^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})$").matchEntire(input.trim().trimEnd('.')) ?: return null
+        val o = m.groupValues.drop(1).map { it.toInt() }
+        if (o.any { it > 255 }) return null
+        return o.joinToString(".")
+    }
 }
 
 object Net {
@@ -59,6 +71,9 @@ object Net {
             .readTimeout(0, TimeUnit.SECONDS)
             .pingInterval(0, TimeUnit.SECONDS)
             .sslSocketFactory(ctx.socketFactory, pin)
+            // Older TVs (LG webOS 3/4, early Tizen) only offer older TLS versions and ciphers. The
+            // pin is what proves it's the same TV, so the wider list costs nothing here.
+            .connectionSpecs(listOf(okhttp3.ConnectionSpec.COMPATIBLE_TLS))
             // TVs are addressed by IP and their certs don't name it; the pin replaces this check.
             .hostnameVerifier { _, _ -> true }
             .build()
