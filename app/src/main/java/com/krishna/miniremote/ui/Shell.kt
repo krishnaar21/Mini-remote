@@ -256,13 +256,8 @@ fun AppShell(vm: RemoteVM) {
                                 }
                             }
                         }
-                        // Touch has no pages of circles: one quiet More key instead (keys, inputs, apps).
-                        if (style == "touch") Box(Modifier.size(40.dp).clip(CircleShape).background(T.Key)
-                            .clickable(onClickLabel = "open", role = androidx.compose.ui.semantics.Role.Button) { vm.feel.fire(com.krishna.miniremote.Feel.TICK); more = true }
-                            .semantics { contentDescription = "More: keys, inputs and apps" }, contentAlignment = Alignment.Center) {
-                            LineIcon(Ico.MORE, T.Ink, 20.dp)
-                        }
-                        else PagePills(keyPager.pageCount, keyPager.currentPage, accent, listOf("Main keys", "More keys", "Apps", "More apps"), Modifier.coach("pills")) { i ->
+                        // Touch has no pages of circles (its More key sits in the top bar).
+                        if (style != "touch") PagePills(keyPager.pageCount, keyPager.currentPage, accent, listOf("Main keys", "More keys", "Apps", "More apps"), Modifier.coach("pills")) { i ->
                             vm.feel.fire(com.krishna.miniremote.Feel.TICK); scope.launch { keyPager.animateScrollToPage(i) }
                         }
                     }
