@@ -27,6 +27,9 @@ open class UserFacing(msg: String) : Exception(msg)
 
 class Unsupported(msg: String) : UserFacing(msg)
 
+/** The TV turned this phone away: pairing again fixes it (the toast offers Re-pair). */
+class NeedsRepair(msg: String) : UserFacing(msg)
+
 /** What the TV is showing: an app or input by name, and whether it's live TV / an input. */
 /** What's on the TV: app or input name, whether it's live TV, and (Roku) playback position. */
 data class NowOn(val name: String, val live: Boolean, val positionMs: Long? = null, val durationMs: Long? = null)

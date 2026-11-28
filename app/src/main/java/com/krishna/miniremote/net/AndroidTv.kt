@@ -290,8 +290,11 @@ class AndroidTvAdapter(
         val tls = TlsPin(pin)
         val s = withContext(Dispatchers.IO) {
             try { ClientCert.socket(host, 6466, tls) } catch (e: Exception) {
-                if (e.isCertChanged() || pin == null) throw e
-                throw UserFacing("The TV no longer recognises this phone. Remove it and add it again to re-pair.")
+                // Only a refused handshake means the TV forgot this phone. A TV that's asleep, off or
+                // on another network fails before that, and is reported as unreachable (and retried).
+                val refused = generateSequence(e as Throwable) { it.cause }.take(8).any { it is javax.net.ssl.SSLException }
+                if (e.isCertChanged() || pin == null || !refused) throw e
+                throw NeedsRepair("The TV doesn't recognise this phone any more.")
             }
         }
         val f = Framed(s.inputStream, s.outputStream)
