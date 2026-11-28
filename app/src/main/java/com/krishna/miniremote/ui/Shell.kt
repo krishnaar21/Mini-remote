@@ -307,10 +307,9 @@ fun AppShell(vm: RemoteVM) {
                     // Only quick key feedback sits in the dial; messages and errors go to the toast.
                     // Key names show on the bottom line (on the remote), not as a toast.
                     val inWell = onRemote && vm.toastKey != null
-                    // On the remote it sits under the top bar (clear of the keys); elsewhere near the bottom.
+                    // Bottom centre on every screen.
                     ToastChip(if (inWell) null else vm.toast, action = vm.toastAction, accent = accent,
-                        modifier = if (onRemote) Modifier.align(Alignment.TopCenter).padding(top = 96.dp, start = 24.dp, end = 24.dp)
-                        else Modifier.align(Alignment.BottomCenter).padding(bottom = 56.dp))
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 56.dp, start = 24.dp, end = 24.dp))
                     when (val u = vm.update) {
                         is RemoteVM.Update.Downloading, is RemoteVM.Update.Ready, is RemoteVM.Update.Manual ->
                             Box(Modifier.align(Alignment.TopCenter).padding(top = 4.dp).height(32.dp)) {

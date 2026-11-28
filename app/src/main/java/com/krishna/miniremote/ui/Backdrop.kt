@@ -39,7 +39,7 @@ object Backdrop {
     val blurs get() = android.os.Build.VERSION.SDK_INT >= 31
 
     /** The dark layer over what's behind a sheet. */
-    fun scrim(): Color = Color.Black.copy(alpha = if (blurs) (if (Look.p.light) 0.14f else 0.30f) else (if (Look.p.light) 0.32f else 0.55f))
+    fun scrim(): Color = Color.Black.copy(alpha = if (blurs) (if (Look.p.light) 0.08f else 0.16f) else (if (Look.p.light) 0.32f else 0.55f))
 }
 
 /** Enough to soften what's behind; text and cards still read as shapes. */
