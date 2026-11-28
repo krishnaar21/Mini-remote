@@ -92,6 +92,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        AppIcon.reconcile(this)
         Outside.vm = java.lang.ref.WeakReference(vm)
         handle(intent)
         // Android 13+: ask once so a ready update can show a notification.

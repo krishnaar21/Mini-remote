@@ -225,7 +225,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
     var open by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { Shot.openSetting?.let { Shot.openSetting = null; delay(700); open = it } }
     val version = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "dev" }
-    val iconName = com.krishna.miniremote.AppIcon.all.firstOrNull { it.first == com.krishna.miniremote.AppIcon.current(ctx) }?.second ?: "Dial"
+    val iconName = com.krishna.miniremote.AppIcon.all.firstOrNull { it.first == com.krishna.miniremote.AppIcon.current(ctx) }?.second ?: "Pebble"
     val accentName = ACCENTS.firstOrNull { it.second.equals(s.accentHex, true) }?.first ?: "Custom"
 
     // In groups under grey headings, as on iOS. (The profile lives on in backups, not here.)
