@@ -121,7 +121,8 @@ fun HomeScreen(
     val onTwo: (RemoteKey) -> Unit = { k -> vm.scrubTick(k) }
     // Two-finger double tap: swap dial and trackpad (saved, like the setting).
     val lastTwoTap = remember { longArrayOf(0L) }
-    val onTwoTap: () -> Unit = {
+    val onTwoTap: () -> Unit = onTwoTap@{
+        if (vm.settings.controlStyle == "touch") return@onTwoTap // its own layout: nothing to swap with
         val now = android.os.SystemClock.uptimeMillis()
         if (now - lastTwoTap[0] < 450) {
             lastTwoTap[0] = 0L
@@ -232,13 +233,19 @@ fun HomeScreen(
             CustomAccessibilityAction("Volume down") { vm.press(RemoteKey.VOL_DOWN); true },
         )
     }
-    val padOnly = if (deck == Deck.NUMPAD) (if (vm.settings.controlStyle == "trackpad") Deck.TRACKPAD else Deck.DIAL) else deck
+    val padOnly = if (deck == Deck.NUMPAD) (if (vm.settings.controlStyle != "dial") Deck.TRACKPAD else Deck.DIAL) else deck
+    // Touch: one big surface over a short row of keys (Settings › Control).
+    val touch = vm.settings.controlStyle == "touch" && deck != Deck.NUMPAD
 
     // Top: the TV pill on the left, power on the right.
     val topBar: @Composable () -> Unit = {
         // Lined up with the keys and the bottom line: the same side margins.
         Row(Modifier.width(KEYROW_W).padding(top = 32.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             TvPicker(vm, Modifier.weight(1f), openDevices)
+            // Touch has no pages of circles: More (keys, inputs, apps) sits up here, by power.
+            if (touch) KeyButton(accent, "More: keys, inputs and apps", Modifier.padding(end = 12.dp).size(52.dp), pressedScale = 0.94f, onPress = openMore) { c, _ ->
+                LineIcon(Ico.MORE, c, 22.dp)
+            }
             // Off (not reachable, or in standby and says so): ask to turn it on. On, or can't tell: ask to turn it off.
             val off = vm.active != null && (vm.link != Link.READY || vm.tvOn == false)
             KeyButton(accent, "Power", Modifier.size(52.dp).coach("power"), pressedScale = 1f,
@@ -253,6 +260,11 @@ fun HomeScreen(
     val cards = androidx.compose.foundation.pager.rememberPagerState { 3 }
     // The middle: the cards (Cards) or the dial in its ring (Black).
     val middle: @Composable (Modifier) -> Unit = { m ->
+        // A little taller than wide, at the top; the room left over goes above the keys.
+        if (touch) BoxWithConstraints(m.padding(top = 4.dp, bottom = 6.dp).then(a11y).coach("dial"), contentAlignment = Alignment.TopCenter) {
+            val w = minOf(maxWidth, KEYROW_W)
+            trackpadAt(w, minOf(maxHeight, w * 1.08f))
+        } else
         when (layout) {
             HomeLayout.CARDS -> Column(m, horizontalAlignment = Alignment.CenterHorizontally) {
                 androidx.compose.foundation.pager.HorizontalPager(
@@ -280,6 +292,7 @@ fun HomeScreen(
         }
     }
     val keysBlock: @Composable () -> Unit = {
+        if (touch) Box(Modifier.coach("keys")) { TouchKeys(vm, accent, KEYROW_W) } else
         when (layout) {
             HomeLayout.CARDS -> FourKeys(vm, accent, openKeys)
             HomeLayout.STRIP -> Box(Modifier.coach("keys")) { KeyRows(vm, accent, numpad, onNumpad, openKeys, openMore, openApps, keyPager) }
@@ -304,7 +317,8 @@ fun HomeScreen(
                     topBar()
                     Spacer(Modifier.height(14.dp))
                     middle(Modifier.weight(1f).fillMaxWidth())
-                    Box(Modifier.padding(top = if (layout == HomeLayout.CARDS) 8.dp else 10.dp, bottom = if (layout == HomeLayout.STRIP) 26.dp else 0.dp)) { keysBlock() }
+                    // Touch sits lower: its foot holds only what's playing.
+                    Box(Modifier.padding(top = if (touch) 18.dp else if (layout == HomeLayout.CARDS) 8.dp else 10.dp, bottom = if (touch) 6.dp else if (layout == HomeLayout.STRIP) 26.dp else 0.dp)) { keysBlock() }
                 }
                 Spacer(Modifier.height(NAV_H + 28.dp))
             }
