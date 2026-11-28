@@ -121,7 +121,8 @@ fun HomeScreen(
     val onTwo: (RemoteKey) -> Unit = { k -> vm.scrubTick(k) }
     // Two-finger double tap: swap dial and trackpad (saved, like the setting).
     val lastTwoTap = remember { longArrayOf(0L) }
-    val onTwoTap: () -> Unit = {
+    val onTwoTap: () -> Unit = onTwoTap@{
+        if (vm.settings.controlStyle == "touch") return@onTwoTap // its own layout: nothing to swap with
         val now = android.os.SystemClock.uptimeMillis()
         if (now - lastTwoTap[0] < 450) {
             lastTwoTap[0] = 0L
@@ -232,7 +233,9 @@ fun HomeScreen(
             CustomAccessibilityAction("Volume down") { vm.press(RemoteKey.VOL_DOWN); true },
         )
     }
-    val padOnly = if (deck == Deck.NUMPAD) (if (vm.settings.controlStyle == "trackpad") Deck.TRACKPAD else Deck.DIAL) else deck
+    val padOnly = if (deck == Deck.NUMPAD) (if (vm.settings.controlStyle != "dial") Deck.TRACKPAD else Deck.DIAL) else deck
+    // Touch: one big surface over a short row of keys (Settings › Control).
+    val touch = vm.settings.controlStyle == "touch" && deck != Deck.NUMPAD
 
     // Top: the TV pill on the left, power on the right.
     val topBar: @Composable () -> Unit = {
@@ -253,6 +256,9 @@ fun HomeScreen(
     val cards = androidx.compose.foundation.pager.rememberPagerState { 3 }
     // The middle: the cards (Cards) or the dial in its ring (Black).
     val middle: @Composable (Modifier) -> Unit = { m ->
+        if (touch) BoxWithConstraints(m.padding(top = 4.dp, bottom = 6.dp).then(a11y).coach("dial"), contentAlignment = Alignment.Center) {
+            trackpadAt(minOf(maxWidth, KEYROW_W), maxHeight)
+        } else
         when (layout) {
             HomeLayout.CARDS -> Column(m, horizontalAlignment = Alignment.CenterHorizontally) {
                 androidx.compose.foundation.pager.HorizontalPager(
@@ -280,6 +286,7 @@ fun HomeScreen(
         }
     }
     val keysBlock: @Composable () -> Unit = {
+        if (touch) Box(Modifier.coach("keys")) { TouchKeys(vm, accent, KEYROW_W) } else
         when (layout) {
             HomeLayout.CARDS -> FourKeys(vm, accent, openKeys)
             HomeLayout.STRIP -> Box(Modifier.coach("keys")) { KeyRows(vm, accent, numpad, onNumpad, openKeys, openMore, openApps, keyPager) }

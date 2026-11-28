@@ -1266,7 +1266,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
             scrubStepDp = f("scrubStepDp", d.scrubStepDp).coerceIn(24f, 60f),
             keepAwake = j.optBoolean("keepAwake", d.keepAwake),
             autoUpdate = j.optBoolean("autoUpdate", d.autoUpdate),
-            controlStyle = j.optString("controlStyle", d.controlStyle).takeIf { it == "dial" || it == "trackpad" } ?: d.controlStyle,
+            controlStyle = j.optString("controlStyle", d.controlStyle).takeIf { it == "dial" || it == "trackpad" || it == "touch" } ?: d.controlStyle,
             layout = j.optString("layout", d.layout).takeIf { it == "strip" || it == "cards" } ?: d.layout,
             appsIn = j.optString("appsIn", d.appsIn).takeIf { it == "home" || it == "more" } ?: d.appsIn,
             volumeKeys = j.optBoolean("volumeKeys", d.volumeKeys),

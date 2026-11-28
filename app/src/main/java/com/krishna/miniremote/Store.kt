@@ -42,7 +42,7 @@ class Store(ctx: Context) {
             gyro = p.getBoolean("gyro", d.gyro),
             keepAwake = p.getBoolean("awake", d.keepAwake),
             autoUpdate = p.getBoolean("autoupdate", d.autoUpdate),
-            controlStyle = p.getString("control", d.controlStyle)?.takeIf { it == "dial" || it == "trackpad" } ?: d.controlStyle,
+            controlStyle = p.getString("control", d.controlStyle)?.takeIf { it == "dial" || it == "trackpad" || it == "touch" } ?: d.controlStyle,
             profileName = p.getString("profileName", d.profileName) ?: d.profileName,
             profileEmail = p.getString("profileEmail", d.profileEmail) ?: d.profileEmail,
             volumeKeys = p.getBoolean("volumeKeys", d.volumeKeys),

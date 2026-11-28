@@ -160,7 +160,7 @@ fun AppShell(vm: RemoteVM) {
     val style = vm.settings.controlStyle
     // Dial or trackpad is a setting; the tray's 123 key swaps in the number pad for a while.
     var numpad by remember { mutableStateOf(false) }
-    val deck = if (numpad) Deck.NUMPAD else if (style == "trackpad") Deck.TRACKPAD else Deck.DIAL
+    val deck = if (numpad) Deck.NUMPAD else if (style != "dial") Deck.TRACKPAD else Deck.DIAL
     var tray by remember { mutableStateOf(false) }
     val onRemote = !apps
     // The tray tucks itself away a few seconds after the last command, and when you leave the page.
@@ -192,6 +192,8 @@ fun AppShell(vm: RemoteVM) {
             "depthmore" -> { set { it.copy(depth = true) }; kotlinx.coroutines.delay(400); more = true }
             "depth" -> set { it.copy(depth = true) }
             "flat" -> set { it.copy(depth = false) }
+            "touch" -> set { it.copy(controlStyle = "touch") }
+            "touchdepth" -> set { it.copy(controlStyle = "touch", depth = true) }
             "welcome" -> set { it.copy(onboarded = false) }
             "tour" -> set { it.copy(toured = false) }
             "page2" -> keyPager.scrollToPage(1)
@@ -254,7 +256,13 @@ fun AppShell(vm: RemoteVM) {
                                 }
                             }
                         }
-                        PagePills(keyPager.pageCount, keyPager.currentPage, accent, listOf("Main keys", "More keys", "Apps", "More apps"), Modifier.coach("pills")) { i ->
+                        // Touch has no pages of circles: one quiet More key instead (keys, inputs, apps).
+                        if (style == "touch") Box(Modifier.size(40.dp).clip(CircleShape).background(T.Key)
+                            .clickable(onClickLabel = "open", role = androidx.compose.ui.semantics.Role.Button) { vm.feel.fire(com.krishna.miniremote.Feel.TICK); more = true }
+                            .semantics { contentDescription = "More: keys, inputs and apps" }, contentAlignment = Alignment.Center) {
+                            LineIcon(Ico.MORE, T.Ink, 20.dp)
+                        }
+                        else PagePills(keyPager.pageCount, keyPager.currentPage, accent, listOf("Main keys", "More keys", "Apps", "More apps"), Modifier.coach("pills")) { i ->
                             vm.feel.fire(com.krishna.miniremote.Feel.TICK); scope.launch { keyPager.animateScrollToPage(i) }
                         }
                     }

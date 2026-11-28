@@ -231,7 +231,7 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
     // In groups under grey headings, as on iOS. (The profile lives on in backups, not here.)
     SetHead("Remote", first = true)
     SetCard {
-        SetRow(if (s.controlStyle == "trackpad") Ico.TRACKPAD else Ico.DIAL, SetTint.blue, "Control", if (s.controlStyle == "trackpad") "Trackpad" else "Dial") { open = "control" }
+        SetRow(if (s.controlStyle == "dial") Ico.DIAL else Ico.TRACKPAD, SetTint.blue, "Control", when (s.controlStyle) { "trackpad" -> "Trackpad"; "touch" -> "Touch"; else -> "Dial" }) { open = "control" }
         SetLine()
         SetRow(Ico.GRID, SetTint.purple, "Quick access", if (s.appsIn == "more") "More sheet" else "Home page") { open = "apps" }
         if (openGestures != null) { SetLine(); SetRow(Ico.TRACKPAD, SetTint.teal, "Gestures", onClick = openGestures) }
@@ -287,6 +287,8 @@ internal fun SettingsPage(vm: RemoteVM, accent: Color, manage: (() -> Unit)?, op
                 Choice("Dial", "Arrows and OK; turn for volume", s.controlStyle == "dial", accent, Ico.DIAL) { vm.update(s.copy(controlStyle = "dial")) }
                 SetLine()
                 Choice("Trackpad", "Swipe to move, tap to select", s.controlStyle == "trackpad", accent, Ico.TRACKPAD) { vm.update(s.copy(controlStyle = "trackpad")) }
+                SetLine()
+                Choice("Touch", "Big swipe area, four keys", s.controlStyle == "touch", accent, Ico.TRACKPAD) { vm.update(s.copy(controlStyle = "touch")) }
             }
         }
         "apps" -> SetSheet("Quick access", "Where your apps sit.", { open = null }) {
