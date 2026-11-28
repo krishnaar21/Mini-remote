@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mini Remote app icon "Pebble" (light). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#14000000" android:pathData="M29.90,56.60a24.1,24.1 0,1 1,48.20,0a24.1,24.1 0,1 1,-48.20,0Z"/>
+    <path android:fillColor="#FFC4C3BD" android:pathData="M30.50,55.40a23.5,23.5 0,1 1,47.00,0a23.5,23.5 0,1 1,-47.00,0Z"/>
+    <path android:pathData="M30.50,54.00a23.5,23.5 0,1 1,47.00,0a23.5,23.5 0,1 1,-47.00,0Z"><aapt:attr name="android:fillColor"><gradient android:type="radial" android:centerX="48" android:centerY="46" android:gradientRadius="32"><item android:offset="0" android:color="#FFFBFBF8"/><item android:offset="1" android:color="#FFD6D5CF"/></gradient></aapt:attr></path>
+    <path android:pathData="M45.30,54.00a8.7,8.7 0,1 1,17.40,0a8.7,8.7 0,1 1,-17.40,0Z"><aapt:attr name="android:fillColor"><gradient android:type="radial" android:centerX="52" android:centerY="51" android:gradientRadius="11"><item android:offset="0" android:color="#FFFFFFFF"/><item android:offset="1" android:color="#FFE4E3DE"/></gradient></aapt:attr></path>
+    <path android:strokeColor="#FFBAB9B3" android:strokeWidth="0.6" android:fillColor="#00000000" android:pathData="M45.30,54.00a8.7,8.7 0,1 1,17.40,0a8.7,8.7 0,1 1,-17.40,0Z"/>
+    <path android:fillColor="#FF8C8C88" android:pathData="M35.45,54.00a0.95,0.95 0,1 1,1.90,0a0.95,0.95 0,1 1,-1.90,0Z"/>
+    <path android:fillColor="#FF8C8C88" android:pathData="M70.65,54.00a0.95,0.95 0,1 1,1.90,0a0.95,0.95 0,1 1,-1.90,0Z"/>
+    <path android:fillColor="#FF8C8C88" android:pathData="M53.05,71.60a0.95,0.95 0,1 1,1.90,0a0.95,0.95 0,1 1,-1.90,0Z"/>
+    <path android:fillColor="#FFFF3B30" android:pathData="M52.75,36.40a1.25,1.25 0,1 1,2.50,0a1.25,1.25 0,1 1,-2.50,0Z"/>
+</vector>

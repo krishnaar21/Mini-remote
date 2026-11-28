@@ -2,6 +2,7 @@ package com.krishna.miniremote.ui
 
 import androidx.compose.ui.composed
 import androidx.compose.foundation.layout.imePadding
+import com.krishna.miniremote.net.HostValidator
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -587,25 +588,35 @@ internal fun ScanPage(vm: RemoteVM, accent: Color, pick: (Device) -> Unit, manua
 @Composable
 internal fun ManualPage(vm: RemoteVM, accent: Color, onAdded: (Device) -> Unit) {
     var ip by remember { mutableStateOf("") }
-    var brand by remember { mutableStateOf(Brand.ROKU) }
+    // null = work out the brand from what answers at the address (the usual case).
+    var brand by remember { mutableStateOf<Brand?>(null) }
     var open by remember { mutableStateOf(false) }
     var err by remember { mutableStateOf<String?>(null) }
-    Field("IP address", ip, { ip = it.filter { c -> c.isDigit() || c == '.' }.take(15); err = null }, placeholder = "192.168.1.20",
-        isError = err != null, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-    ExposedDropdownMenuBox(expanded = open, onExpandedChange = { open = it }) {
-        Field("Brand", brand.label, {}, readOnly = true, modifier = Modifier.menuAnchor(),
-            trailing = { LineIcon(if (open) Ico.UP else Ico.DOWN, Muted, 18.dp) })
-        ExposedDropdownMenu(open, { open = false }, containerColor = Color(0xFF26262A)) {
-            Brand.entries.forEach { b -> DropdownMenuItem(text = { Text(b.label, color = T.Ink) }, onClick = { brand = b; open = false }) }
+    val busy = vm.checkingManual
+    val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    fun submit() {
+        if (busy) return
+        kb?.hide()
+        vm.addManual(ip, brand) { e, d ->
+            if (e != null) { err = e; vm.feel.fire(com.krishna.miniremote.Feel.ERROR) } else if (d != null) onAdded(d)
         }
     }
-    Text(err ?: "", color = DangerInk, fontSize = 13.sp, modifier = Modifier.padding(top = 0.dp, bottom = 10.dp).heightIn(min = 18.dp)
-        .semantics { liveRegion = LiveRegionMode.Assertive })
-    Btn("Continue") {
-        val (e, d) = vm.addManual(ip, brand)
-        if (e != null) { err = e; vm.feel.fire(com.krishna.miniremote.Feel.ERROR) } else if (d != null) onAdded(d)
+    Field("IP address", ip, { ip = it.filter { c -> c.isDigit() || c == '.' }.take(15); err = null }, placeholder = "192.168.1.20",
+        isError = err != null, readOnly = busy,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Go),
+        keyboardActions = KeyboardActions(onGo = { submit() }))
+    ExposedDropdownMenuBox(expanded = open, onExpandedChange = { if (!busy) open = it }) {
+        Field("Brand", brand?.label ?: "Detect automatically", {}, readOnly = true, modifier = Modifier.menuAnchor(),
+            trailing = { LineIcon(if (open) Ico.UP else Ico.DOWN, Muted, 18.dp) })
+        ExposedDropdownMenu(open, { open = false }, containerColor = Color(0xFF26262A)) {
+            DropdownMenuItem(text = { Text("Detect automatically", color = T.Ink) }, onClick = { brand = null; open = false; err = null })
+            Brand.entries.forEach { b -> DropdownMenuItem(text = { Text(b.label, color = T.Ink) }, onClick = { brand = b; open = false; err = null }) }
+        }
     }
-    Hint("On the TV: Settings › Network.")
+    Text(err ?: "", color = DangerInk, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 0.dp, bottom = 10.dp).heightIn(min = 18.dp)
+        .semantics { liveRegion = LiveRegionMode.Assertive })
+    Btn(if (busy) "Checking ${HostValidator.normalize(ip) ?: ip}…" else "Continue", enabled = !busy && ip.isNotBlank()) { submit() }
+    Hint("Find it on the TV under Settings › Network, in the Wi-Fi or connection details. The TV must be on.")
 }
 
 /* ----------------------------------------------------------------- pairing */

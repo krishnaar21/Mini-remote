@@ -153,7 +153,7 @@ fun RingDial(dial: Dp, accent: Color, level: Float? = null, value: String? = nul
 
 /** A round key that fires on release (so it can sit in a scrolling strip). Icon or a short word, with an optional caption. */
 @Composable
-fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ico: Ico? = null, word: String? = null, caption: String? = null, enabled: Boolean = true, onDisabled: (() -> Unit)? = null, onClick: () -> Unit) {
+fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ico: Ico? = null, icoSize: Dp? = null, word: String? = null, caption: String? = null, enabled: Boolean = true, onDisabled: (() -> Unit)? = null, onClick: () -> Unit) {
     val src = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.94f else 1f, if (pressed) tween(70) else androidx.compose.animation.core.spring(0.45f, 700f), label = "press")
@@ -173,7 +173,7 @@ fun StripKey(accent: Color, label: String, size: Dp, active: Boolean = false, ic
             // − and + share one box so they sit level; the minus is a step bolder and a touch
             // wider, as a bare bar reads lighter than a cross.
             val minus = ico == Ico.MINUS
-            if (ico != null) LineIcon(ico, c, (if (caption != null) 18.dp else 23.dp) * g * (if (minus) 1.08f else 1f), stroke = if (minus) 2.15f else 1.8f)
+            if (ico != null) LineIcon(ico, c, icoSize ?: ((if (caption != null) 18.dp else 23.dp) * g * (if (minus) 1.08f else 1f)), stroke = if (icoSize != null) 2f else if (minus) 2.15f else 1.8f)
             if (word != null) Text(word, color = c, fontSize = (15 * g).sp, fontWeight = FontWeight.Medium)
             if (caption != null) Text(caption, color = T.Dim, fontSize = (9 * g).sp, letterSpacing = 0.8.sp, fontWeight = FontWeight.Medium,
                 lineHeight = 9.sp, modifier = Modifier.offset(y = (-1).dp))
@@ -439,6 +439,33 @@ fun FourKeys(vm: RemoteVM, accent: Color, openKeys: () -> Unit, size: Dp = 62.dp
             LineIcon(if (vm.playing) Ico.PAUSE else Ico.PLAY_ONLY, c, if (vm.playing) 22.dp else 20.dp, stroke = if (vm.playing) 2.4f else 1.8f)
         }
         KeyButton(accent, "Search", k, actionLabel = "search or type on TV", pressedScale = 0.94f, enabled = vm.can(RemoteKey.HOME), onDisabled = { vm.explain(RemoteKey.HOME) }, onPress = openKeys) { c, _ -> LineIcon(Ico.SEARCH, c, 21.dp) }
+    }
+}
+
+/**
+ * The Touch style's keys under the big surface: Home over Play / Pause on the left, a large
+ * Back in the middle, and a tall pill on the right (volume, or channels on live TV, like the
+ * second row of the Black layout). [w] is the row's width; everything scales from it.
+ */
+@Composable
+fun TouchKeys(vm: RemoteVM, accent: Color, w: Dp) {
+    val small = (w.value * 0.17f).coerceIn(52f, 68f).dp
+    val gap = (small.value * 0.2f).dp
+    val big = small * 2 + gap
+    val tv = vm.nowOn?.live == true
+    Row(Modifier.width(w), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+            StripKey(accent, "Home", small, ico = Ico.HOME, icoSize = small * 0.36f, enabled = vm.can(RemoteKey.HOME), onDisabled = { vm.explain(RemoteKey.HOME) }) { vm.press(RemoteKey.HOME) }
+            StripKey(accent, if (vm.playing) "Pause" else "Play", small, ico = if (vm.playing) Ico.PAUSE else Ico.PLAY_ONLY, icoSize = small * 0.34f,
+                enabled = vm.can(RemoteKey.PLAY_PAUSE), onDisabled = { vm.explain(RemoteKey.PLAY_PAUSE) }) { vm.press(RemoteKey.PLAY_PAUSE) }
+        }
+        StripKey(accent, "Back", big, ico = Ico.CHEVRON_L, icoSize = big * 0.3f, enabled = vm.can(RemoteKey.BACK), onDisabled = { vm.explain(RemoteKey.BACK) }) { vm.press(RemoteKey.BACK) }
+        if (tv) TouchRocker(accent, "CH", "Channel up", "Channel down", Modifier.width(small).height(big),
+            enabled = vm.can(RemoteKey.CH_UP), onDisabled = { vm.explain(RemoteKey.CH_UP) },
+            onUp = { vm.press(RemoteKey.CH_UP) }, onDown = { vm.press(RemoteKey.CH_DOWN) })
+        else TouchRocker(accent, "VOL", "Volume up", "Volume down", Modifier.width(small).height(big),
+            enabled = vm.can(RemoteKey.VOL_UP), onDisabled = { vm.explain(RemoteKey.VOL_UP) },
+            onUp = { vm.press(RemoteKey.VOL_UP, quiet = true) }, onDown = { vm.press(RemoteKey.VOL_DOWN, quiet = true) })
     }
 }
 

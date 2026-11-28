@@ -26,7 +26,7 @@ bar() {
 a shell pm grant $PKG android.permission.POST_NOTIFICATIONS 2>/dev/null || true
 mkdir -p shots
 i=1
-for s in home depth flat welcome tour page2 page3 more moreapps depthmore sleep keys apps devices scan settings settingsheet settingsheet2 power trackpad live light navy; do
+for s in home depth flat welcome tour page2 page3 more moreapps depthmore sleep keys apps devices scan settings settingsheet settingsheet2 power trackpad touch touchdepth live light navy; do
   a shell am force-stop $PKG
   a shell pm clear $PKG >/dev/null
   a shell pm grant $PKG android.permission.POST_NOTIFICATIONS 2>/dev/null || true

@@ -5,6 +5,7 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -226,6 +227,38 @@ fun VerticalRocker(
         Text(word, color = T.Dim, fontSize = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.sp,
             modifier = Modifier.clearAndSetSemantics {})
         RockerSeg(downLabel, accent, onDown) { LineIcon(downIco, it, 20.dp, stroke = 1.9f) }
+    }
+}
+
+/**
+ * The Touch style's tall pill: [upLabel] on top, [word] (VOL / CH) between, [downLabel] below.
+ * Same fill (flat or raised) as Home's round keys; both ends repeat while held.
+ */
+@Composable
+fun TouchRocker(
+    accent: Color,
+    word: String,
+    upLabel: String,
+    downLabel: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onDisabled: () -> Unit = {},
+    onUp: () -> Unit,
+    onDown: () -> Unit,
+) {
+    Column(
+        modifier.graphicsLayer { alpha = if (enabled) 1f else 0.32f }
+            .then(if (Look.depth) Modifier.drawBehind { depthShape(M.High, size.width / 2f) } else Modifier)
+            .clip(androidx.compose.foundation.shape.CircleShape)
+            .then(if (Look.depth) Modifier else Modifier.background(T.Key)),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        val up = if (enabled) onUp else onDisabled
+        val down = if (enabled) onDown else onDisabled
+        RockerSeg(upLabel, accent, up) { LineIcon(Ico.UP, it, 24.dp, stroke = 2.2f) }
+        Text(word, color = T.Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp,
+            modifier = Modifier.clearAndSetSemantics {})
+        RockerSeg(downLabel, accent, down) { LineIcon(Ico.DOWN, it, 24.dp, stroke = 2.2f) }
     }
 }
 

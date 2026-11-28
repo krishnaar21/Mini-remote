@@ -38,6 +38,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -158,7 +160,7 @@ fun AppShell(vm: RemoteVM) {
     val style = vm.settings.controlStyle
     // Dial or trackpad is a setting; the tray's 123 key swaps in the number pad for a while.
     var numpad by remember { mutableStateOf(false) }
-    val deck = if (numpad) Deck.NUMPAD else if (style == "trackpad") Deck.TRACKPAD else Deck.DIAL
+    val deck = if (numpad) Deck.NUMPAD else if (style != "dial") Deck.TRACKPAD else Deck.DIAL
     var tray by remember { mutableStateOf(false) }
     val onRemote = !apps
     // The tray tucks itself away a few seconds after the last command, and when you leave the page.
@@ -190,6 +192,8 @@ fun AppShell(vm: RemoteVM) {
             "depthmore" -> { set { it.copy(depth = true) }; kotlinx.coroutines.delay(400); more = true }
             "depth" -> set { it.copy(depth = true) }
             "flat" -> set { it.copy(depth = false) }
+            "touch" -> set { it.copy(controlStyle = "touch") }
+            "touchdepth" -> set { it.copy(controlStyle = "touch", depth = true) }
             "welcome" -> set { it.copy(onboarded = false) }
             "tour" -> set { it.copy(toured = false) }
             "page2" -> keyPager.scrollToPage(1)
@@ -252,7 +256,8 @@ fun AppShell(vm: RemoteVM) {
                                 }
                             }
                         }
-                        PagePills(keyPager.pageCount, keyPager.currentPage, accent, listOf("Main keys", "More keys", "Apps", "More apps"), Modifier.coach("pills")) { i ->
+                        // Touch has no pages of circles (its More key sits in the top bar).
+                        if (style != "touch") PagePills(keyPager.pageCount, keyPager.currentPage, accent, listOf("Main keys", "More keys", "Apps", "More apps"), Modifier.coach("pills")) { i ->
                             vm.feel.fire(com.krishna.miniremote.Feel.TICK); scope.launch { keyPager.animateScrollToPage(i) }
                         }
                     }
@@ -305,10 +310,9 @@ fun AppShell(vm: RemoteVM) {
                     // Only quick key feedback sits in the dial; messages and errors go to the toast.
                     // Key names show on the bottom line (on the remote), not as a toast.
                     val inWell = onRemote && vm.toastKey != null
-                    // On the remote it sits under the top bar (clear of the keys); elsewhere near the bottom.
-                    ToastChip(if (inWell) null else vm.toast,
-                        if (onRemote) Modifier.align(Alignment.TopCenter).padding(top = 96.dp, start = 24.dp, end = 24.dp)
-                        else Modifier.align(Alignment.BottomCenter).padding(bottom = 56.dp))
+                    // Bottom centre on every screen.
+                    ToastChip(if (inWell) null else vm.toast, action = vm.toastAction, accent = accent,
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 56.dp, start = 24.dp, end = 24.dp))
                     when (val u = vm.update) {
                         is RemoteVM.Update.Downloading, is RemoteVM.Update.Ready, is RemoteVM.Update.Manual ->
                             Box(Modifier.align(Alignment.TopCenter).padding(top = 4.dp).height(32.dp)) {
@@ -445,16 +449,28 @@ fun RoundIcon(ico: Ico, label: String, onClick: () -> Unit) = CircleIcon(ico, la
 
 /** Short message that floats above the tab pill. */
 @Composable
-fun ToastChip(text: String?, modifier: Modifier = Modifier) {
-    // Keep the last text while it fades out (no state write during composition).
-    val last = remember { arrayOf("") }
-    if (text != null) last[0] = text
+fun ToastChip(text: String?, modifier: Modifier = Modifier, action: RemoteVM.ToastAction? = null, accent: Color = T.Ink) {
+    // Keep the last text (and button) while it fades out (no state write during composition).
+    val last = remember { arrayOf<Pair<String, RemoteVM.ToastAction?>>("" to null) }
+    if (text != null) last[0] = text to action
     AnimatedVisibility(text != null, modifier, enter = fadeIn() + slideInVertically { it / 2 }, exit = fadeOut()) {
-        Text(
-            last[0], color = T.Ink, fontSize = 13.5.sp, fontWeight = FontWeight.Medium,
-            modifier = Modifier.softFace(CARD, dpUnits = true).padding(horizontal = 18.dp, vertical = 11.dp)
-                .semantics { liveRegion = LiveRegionMode.Polite },
-        )
+        val (t, act) = last[0]
+        Row(
+            Modifier.widthIn(max = 360.dp).softFace(CARD, dpUnits = true)
+                .padding(start = 20.dp, end = if (act == null) 20.dp else 10.dp, top = if (act == null) 15.dp else 10.dp, bottom = if (act == null) 15.dp else 10.dp)
+                .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(t, color = T.Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                textAlign = if (act == null) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start,
+                modifier = Modifier.weight(1f, fill = false))
+            if (act != null) {
+                Text(act.label, color = accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clip(CircleShape).background(M.High).clickable(role = Role.Button) { act.run() }
+                        .heightIn(min = 34.dp).padding(horizontal = 14.dp, vertical = 8.dp))
+            }
+        }
     }
 }
 

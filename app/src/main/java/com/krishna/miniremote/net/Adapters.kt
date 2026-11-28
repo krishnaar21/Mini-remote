@@ -27,6 +27,9 @@ open class UserFacing(msg: String) : Exception(msg)
 
 class Unsupported(msg: String) : UserFacing(msg)
 
+/** The TV turned this phone away: pairing again fixes it (the toast offers Re-pair). */
+class NeedsRepair(msg: String) : UserFacing(msg)
+
 /** What the TV is showing: an app or input by name, and whether it's live TV / an input. */
 /** What's on the TV: app or input name, whether it's live TV, and (Roku) playback position. */
 data class NowOn(val name: String, val live: Boolean, val positionMs: Long? = null, val durationMs: Long? = null)
@@ -74,8 +77,22 @@ interface RemoteAdapter {
         get() = null
         set(_) {}
 
-    /** Turns the TV on when it's in standby but still on the network (Roku). */
+    /**
+     * Turns the TV on while it's in standby but still connected (Roku, Android TV, Samsung, LG with
+     * only its screen off). False when it has to be woken with Wake-on-LAN instead.
+     */
     suspend fun powerOn(): Boolean = false
+
+    /**
+     * Whether the TV is on (picture showing): true or false when it says so, null when it can't tell.
+     * Many TVs stay on the network in standby, so being connected doesn't mean they're on.
+     */
+    suspend fun isOn(): Boolean? = null
+
+    /** Called when the TV says by itself that it turned on (true) or off (false) (LG, Android TV). */
+    var onPower: ((Boolean) -> Unit)?
+        get() = null
+        set(_) {}
 
     /** Asks the TV for its volume; null when this TV can't tell. */
     suspend fun readVolume(): TvVolume? = null
@@ -202,6 +219,16 @@ class RokuAdapter(private val host: String) : RemoteAdapter {
 
     override suspend fun powerOn(): Boolean = runCatching { post("keypress/PowerOn"); true }.getOrDefault(false)
 
+    /** device-info's power-mode: PowerOn when the picture is on; DisplayOff / Ready / Suspend in standby. Sticks say Headless. */
+    override suspend fun isOn(): Boolean? {
+        val mode = Regex("<power-mode>([^<]*)</power-mode>").find(get("query/device-info"))?.groupValues?.get(1)?.trim()
+        return when (mode) {
+            "PowerOn" -> true
+            "DisplayOff", "Ready", "Suspend", "PowerOff" -> false
+            else -> null
+        }
+    }
+
     /** Channels (type appl) and, on Roku TVs, inputs like HDMI 1 (type tvin). Icons come from the Roku. */
     override suspend fun listApps(): List<TvApp> =
         Regex("<app id=\"([^\"]+)\"([^>]*)>([^<]*)</app>").findAll(get("query/apps")).map { m ->
@@ -269,6 +296,26 @@ class SamsungAdapter(
                 if (!r.isSuccessful) null else JSONObject(r.body?.string().orEmpty()).optJSONObject("device")?.optString("wifiMac")?.takeIf { it.isNotEmpty() }
             }
         }.getOrNull()
+    }
+
+    /** The REST info's PowerState ("on" / "standby"), sent by 2018-and-later TVs; null on older ones. */
+    override suspend fun isOn(): Boolean? = withContext(Dispatchers.IO) {
+        runCatching {
+            Net.plain.newCall(Request.Builder().url("http://$host:8001/api/v2/").build()).execute().use { r ->
+                if (!r.isSuccessful) null
+                else when (JSONObject(r.body?.string().orEmpty()).optJSONObject("device")?.optString("PowerState")?.lowercase()) {
+                    "on" -> true
+                    "standby" -> false
+                    else -> null
+                }
+            }
+        }.getOrNull()
+    }
+
+    /** In standby with the connection still open, the power key turns it on. */
+    override suspend fun powerOn(): Boolean {
+        if (ws == null || isOn() != false) return false
+        return runCatching { send(RemoteKey.POWER); true }.getOrDefault(false)
     }
 
     /** Samsung has no input list over this channel: offer the HDMI keys. */
@@ -397,6 +444,10 @@ class LgAdapter(
 ) : RemoteAdapter {
     private val tls = TlsPin(pin)
     private val secure = Net.pinnedTls(tls)
+    /** Plain ws:3000 for older webOS: long-lived like [secure] (no read timeout, no pings). */
+    private val plainLong by lazy {
+        Net.plain.newBuilder().readTimeout(0, java.util.concurrent.TimeUnit.SECONDS).pingInterval(0, java.util.concurrent.TimeUnit.SECONDS).build()
+    }
     private var ws: WebSocket? = null
     private var pointer: WebSocket? = null
     private val ids = AtomicInteger(1)
@@ -414,13 +465,51 @@ class LgAdapter(
                 "READ_INSTALLED_APPS",
                 // Inputs list, and the TV's network address for waking it.
                 "READ_INPUT_DEVICE_LIST", "READ_NETWORK_STATE", "CONTROL_INPUT_TV",
+                // Whether the TV is on or in standby (the power key shows Turn on / Turn off),
+                // and lighting the screen again when only the screen was off.
+                "READ_POWER_STATE", "CONTROL_TV_SCREEN",
             )
         )
     )
 
     override var onVolume: ((TvVolume) -> Unit)? = null
     override var onDropped: (() -> Unit)? = null
+    override var onPower: ((Boolean) -> Unit)? = null
     @Volatile private var closing = false
+    /** The last power state the TV reported (null: it hasn't, or won't say). */
+    @Volatile private var power: Boolean? = null
+    /** On, but with only the screen turned off: turnOnScreen lights it again. */
+    @Volatile private var screenOff = false
+
+    /**
+     * getPowerState's answer. With Quick Start+ an LG TV that's "off" stays on the network in
+     * Active Standby, so the connection alone doesn't say it's on. "Screen Off" counts as off here:
+     * the picture is dark, and Turn on lights it.
+     */
+    private fun parsePower(p: JSONObject?): Boolean? {
+        val state = p?.optString("state").orEmpty()
+        if (state.isEmpty()) return null
+        val processing = p?.optString("processing").orEmpty()
+        screenOff = state == "Screen Off"
+        if (listOf("Power Off", "Suspend", "Standby").any { processing.contains(it, ignoreCase = true) }) return false
+        return when (state) {
+            "Active", "Screen Saver" -> true
+            "Screen Off", "Active Standby", "Suspend", "Power Off" -> false
+            else -> null
+        }
+    }
+
+    override suspend fun isOn(): Boolean? =
+        runCatching { parsePower(request("ssap://com.webos.service.tvpower/power/getPowerState").optJSONObject("payload")) }
+            .getOrNull()?.also { power = it } ?: power
+
+    /** Only the screen off: light it. In Active Standby the TV needs Wake-on-LAN ("TV On With Mobile"). */
+    override suspend fun powerOn(): Boolean {
+        if (!screenOff) return false
+        return runCatching {
+            request("ssap://com.webos.service.tvpower/power/turnOnScreen", JSONObject().put("standbyMode", "active")); true
+        }.getOrDefault(false)
+    }
 
     private fun parseVolume(p: JSONObject?): TvVolume? {
         if (p == null) return null
@@ -450,32 +539,51 @@ class LgAdapter(
 
     override suspend fun readVolume(): TvVolume? = parseVolume(request("ssap://audio/getVolume").optJSONObject("payload"))
 
-    private fun listener(registered: CompletableDeferred<Unit>) = object : WebSocketListener() {
+    private fun listener(registered: CompletableDeferred<Unit>, opened: CompletableDeferred<Unit>) = object : WebSocketListener() {
+        override fun onOpen(webSocket: WebSocket, response: Response) { opened.complete(Unit) }
         override fun onMessage(webSocket: WebSocket, text: String) {
             val j = runCatching { JSONObject(text) }.getOrNull() ?: return
             val type = j.optString("type")
             if (j.optString("id") == "vol") { parseVolume(j.optJSONObject("payload"))?.let { v -> onVolume?.invoke(v) }; return }
+            // Power state, sent again whenever it changes. Refused (no permission, older webOS): stays unknown.
+            if (j.optString("id") == "pwr") {
+                if (type != "error") parsePower(j.optJSONObject("payload"))?.let { on -> power = on; onPower?.invoke(on) }
+                return
+            }
             if (type == "registered") {
                 j.optJSONObject("payload")?.optString("client-key")?.takeIf { it.isNotEmpty() }?.let { token = it; onToken(it) }
                 registered.complete(Unit)
             } else if (type == "error" && j.optString("id") == "register") {
-                registered.completeExceptionally(IllegalStateException(j.optString("error", "Pairing refused")))
+                // Usually "403 User denied access" (No on the TV, or the prompt timed out there).
+                registered.completeExceptionally(UserFacing("The TV didn't allow Mini Remote. Try again and choose Yes on the TV."))
             }
             pending.remove(j.optString("id"))?.complete(j)
         }
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             if (registered.isCompleted && !closing && ws === webSocket) { ws = null; pointer = null; onDropped?.invoke() }
+            opened.completeExceptionally(t)
             registered.completeExceptionally(t)
         }
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             if (registered.isCompleted && !closing && ws === webSocket) { ws = null; pointer = null; onDropped?.invoke() }
+            val gone = IllegalStateException("The TV closed the connection")
+            opened.completeExceptionally(gone)
+            registered.completeExceptionally(gone)
         }
     }
 
+    /** The socket itself didn't open (port closed, TLS refused): another port may still work. */
+    private class NotOpened(cause: Throwable) : Exception(cause.message, cause)
+
     private suspend fun tryConnect(url: String, client: okhttp3.OkHttpClient) {
         val registered = CompletableDeferred<Unit>()
-        val s = client.newWebSocket(Request.Builder().url(url).build(), listener(registered))
+        val opened = CompletableDeferred<Unit>()
+        val s = client.newWebSocket(Request.Builder().url(url).build(), listener(registered, opened))
         ws = s
+        try { withTimeout(8_000) { opened.await() } }
+        catch (e: kotlinx.coroutines.TimeoutCancellationException) { s.cancel(); ws = null; throw NotOpened(e) }
+        catch (e: kotlinx.coroutines.CancellationException) { s.cancel(); ws = null; throw e }
+        catch (e: Exception) { s.cancel(); ws = null; throw NotOpened(e) }
         val reg = JSONObject().put("type", "register").put("id", "register").put(
             "payload", JSONObject().put("forcePairing", false).put("pairingType", "PROMPT")
                 .put("manifest", manifest).also { p -> token?.let { p.put("client-key", it) } }
@@ -484,19 +592,33 @@ class LgAdapter(
         try { withTimeout(30_000) { registered.await() } } catch (e: Exception) { s.cancel(); ws = null; throw e }
         // Keep the volume in step: the TV sends it again whenever it changes.
         s.send(JSONObject().put("type", "subscribe").put("id", "vol").put("uri", "ssap://audio/getVolume").toString())
+        s.send(JSONObject().put("type", "subscribe").put("id", "pwr").put("uri", "ssap://com.webos.service.tvpower/power/getPowerState").toString())
     }
 
     override suspend fun connect() {
         close()
         if (pin != null) {
             // Paired over TLS before: never drop back to the unencrypted port.
-            tryConnect("wss://$host:3001", secure)
+            unwrap { tryConnect("wss://$host:3001", secure) }
             return
         }
-        // Encrypted only (port 3001). Mini Remote supports TVs from 2017 on; with current firmware
-        // they have the secure port, so the pairing key never crosses Wi-Fi in the clear.
-        tryConnect("wss://$host:3001", secure)
-        tls.seen?.let(onPin)
+        // Encrypted port 3001 first (webOS 4+ and current firmware, which may close 3000).
+        try {
+            tryConnect("wss://$host:3001", secure)
+            tls.seen?.let(onPin)
+            return
+        } catch (e: NotOpened) {
+            // Only when nothing opened on 3001: the TV never saw a pairing request there, so
+            // trying 3000 can't show a second prompt. Older webOS (1-3, and some 2018-19 sets on
+            // old firmware) only listen on plain port 3000. Its traffic isn't encrypted, but it
+            // stays on the home network (HostValidator), and it's the only way those TVs talk.
+        }
+        unwrap { tryConnect("ws://$host:3000", plainLong) }
+    }
+
+    /** Shows the real reason a socket didn't open, not the wrapper. */
+    private suspend fun unwrap(block: suspend () -> Unit) {
+        try { block() } catch (e: NotOpened) { throw e.cause ?: e }
     }
 
     private suspend fun request(uri: String, payload: JSONObject = JSONObject()): JSONObject {

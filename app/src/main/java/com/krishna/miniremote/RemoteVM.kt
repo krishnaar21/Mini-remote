@@ -38,6 +38,11 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     var toast by mutableStateOf<String?>(null); private set
     /** The key behind the current toast, so the well can show its icon above the name. */
     var toastKey by mutableStateOf<RemoteKey?>(null); private set
+    /** A button on the toast (e.g. Re-pair), when there's one thing to do about the message. */
+    var toastAction by mutableStateOf<ToastAction?>(null); private set
+
+    /** A button on a toast: a short label and what it does. */
+    class ToastAction(val label: String, val run: () -> Unit)
     var scanning by mutableStateOf(false); private set
     /** TVs found by the last scan that aren't saved yet. */
     var found by mutableStateOf<List<Device>>(emptyList()); private set
@@ -56,6 +61,12 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     var playing by mutableStateOf(false); private set
     /** The TV's own volume, when it tells us (Android TV, LG, most Samsung). Null = unknown. */
     var tvVolume by mutableStateOf<com.krishna.miniremote.net.TvVolume?>(null); private set
+    /**
+     * Whether the connected TV is on: true / false when it says so (LG, Android TV, Roku, newer
+     * Samsung), null when it can't tell. Many TVs stay connected in standby, so the power key
+     * reads this to turn the TV on instead of asking to turn it off.
+     */
+    var tvOn by mutableStateOf<Boolean?>(null); private set
     private var volJob: Job? = null
     /** Non-null while an Android / Google TV is showing a pairing code and we're waiting for it. */
     var pairPrompt by mutableStateOf<PairPrompt?>(null); private set
@@ -299,8 +310,9 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     /** Quick check that the TV answers on its remote port (no pairing, nothing sent). */
     private suspend fun reachable(d: Device): Boolean = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         if (!HostValidator.isPrivateIPv4(d.host)) return@withContext false
-        val port = when (d.brand) { Brand.ROKU -> 8060; Brand.SAMSUNG -> 8002; Brand.LG -> if (d.pin != null) 3001 else 3000; Brand.ANDROID_TV -> 6466 }
-        runCatching { java.net.Socket().use { it.connect(java.net.InetSocketAddress(d.host, port), 800); true } }.getOrDefault(false)
+        // LG: paired over TLS uses 3001 only; otherwise either port (older webOS has only 3000).
+        val ports = when (d.brand) { Brand.ROKU -> listOf(8060); Brand.SAMSUNG -> listOf(8002); Brand.LG -> if (d.pin != null) listOf(3001) else listOf(3001, 3000); Brand.ANDROID_TV -> listOf(6466) }
+        ports.any { port -> runCatching { java.net.Socket().use { it.connect(java.net.InetSocketAddress(d.host, port), 800); true } }.getOrDefault(false) }
     }
 
     /**
@@ -411,6 +423,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         devices = listOf(Device("demo", "Demo TV", "192.168.1.20", Brand.ANDROID_TV))
         activeId = "demo"
         link = Link.READY
+        tvOn = true
         tvVolume = com.krishna.miniremote.net.TvVolume(24, 100, false)
         nowOn = NowOn("Netflix", false, 1_204_000, 2_710_000)
     }
@@ -476,12 +489,16 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun say(t: String, key: RemoteKey? = null) {
+    fun say(t: String, key: RemoteKey? = null, action: ToastAction? = null) {
         toast = t
         toastKey = key
+        toastAction = action
         toastJob?.cancel()
-        // Longer messages stay up longer so they can be read.
-        toastJob = viewModelScope.launch { delay(1100L + 45L * t.length.coerceAtMost(80)); toast = null; toastKey = null }
+        // Longer messages stay up longer so they can be read; one with a button stays a few seconds more.
+        toastJob = viewModelScope.launch {
+            delay(if (key != null) 1100L else (if (action != null) 6000L else 2200L) + 60L * t.length.coerceAtMost(90))
+            toast = null; toastKey = null; toastAction = null
+        }
     }
 
     private var redials = 0
@@ -517,7 +534,9 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                     askCode = { err -> askCode(d.name, err) },
                 )
                 tvVolume = null
+                tvOn = null
                 a.onVolume = { v -> viewModelScope.launch { tvVolume = v; muted = v.muted } }
+                a.onPower = { on -> viewModelScope.launch { if (activeId == d.id) tvOn = on } }
                 a.onDropped = { dropped(d, a) }
                 // A text box got focus on the TV. If the phone is what's driving it (something sent
                 // from here in the last 20 s), type from the phone; if the physical remote is,
@@ -529,6 +548,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 adapter = a
                 refreshVolume(0)
                 link = Link.READY
+                viewModelScope.launch { runCatching { a.isOn() }.getOrNull()?.let { on -> if (adapter === a) tvOn = on } }
                 fetchName(d) // a saved TV still called "Google TV" / "LG TV" gets its own name
                 redials = 0
                 // Remember the TV's network address so it can be woken later.
@@ -538,7 +558,9 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 // A timeout inside connect is a failure to show, not this job being cancelled.
                 if (e !is TimeoutCancellationException) throw e
                 link = Link.ERROR
-                val msg = "${d.name} didn't answer in time"
+                // LG and Samsung wait for Yes / Allow on the TV, so a timeout there is usually that.
+                val msg = if (d.brand == Brand.LG || d.brand == Brand.SAMSUNG) "${d.name} didn't answer in time. If the TV asked, choose ${if (d.brand == Brand.LG) "Yes" else "Allow"} and try again."
+                    else "${d.name} didn't answer in time"
                 lastError = msg
                 say(msg)
                 feel.fire(Feel.ERROR)
@@ -551,18 +573,30 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                 val msg = when {
                     e is UserFacing -> e.message ?: "Not supported"
                     e.isCertChanged() -> "${d.name}'s certificate changed. Remove and add it again if you reset it."
-                    else -> "Couldn't reach ${d.name}"
+                    e.causes().any { it is java.net.ConnectException || it is java.net.NoRouteToHostException || it is java.net.SocketTimeoutException } ->
+                        "Couldn't reach ${d.name} at ${d.host}. Check it's on and on the same Wi-Fi as this phone."
+                    e.causes().any { it is javax.net.ssl.SSLException } -> "${d.name} answered, but the secure connection failed."
+                    else -> "Couldn't connect to ${d.name}"
                 }
                 lastError = msg
-                say(msg)
+                if (e is com.krishna.miniremote.net.NeedsRepair) say(msg, action = ToastAction("Re-pair") { repair(d) }) else say(msg)
                 feel.fire(Feel.ERROR)
             }
         }
     }
 
+    /** Forgets the pairing with this TV and connects again, so it shows a new code to enter. */
+    fun repair(d: Device) {
+        toastJob?.cancel(); toast = null; toastKey = null; toastAction = null
+        updateDevice(d.id) { it.copy(pin = null, token = null) }
+        activeId = d.id; store.saveActive(d.id)
+        connect(d, quiet = false)
+    }
+
     fun disconnect() {
         connectJob?.cancel()
         adapter?.close(); adapter = null
+        tvOn = null
         codeAnswer?.complete(null)
         link = Link.IDLE
     }
@@ -590,20 +624,48 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
 
     /** Saves a TV (replacing one with the same id) and connects to it. */
     fun addAndSelect(d: Device) {
-        devices = devices.filter { it.id != d.id } + d
+        // One entry per address: a TV first saved under the wrong brand is replaced, not doubled.
+        devices = devices.filter { it.id != d.id && it.host != d.host } + d
         store.saveDevices(devices)
         found = found.filter { it.host != d.host }
         select(d)
     }
 
-    /** Returns an error to show, or the new device. */
-    fun addManual(host: String, brand: Brand): Pair<String?, Device?> {
-        val h = host.trim()
-        if (!HostValidator.isPrivateIPv4(h)) return "Enter a home-network address like 192.168.1.20." to null
-        val d = Device("${brand.name.lowercase()}-$h", brand.label, h, brand)
-        addAndSelect(d)
-        fetchName(d)
-        return null to d
+    /** True while a typed-in address is being checked. */
+    var checkingManual by mutableStateOf(false); private set
+
+    /**
+     * Checks a typed-in address before saving it: is something there, and which TV is it?
+     * [brand] null = work it out. [done] gets an error to show, or the saved device (then pairing
+     * starts). A TV already saved at that address with the same brand keeps its pairing.
+     */
+    fun addManual(host: String, brand: Brand?, done: (String?, Device?) -> Unit) {
+        val h = HostValidator.normalize(host)
+            ?: return done("Enter the TV's address as four numbers, like 192.168.1.20.", null)
+        if (!HostValidator.isPrivateIPv4(h)) {
+            return done("That isn't a home Wi-Fi address. TV addresses start with 192.168, 10 or 172.16 to 172.31.", null)
+        }
+        if (checkingManual) return
+        checkingManual = true
+        viewModelScope.launch {
+            val r = try { Discovery.check(h, brand) } catch (e: CancellationException) { throw e } catch (e: Exception) { Discovery.Check.Silent }
+            finally { checkingManual = false }
+            when (r) {
+                is Discovery.Check.Tv -> {
+                    val saved = devices.firstOrNull { it.id == r.device.id }
+                    val d = saved ?: r.device
+                    addAndSelect(d)
+                    fetchName(d)
+                    done(null, d)
+                }
+                Discovery.Check.Silent -> done("Nothing answered at $h. Check the TV is on, the address matches Settings › Network on the TV, and this phone is on the same Wi-Fi.", null)
+                is Discovery.Check.Unknown -> done(
+                    if (brand == null) "Something answered at $h, but it doesn't look like a TV. Choose the TV's brand above and try again."
+                    else "Something answered at $h, but not like a ${brand.label} TV. Check the address and brand.",
+                    null,
+                )
+            }
+        }
     }
 
     /** Replaces a placeholder name ("LG TV", "Google TV"…) with the name set on the TV, when it says. */
@@ -892,17 +954,56 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     /** Bumps when the TV asks for a keyboard (a text box got focus): the Search sheet opens. */
     var keyboardAsk by mutableIntStateOf(0); private set
 
-    /** Turns the TV on: Wake-on-LAN with its saved network address (and Roku's PowerOn), then connects. */
+    /**
+     * The power key: opens the "Turn on?" sheet (ask(true)) or the "Turn off?" one (ask(false)).
+     * Not connected: Turn on. Connected: asks the TV whether it's on (where it can tell); off
+     * (standby, still on the network) is Turn on; on, or it can't tell, is Turn off.
+     */
+    fun powerTap(ask: (off: Boolean) -> Unit) {
+        if (demo) { ask(false); return }
+        val a = adapter
+        if (active == null) { say("Choose a TV first"); return }
+        if (a == null || link != Link.READY) { ask(true); return }
+        viewModelScope.launch {
+            val fresh = withTimeoutOrNull(1500) { runCatching { a.isOn() }.getOrNull() }
+            if (adapter !== a) return@launch
+            if (fresh != null) tvOn = fresh
+            ask(tvOn == false)
+        }
+    }
+
+    /** Where to allow waking over the network, said when a TV in standby didn't wake. */
+    private fun wakeHint(d: Device) = when (d.brand) {
+        Brand.LG -> "${d.name} didn't turn on. On the TV, turn on TV On With Mobile (Settings › General › Devices)."
+        Brand.SAMSUNG -> "${d.name} didn't turn on. On the TV, turn on Power On with Mobile (Settings › General › Network › Expert Settings)."
+        Brand.ROKU -> "${d.name} didn't turn on. On the TV, turn on Fast TV start (Settings › System › Power)."
+        else -> "${d.name} didn't turn on. Use the TV's own remote this time."
+    }
+
+    /** Turns the TV on: its own power-on where it has one, else Wake-on-LAN with its saved network address, then connects. */
     fun wake() {
         val d = active ?: run { say("Choose a TV first"); return }
         feel.fire(Feel.HEAVY)
         viewModelScope.launch {
             val a = adapter
-            if (a != null && link == Link.READY && a.powerOn()) { say("Turning on ${d.name}"); return@launch }
+            // Connected while in standby: the TV can say when it's on.
+            val standby = a != null && link == Link.READY
+            if (standby && a!!.powerOn()) { say("Turning on ${d.name}"); tvOn = true; return@launch }
             val mac = d.mac
             if (mac == null) { say("${d.name} can't be turned on from here yet. Connect once while it's on."); return@launch }
             if (!com.krishna.miniremote.net.Wol.wake(mac, d.host)) { say("Couldn't reach the network"); return@launch }
-            say("Waking ${d.name}…")
+            say(if (standby) "Turning on ${d.name}…" else "Waking ${d.name}…")
+            if (standby) {
+                // Still connected: wait for the TV to say it's on.
+                repeat(6) {
+                    delay(2000)
+                    if (adapter !== a) return@launch
+                    val on = runCatching { a!!.isOn() }.getOrNull() ?: tvOn
+                    if (on == true) { tvOn = true; return@launch }
+                }
+                if (tvOn == false) say(wakeHint(d))
+                return@launch
+            }
             // TVs take a few seconds to join the network.
             repeat(6) {
                 delay(2500)
@@ -1165,7 +1266,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
             scrubStepDp = f("scrubStepDp", d.scrubStepDp).coerceIn(24f, 60f),
             keepAwake = j.optBoolean("keepAwake", d.keepAwake),
             autoUpdate = j.optBoolean("autoUpdate", d.autoUpdate),
-            controlStyle = j.optString("controlStyle", d.controlStyle).takeIf { it == "dial" || it == "trackpad" } ?: d.controlStyle,
+            controlStyle = j.optString("controlStyle", d.controlStyle).takeIf { it == "dial" || it == "trackpad" || it == "touch" } ?: d.controlStyle,
             layout = j.optString("layout", d.layout).takeIf { it == "strip" || it == "cards" } ?: d.layout,
             appsIn = j.optString("appsIn", d.appsIn).takeIf { it == "home" || it == "more" } ?: d.appsIn,
             volumeKeys = j.optBoolean("volumeKeys", d.volumeKeys),
@@ -1249,3 +1350,6 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
 /** Where Help & feedback goes: an email address (when set), else new issues on GitHub. */
 const val SUPPORT_EMAIL = "iamyourdev123@gmail.com"
 const val SUPPORT_ISSUES = "https://github.com/krishnaar21/mini-remote/issues/new"
+
+/** [this] and what caused it, a few levels down. */
+private fun Throwable.causes(): Sequence<Throwable> = generateSequence(this) { it.cause }.take(8)
