@@ -24,10 +24,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 
 /**
- * What's behind an open sheet: blurred and darkened, at every level (the remote, the apps
- * screen, Settings under one of its own sheets), so the sheet stands on its own and nothing
- * underneath reads through it. The blur is a GPU effect on the layer (Android 12 and up), not a
- * redraw. It fades in as a sheet opens and is removed at once the moment the sheet starts to
+ * What's behind an open sheet: softly blurred and dimmed, at every level (the remote, the apps
+ * screen, Settings under one of its own sheets). It stays a soft, recognisable version of the page
+ * you came from, like the design's scrim: a heavy blur plus a dark scrim flattened these dark
+ * surfaces into one colour, so Settings under a sheet looked like a blank page. The blur is a GPU
+ * effect on the layer (Android 12 and up), not a redraw. It fades in as a sheet opens and is removed at once the moment the sheet starts to
  * close, since any fade-out there reads as lag.
  */
 object Backdrop {
@@ -38,8 +39,11 @@ object Backdrop {
     val blurs get() = android.os.Build.VERSION.SDK_INT >= 31
 
     /** The dark layer over what's behind a sheet. */
-    fun scrim(): Color = Color.Black.copy(alpha = if (blurs) (if (Look.p.light) 0.18f else 0.42f) else (if (Look.p.light) 0.32f else 0.55f))
+    fun scrim(): Color = Color.Black.copy(alpha = if (blurs) (if (Look.p.light) 0.14f else 0.30f) else (if (Look.p.light) 0.32f else 0.55f))
 }
+
+/** Enough to soften what's behind; text and cards still read as shapes. */
+private val BLUR = 6.dp
 
 /** Blurs this when a sheet is open above it: [token] null is the app itself (under every sheet). */
 fun Modifier.underSheets(token: Any? = null): Modifier = composed {
@@ -47,7 +51,7 @@ fun Modifier.underSheets(token: Any? = null): Modifier = composed {
     val behind = if (token == null) list.isNotEmpty() else list.indexOf(token).let { it >= 0 && it < list.lastIndex }
     val t by animateFloatAsState(if (behind) 1f else 0f, if (behind) tween(160) else snap(), label = "backdrop")
     if (!Backdrop.blurs || t == 0f) this
-    else graphicsLayer { renderEffect = BlurEffect(16.dp.toPx() * t, 16.dp.toPx() * t, TileMode.Clamp) }
+    else graphicsLayer { renderEffect = BlurEffect(BLUR.toPx() * t, BLUR.toPx() * t, TileMode.Clamp) }
 }
 
 /**
