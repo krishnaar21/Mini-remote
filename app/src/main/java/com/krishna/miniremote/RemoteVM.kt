@@ -496,7 +496,7 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         toastJob?.cancel()
         // Longer messages stay up longer so they can be read; one with a button stays a few seconds more.
         toastJob = viewModelScope.launch {
-            delay((if (action != null) 5000L else 1100L) + 45L * t.length.coerceAtMost(80))
+            delay(if (key != null) 1100L else (if (action != null) 6000L else 2200L) + 60L * t.length.coerceAtMost(90))
             toast = null; toastKey = null; toastAction = null
         }
     }
