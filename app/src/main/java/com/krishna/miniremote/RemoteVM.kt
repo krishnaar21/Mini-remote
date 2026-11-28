@@ -38,6 +38,11 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
     var toast by mutableStateOf<String?>(null); private set
     /** The key behind the current toast, so the well can show its icon above the name. */
     var toastKey by mutableStateOf<RemoteKey?>(null); private set
+    /** A button on the toast (e.g. Re-pair), when there's one thing to do about the message. */
+    var toastAction by mutableStateOf<ToastAction?>(null); private set
+
+    /** A button on a toast: a short label and what it does. */
+    class ToastAction(val label: String, val run: () -> Unit)
     var scanning by mutableStateOf(false); private set
     /** TVs found by the last scan that aren't saved yet. */
     var found by mutableStateOf<List<Device>>(emptyList()); private set
@@ -484,12 +489,16 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun say(t: String, key: RemoteKey? = null) {
+    fun say(t: String, key: RemoteKey? = null, action: ToastAction? = null) {
         toast = t
         toastKey = key
+        toastAction = action
         toastJob?.cancel()
-        // Longer messages stay up longer so they can be read.
-        toastJob = viewModelScope.launch { delay(1100L + 45L * t.length.coerceAtMost(80)); toast = null; toastKey = null }
+        // Longer messages stay up longer so they can be read; one with a button stays a few seconds more.
+        toastJob = viewModelScope.launch {
+            delay((if (action != null) 5000L else 1100L) + 45L * t.length.coerceAtMost(80))
+            toast = null; toastKey = null; toastAction = null
+        }
     }
 
     private var redials = 0
@@ -570,10 +579,18 @@ class RemoteVM(app: Application) : AndroidViewModel(app) {
                     else -> "Couldn't connect to ${d.name}"
                 }
                 lastError = msg
-                say(msg)
+                if (e is com.krishna.miniremote.net.NeedsRepair) say(msg, action = ToastAction("Re-pair") { repair(d) }) else say(msg)
                 feel.fire(Feel.ERROR)
             }
         }
+    }
+
+    /** Forgets the pairing with this TV and connects again, so it shows a new code to enter. */
+    fun repair(d: Device) {
+        toastJob?.cancel(); toast = null; toastKey = null; toastAction = null
+        updateDevice(d.id) { it.copy(pin = null, token = null) }
+        activeId = d.id; store.saveActive(d.id)
+        connect(d, quiet = false)
     }
 
     fun disconnect() {

@@ -38,6 +38,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -306,8 +308,8 @@ fun AppShell(vm: RemoteVM) {
                     // Key names show on the bottom line (on the remote), not as a toast.
                     val inWell = onRemote && vm.toastKey != null
                     // On the remote it sits under the top bar (clear of the keys); elsewhere near the bottom.
-                    ToastChip(if (inWell) null else vm.toast,
-                        if (onRemote) Modifier.align(Alignment.TopCenter).padding(top = 96.dp, start = 24.dp, end = 24.dp)
+                    ToastChip(if (inWell) null else vm.toast, action = vm.toastAction, accent = accent,
+                        modifier = if (onRemote) Modifier.align(Alignment.TopCenter).padding(top = 96.dp, start = 24.dp, end = 24.dp)
                         else Modifier.align(Alignment.BottomCenter).padding(bottom = 56.dp))
                     when (val u = vm.update) {
                         is RemoteVM.Update.Downloading, is RemoteVM.Update.Ready, is RemoteVM.Update.Manual ->
@@ -445,16 +447,28 @@ fun RoundIcon(ico: Ico, label: String, onClick: () -> Unit) = CircleIcon(ico, la
 
 /** Short message that floats above the tab pill. */
 @Composable
-fun ToastChip(text: String?, modifier: Modifier = Modifier) {
-    // Keep the last text while it fades out (no state write during composition).
-    val last = remember { arrayOf("") }
-    if (text != null) last[0] = text
+fun ToastChip(text: String?, modifier: Modifier = Modifier, action: RemoteVM.ToastAction? = null, accent: Color = T.Ink) {
+    // Keep the last text (and button) while it fades out (no state write during composition).
+    val last = remember { arrayOf<Pair<String, RemoteVM.ToastAction?>>("" to null) }
+    if (text != null) last[0] = text to action
     AnimatedVisibility(text != null, modifier, enter = fadeIn() + slideInVertically { it / 2 }, exit = fadeOut()) {
-        Text(
-            last[0], color = T.Ink, fontSize = 13.5.sp, fontWeight = FontWeight.Medium,
-            modifier = Modifier.softFace(CARD, dpUnits = true).padding(horizontal = 18.dp, vertical = 11.dp)
-                .semantics { liveRegion = LiveRegionMode.Polite },
-        )
+        val (t, act) = last[0]
+        Row(
+            Modifier.widthIn(max = 360.dp).softFace(CARD, dpUnits = true)
+                .padding(start = 18.dp, end = if (act == null) 18.dp else 8.dp, top = if (act == null) 11.dp else 8.dp, bottom = if (act == null) 11.dp else 8.dp)
+                .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(t, color = T.Ink, fontSize = 13.5.sp, fontWeight = FontWeight.Medium, maxLines = 3,
+                textAlign = if (act == null) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start,
+                modifier = Modifier.weight(1f, fill = false))
+            if (act != null) {
+                Text(act.label, color = accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clip(CircleShape).background(M.High).clickable(role = Role.Button) { act.run() }
+                        .heightIn(min = 34.dp).padding(horizontal = 14.dp, vertical = 8.dp))
+            }
+        }
     }
 }
 
